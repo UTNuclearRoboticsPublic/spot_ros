@@ -145,7 +145,7 @@ class SpotJoyUtils(Node):
         self._gripper_closed = True
 
         # Docking configuration
-        self.dock_id = self.declare_parameter(name='dock_id',
+        self.dock_id: int = self.declare_parameter(name='dock_id',
             value=520,
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_INTEGER,
@@ -156,7 +156,7 @@ class SpotJoyUtils(Node):
         self.get_logger().info(f'Registering dock id {self.dock_id}')
 
         # Controller configuration
-        self.controller_config = self.declare_parameter(name="controller",
+        self.controller_config: str = self.declare_parameter(name="controller",
             value=Parameter.Type.STRING,
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_STRING,
@@ -315,9 +315,15 @@ class SpotJoyUtils(Node):
         buttons = data.buttons
         axes    = data.axes
 
+        if len(buttons) != len(self.actions["ButtonType"]):
+            self.get_logger().error(f"Wrong controller configuration. Current setting is [{self.controller_config}] but that has {len(self.actions['ButtonType'])} buttons but your controller has {len(buttons)}", throttle_duration_sec=3.0)
+            return
+        elif len(axes) != (len(self.actions["AxisType"])):
+            self.get_logger().error(f"Wrong controller configuration. Current setting is [{self.controller_config}] but that has {len(self.actions['AxisType'])} axes but your controller has {len(axes)}", throttle_duration_sec=3.0)
+            return
         # When using Logitech, we need the controller in "D" mode, not "X" mode
-        if self.actions["ButtonType"] == LogitechButtons and len(axes) != 6:
-            self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=1.0)
+        elif self.actions["ButtonType"] == LogitechButtons and len(axes) != 6:
+            self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=3.0)
             return
 
         # Handle actions with a simple trigger format
