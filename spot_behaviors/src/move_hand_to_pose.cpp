@@ -53,6 +53,12 @@ BT::PortsList MoveHandToPose::providedPorts(){
         BT::InputPort<std::string>("pipeline", "The planning pipeline to use for planning"),
         BT::InputPort<std::string>("planner", "The planner to use"),
         BT::InputPort<std::string>("axis_5dof", "The axis about which to give rotational freedom. Leave blank for 6DoF pose. Options are [x, y, z]. Applies to moveit backend only"),
+        BT::InputPort<float>("max_x", +1e9f, "The maximum x-value that the robot can occupy, defined in the same frame as the target pose"),
+        BT::InputPort<float>("max_y", +1e9f, "The maximum y-value that the robot can occupy, defined in the same frame as the target pose"),
+        BT::InputPort<float>("max_z", +1e9f, "The maximum z-value that the robot can occupy, defined in the same frame as the target pose"),
+        BT::InputPort<float>("min_x", -1e9f, "The minimum x-value that the robot can occupy, defined in the same frame as the target pose"),
+        BT::InputPort<float>("min_y", -1e9f, "The minimum y-value that the robot can occupy, defined in the same frame as the target pose"),
+        BT::InputPort<float>("min_z", -1e9f, "The minimum z-value that the robot can occupy, defined in the same frame as the target pose"),
         BT::InputPort<float>("planning_timeout", "The time to wait for the planner to compute in seconds")
     };
 }
@@ -104,12 +110,12 @@ BT::NodeStatus MoveHandToPose::onStart() {
         move_group_goal.request.group_name = getInput<std::string>("planning_group").value_or("arm");
         move_group_goal.request.workspace_parameters.header.frame_id = target_pose.header.frame_id;
         move_group_goal.request.workspace_parameters.header.stamp = now();
-        move_group_goal.request.workspace_parameters.min_corner.x = -1e9;
-        move_group_goal.request.workspace_parameters.min_corner.y = -1e9;
-        move_group_goal.request.workspace_parameters.min_corner.z = -1e9;
-        move_group_goal.request.workspace_parameters.max_corner.x = +1e9;
-        move_group_goal.request.workspace_parameters.max_corner.y = +1e9;
-        move_group_goal.request.workspace_parameters.max_corner.z = +1e9;
+        move_group_goal.request.workspace_parameters.min_corner.x = getInput<float>("min_x").value();
+        move_group_goal.request.workspace_parameters.min_corner.y = getInput<float>("min_y").value();
+        move_group_goal.request.workspace_parameters.min_corner.z = getInput<float>("min_z").value();
+        move_group_goal.request.workspace_parameters.max_corner.x = getInput<float>("max_x").value();
+        move_group_goal.request.workspace_parameters.max_corner.y = getInput<float>("max_y").value();
+        move_group_goal.request.workspace_parameters.max_corner.z = getInput<float>("max_z").value();
 
         const std::string axis_5dof = getInput<std::string>("axis_5dof").value_or("");
         if (axis_5dof == "x") {
