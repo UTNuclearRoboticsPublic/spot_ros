@@ -4,11 +4,13 @@
 <package format="3">
   <name>spot_viz</name>
   <version>2.0.0</version>
-  <description>The spot_viz package</description>
+  <description>RViz visualization for the Boston Dynamics Spot quadruped.</description>
 
-  <maintainer email="dniewinski@clearpathrobotics.com">Dave Niewinski</maintainer>
+  <maintainer email="blakeanderson@utexas.edu">Blake Anderson</maintainer>
+  <author email="blakeanderson@utexas.edu">Blake Anderson</author>
+  <author email="dniewinski@clearpathrobotics.com">Dave Niewinski</author>
 
-  <license>BSD</license>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

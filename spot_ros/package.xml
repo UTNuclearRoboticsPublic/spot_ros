@@ -4,11 +4,15 @@
   <name>spot_ros</name>
   <version>2.0.0</version>
   <description>
-    Spot ROS Driver
+    ROS metapackage for the Boston Dynamics Spot quadruped
   </description>
+
+  <maintainer email="blakeanderson@utexas.edu">Blake Anderson</maintainer>
+  <author email="blakeanderson@utexas.edu">Blake Anderson</author>
+  <author email="dniewinski@clearpathrobotics.com">Dave Niewinski</author>
   <author email="austin.deric@gmail.com">Austin Deric</author>
-  <maintainer email="dniewinski@clearpathrobotics.com">Dave Niewinski</maintainer>
-  <license>Apache-2.0</license>
+
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
