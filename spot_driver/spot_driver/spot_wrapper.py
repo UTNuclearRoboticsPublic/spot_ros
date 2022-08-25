@@ -25,12 +25,9 @@
 #
 ############################################################################################
 
-import time
-
-from bosdyn.client import create_standard_sdk, ResponseError, RpcError
-from bosdyn.client.async_tasks import AsyncPeriodicQuery, AsyncTasks
 from bosdyn.geometry import EulerZXY
-
+from bosdyn.client import create_standard_sdk, ResponseError, RpcError
+from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.power import PowerClient
@@ -40,8 +37,6 @@ from bosdyn.api import image_pb2
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client import power
 
-import bosdyn.api.robot_state_pb2 as robot_state_proto
-from bosdyn.api import basic_command_pb2
 from google.protobuf.timestamp_pb2 import Timestamp
 
 front_image_sources = ['frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth']
@@ -51,162 +46,9 @@ side_image_sources = ['left_fisheye_image', 'right_fisheye_image', 'left_depth',
 rear_image_sources = ['back_fisheye_image', 'back_depth']
 """List of image sources for rear image periodic query"""
 
-class AsyncRobotState(AsyncPeriodicQuery):
-    """Class to get robot state at regular intervals.  get_robot_state_async query sent to the robot at every tick.  Callback registered to defined callback function.
-
-        Attributes:
-            client: The Client to a service on the robot
-            logger: Logger object
-            rate: Rate (Hz) to trigger the query
-            callback: Callback function to call when the results of the query are available
-    """
-    def __init__(self, client, logger, rate, callback):
-        super(AsyncRobotState, self).__init__("robot-state", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
-        self._callback = None
-        if rate > 0.0:
-            self._callback = callback
-
-    def _start_query(self):
-        if self._callback:
-            callback_future = self._client.get_robot_state_async()
-            callback_future.add_done_callback(self._callback)
-            return callback_future
-
-class AsyncMetrics(AsyncPeriodicQuery):
-    """Class to get robot metrics at regular intervals.  get_robot_metrics_async query sent to the robot at every tick.  Callback registered to defined callback function.
-
-        Attributes:
-            client: The Client to a service on the robot
-            logger: Logger object
-            rate: Rate (Hz) to trigger the query
-            callback: Callback function to call when the results of the query are available
-    """
-    def __init__(self, client, logger, rate, callback):
-        super(AsyncMetrics, self).__init__("robot-metrics", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
-        self._callback = None
-        if rate > 0.0:
-            self._callback = callback
-
-    def _start_query(self):
-        if self._callback:
-            callback_future = self._client.get_robot_metrics_async()
-            callback_future.add_done_callback(self._callback)
-            return callback_future
-
-class AsyncLease(AsyncPeriodicQuery):
-    """Class to get lease state at regular intervals.  list_leases_async query sent to the robot at every tick.  Callback registered to defined callback function.
-
-        Attributes:
-            client: The Client to a service on the robot
-            logger: Logger object
-            rate: Rate (Hz) to trigger the query
-            callback: Callback function to call when the results of the query are available
-    """
-    def __init__(self, client, logger, rate, callback):
-        super(AsyncLease, self).__init__("lease", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
-        self._callback = None
-        if rate > 0.0:
-            self._callback = callback
-
-    def _start_query(self):
-        if self._callback:
-            callback_future = self._client.list_leases_async()
-            callback_future.add_done_callback(self._callback)
-            return callback_future
-
-class AsyncImageService(AsyncPeriodicQuery):
-    """Class to get images at regular intervals.  get_image_from_sources_async query sent to the robot at every tick.  Callback registered to defined callback function.
-
-        Attributes:
-            client: The Client to a service on the robot
-            logger: Logger object
-            rate: Rate (Hz) to trigger the query
-            callback: Callback function to call when the results of the query are available
-    """
-    def __init__(self, client, logger, rate, callback, image_requests):
-        super(AsyncImageService, self).__init__("robot_image_service", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
-        self._callback = None
-        if rate > 0.0:
-            self._callback = callback
-        self._image_requests = image_requests
-
-    def _start_query(self):
-        if self._callback:
-            callback_future = self._client.get_image_async(self._image_requests)
-            callback_future.add_done_callback(self._callback)
-            return callback_future
-
-class AsyncIdle(AsyncPeriodicQuery):
-    """Class to check if the robot is moving, and if not, command a stand with the set mobility parameters
-
-        Attributes:
-            client: The Client to a service on the robot
-            logger: Logger object
-            rate: Rate (Hz) to trigger the query
-            spot_wrapper: A handle to the wrapper library
-    """
-    def __init__(self, client, logger, rate, spot_wrapper):
-        super(AsyncIdle, self).__init__("idle", client, logger,
-                                           period_sec=1.0/rate)
-
-        self._spot_wrapper = spot_wrapper
-
-    def _start_query(self):
-        if self._spot_wrapper._last_stand_command != None:
-            self._spot_wrapper._is_sitting = False
-            response = self._client.robot_command_feedback(self._spot_wrapper._last_stand_command)
-            if (response.feedback.mobility_feedback.stand_feedback.status ==
-                    basic_command_pb2.StandCommand.Feedback.STATUS_IS_STANDING):
-                self._spot_wrapper._is_standing = True
-                self._spot_wrapper._last_stand_command = None
-            else:
-                self._spot_wrapper._is_standing = False
-
-        if self._spot_wrapper._last_sit_command != None:
-            self._spot_wrapper._is_standing = False
-            response = self._client.robot_command_feedback(self._spot_wrapper._last_sit_command)
-            if (response.feedback.mobility_feedback.sit_feedback.status ==
-                    basic_command_pb2.SitCommand.Feedback.STATUS_IS_SITTING):
-                self._spot_wrapper._is_sitting = True
-                self._spot_wrapper._last_sit_command = None
-            else:
-                self._spot_wrapper._is_sitting = False
-
-        is_moving = False
-
-        if self._spot_wrapper._last_motion_command_time != None:
-            if time.time() < self._spot_wrapper._last_motion_command_time:
-                is_moving = True
-            else:
-                self._spot_wrapper._last_motion_command_time = None
-
-        if self._spot_wrapper._last_motion_command != None:
-            response = self._client.robot_command_feedback(self._spot_wrapper._last_motion_command)
-            if (response.feedback.mobility_feedback.se2_trajectory_feedback.status ==
-                basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_GOING_TO_GOAL):
-                is_moving = True
-            else:
-                self._spot_wrapper._last_motion_command = None
-
-        self._spot_wrapper._is_moving = is_moving
-
-        if self._spot_wrapper.is_standing and not self._spot_wrapper.is_moving:
-            self._spot_wrapper.stand(False)
-
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
     def __init__(self, username, password, hostname, logger, rates = {}, callbacks = {}):
-        self._username = username
-        self._password = password
-        self._hostname = hostname
-        self._logger = logger
-        self._rates = rates
-        self._callbacks = callbacks
-        self._keep_alive = True
         self._valid = True
 
         self._mobility_params = RobotCommandBuilder.mobility_params()
@@ -218,32 +60,32 @@ class SpotWrapper():
         self._last_motion_command = None
         self._last_motion_command_time = None
 
-        self._front_image_requests = []
+        front_image_requests = []
         for source in front_image_sources:
-            self._front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
+            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
 
-        self._side_image_requests = []
+        side_image_requests = []
         for source in side_image_sources:
-            self._side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
+            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
 
-        self._rear_image_requests = []
+        rear_image_requests = []
         for source in rear_image_sources:
-            self._rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
+            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
 
         try:
             self._sdk = create_standard_sdk('ros_spot')
         except Exception as e:
-            self._logger.error("Error creating SDK object: %s", e)
+            logger.error("Error creating SDK object: %s", e)
             self._valid = False
             return
 
-        self._robot = self._sdk.create_robot(self._hostname)
+        self._robot = self._sdk.create_robot(hostname)
 
         try:
-            self._robot.authenticate(self._username, self._password)
+            self._robot.authenticate(username, password)
             self._robot.start_time_sync()
         except RpcError as err:
-            self._logger.error("Failed to communicate with robot: %s", err)
+            logger.error("Failed to communicate with robot: %s", err)
             self._valid = False
             return
 
@@ -257,19 +99,18 @@ class SpotWrapper():
                 self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
                 self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
             except Exception as e:
-                self._logger.error("Unable to create client service: %s", e)
+                logger.error("Unable to create client service: %s", e)
                 self._valid = False
                 return
 
             # Async Tasks
-            self._async_task_list = []
-            self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, max(0.0, self._rates.get("robot_state", 0.0)), self._callbacks.get("robot_state", lambda:None))
-            self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, max(0.0, self._rates.get("metrics", 0.0)), self._callbacks.get("metrics", lambda:None))
-            self._lease_task = AsyncLease(self._lease_client, self._logger, max(0.0, self._rates.get("lease", 0.0)), self._callbacks.get("lease", lambda:None))
-            self._front_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("front_image", 0.0)), self._callbacks.get("front_image", lambda:None), self._front_image_requests)
-            self._side_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("side_image", 0.0)), self._callbacks.get("side_image", lambda:None), self._side_image_requests)
-            self._rear_image_task = AsyncImageService(self._image_client, self._logger, max(0.0, self._rates.get("rear_image", 0.0)), self._callbacks.get("rear_image", lambda:None), self._rear_image_requests)
-            self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
+            self._robot_state_task = AsyncRobotState(self._robot_state_client, logger, max(0.0, rates.get("robot_state", 0.0)), callbacks.get("robot_state", lambda:None))
+            self._robot_metrics_task = AsyncMetrics(self._robot_state_client, logger, max(0.0, rates.get("metrics", 0.0)), callbacks.get("metrics", lambda:None))
+            self._lease_task = AsyncLease(self._lease_client, logger, max(0.0, rates.get("lease", 0.0)), callbacks.get("lease", lambda:None))
+            self._front_image_task = AsyncImageService(self._image_client, logger, max(0.0, rates.get("front_image", 0.0)), callbacks.get("front_image", lambda:None), front_image_requests)
+            self._side_image_task = AsyncImageService(self._image_client, logger, max(0.0, rates.get("side_image", 0.0)), callbacks.get("side_image", lambda:None), side_image_requests)
+            self._rear_image_task = AsyncImageService(self._image_client, logger, max(0.0, rates.get("rear_image", 0.0)), callbacks.get("rear_image", lambda:None), rear_image_requests)
+            self._idle_task = AsyncIdle(self._robot_command_client, logger, 10.0, self)
 
             self._estop_endpoint = None
 
@@ -365,7 +206,7 @@ class SpotWrapper():
             self.resetEStop()
             return True, "Success"
         except (ResponseError, RpcError) as err:
-            self._logger.error("Failed to initialize robot communication: %s", err)
+            logger.error("Failed to initialize robot communication: %s", err)
             return False, str(err)
 
     def updateTasks(self):
