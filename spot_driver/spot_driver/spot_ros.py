@@ -37,9 +37,6 @@ from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import SetParametersResult
 
 from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
-from std_msgs.msg import Bool
-from tf2_msgs.msg import TFMessage
-from geometry_msgs.msg import TransformStamped
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
@@ -47,22 +44,21 @@ from nav_msgs.msg import Odometry
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import geometry_pb2, trajectory_pb2
-from bosdyn.api.geometry_pb2 import Quaternion, SE2VelocityLimit
+from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
-import bosdyn.geometry
 
 import functools
 import tf2_ros
 
 from spot_msgs.msg import Metrics
 from spot_msgs.msg import LeaseArray, LeaseResource
-from spot_msgs.msg import FootState, FootStateArray
-from spot_msgs.msg import EStopState, EStopStateArray
+from spot_msgs.msg import FootStateArray
+from spot_msgs.msg import EStopStateArray
 from spot_msgs.msg import WiFiState
 from spot_msgs.msg import PowerState
-from spot_msgs.msg import BehaviorFault, BehaviorFaultState
-from spot_msgs.msg import SystemFault, SystemFaultState
-from spot_msgs.msg import BatteryState, BatteryStateArray
+from spot_msgs.msg import BehaviorFaultState
+from spot_msgs.msg import SystemFaultState
+from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
 from spot_msgs.msg import NavigateToAction, NavigateToResult, NavigateToFeedback
@@ -73,7 +69,6 @@ from spot_msgs.srv import ClearBehaviorFault, ClearBehaviorFaultResponse
 from spot_msgs.srv import SetVelocity, SetVelocityRequest, SetVelocityResponse
 
 from .ros_helpers import *
-from .spot_wrapper import SpotWrapper
 
 import logging
 import threading
@@ -86,7 +81,7 @@ class SpotROS(Node):
 
         self.spot_wrapper = None
 
-    def RobotStateCB(self, results):
+    def RobotStateCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new robot state data.
 
         Args:
@@ -124,7 +119,7 @@ class SpotROS(Node):
             self.estop_pub.publish(estop_array_msg)
 
             # WIFI #
-            wifi_msg = GetWifiFromState(state, self.spot_wrapper)
+            wifi_msg = GetWifiFromState(state)
             self.wifi_pub.publish(wifi_msg)
 
             # Battery States #
@@ -143,7 +138,7 @@ class SpotROS(Node):
             behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
             self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
-    def MetricsCB(self, results):
+    def MetricsCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new metrics data.
 
         Args:
@@ -167,7 +162,7 @@ class SpotROS(Node):
 
             self.metrics_pub.publish(metrics_msg)
 
-    def LeaseCB(self, results):
+    def LeaseCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new lease data.
 
         Args:
@@ -192,7 +187,7 @@ class SpotROS(Node):
 
             self.lease_pub.publish(lease_array_msg)
 
-    def FrontImageCB(self, results):
+    def FrontImageCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new front image data.
 
         Args:
@@ -223,7 +218,7 @@ class SpotROS(Node):
             self.frontright_depth_pub.publish(image_msg)
             self.frontright_depth_info_pub.publish(camera_info_msg)
 
-    def SideImageCB(self, results):
+    def SideImageCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new side image data.
 
         Args:
@@ -254,7 +249,7 @@ class SpotROS(Node):
             self.right_depth_pub.publish(image_msg)
             self.right_depth_info_pub.publish(camera_info_msg)
 
-    def RearImageCB(self, results):
+    def RearImageCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new rear image data.
 
         Args:
@@ -275,68 +270,68 @@ class SpotROS(Node):
             self.back_depth_pub.publish(image_msg)
             self.back_depth_info_pub.publish(camera_info_msg)
 
-    def handle_claim(self, _):
+    def handle_claim(self, _) -> TriggerResponse:
         """ROS service handler for the claim service"""
         resp = self.spot_wrapper.claim()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_release(self, _):
+    def handle_release(self, _) -> TriggerResponse:
         """ROS service handler for the release service"""
         resp = self.spot_wrapper.release()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_stop(self, _):
+    def handle_stop(self, _) -> TriggerResponse:
         """ROS service handler for the stop service"""
         resp = self.spot_wrapper.stop()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_self_right(self, _):
+    def handle_self_right(self, _) -> TriggerResponse:
         """ROS service handler for the self-right service"""
         resp = self.spot_wrapper.self_right()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_sit(self, _):
+    def handle_sit(self, _) -> TriggerResponse:
         """ROS service handler for the sit service"""
         resp = self.spot_wrapper.sit()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_stand(self, _):
+    def handle_stand(self, _) -> TriggerResponse:
         """ROS service handler for the stand service"""
         resp = self.spot_wrapper.stand()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_power_on(self, _):
+    def handle_power_on(self, _) -> TriggerResponse:
         """ROS service handler for the power-on service"""
         resp = self.spot_wrapper.power_on()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_safe_power_off(self, _):
+    def handle_safe_power_off(self, _) -> TriggerResponse:
         """ROS service handler for the safe-power-off service"""
         resp = self.spot_wrapper.safe_power_off()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_estop_hard(self, _):
+    def handle_estop_hard(self, _) -> TriggerResponse:
         """ROS service handler to hard-eStop the robot.  The robot will immediately cut power to the motors"""
         resp = self.spot_wrapper.assertEStop(True)
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_estop_soft(self, _):
+    def handle_estop_soft(self, _) -> TriggerResponse:
         """ROS service handler to soft-eStop the robot.  The robot will try to settle on the ground before cutting
         power to the motors """
         resp = self.spot_wrapper.assertEStop(False)
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_estop_disengage(self, _):
+    def handle_estop_disengage(self, _) -> TriggerResponse:
         """ROS service handler to disengage the eStop on the robot."""
         resp = self.spot_wrapper.disengageEStop()
         return TriggerResponse(resp[0], resp[1])
 
-    def handle_clear_behavior_fault(self, req):
+    def handle_clear_behavior_fault(self, req) -> ClearBehaviorFaultResponse:
         """ROS service handler for clearing behavior faults"""
         resp = self.spot_wrapper.clear_behavior_fault(req.id)
         return ClearBehaviorFaultResponse(resp[0], resp[1])
 
-    def handle_stair_mode(self, req):
+    def handle_stair_mode(self, req) -> SetBoolResponse:
         """ROS service handler to set a stair mode to the robot."""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
@@ -346,7 +341,7 @@ class SpotROS(Node):
         except Exception as e:
             return SetBoolResponse(False, 'Error:{}'.format(e))
 
-    def handle_locomotion_mode(self, req):
+    def handle_locomotion_mode(self, req) -> SetLocomotionResponse:
         """ROS service handler to set locomotion mode"""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
@@ -356,7 +351,7 @@ class SpotROS(Node):
         except Exception as e:
             return SetLocomotionResponse(False, 'Error:{}'.format(e))
 
-    def handle_max_vel(self, req: SetVelocityRequest):
+    def handle_max_vel(self, req: SetVelocityRequest) -> SetVelocityRequest:
         """
         Handle a max_velocity service call. This will modify the mobility params to set a limit on the maximum
         velocity that the robot can move during motion commmands. This affects trajectory commands and velocity
@@ -439,11 +434,11 @@ class SpotROS(Node):
         # We timed out
         self.trajectory_server.set_aborted(TrajectoryResult(False, "Failed to reach goal"))
 
-    def cmdVelCallback(self, data):
+    def cmdVelCallback(self, data) -> None:
         """Callback for cmd_vel command"""
         self.spot_wrapper.velocity_cmd(data.linear.x, data.linear.y, data.angular.z)
 
-    def bodyPoseCallback(self, data):
+    def bodyPoseCallback(self, data) -> None:
         """Callback for cmd_vel command"""
         q = data.orientation
         position = geometry_pb2.Vec3(z=data.position.z)
@@ -456,12 +451,12 @@ class SpotROS(Node):
         mobility_params.body_control.CopyFrom(body_control)
         self.spot_wrapper.set_mobility_params(mobility_params)
 
-    def handle_list_graph(self, upload_path):
+    def handle_list_graph(self, upload_path) -> ListGraphResponse:
         """ROS service handler for listing graph_nav waypoint_ids"""
         resp = self.spot_wrapper.list_graph(upload_path)
         return ListGraphResponse(resp)
 
-    def handle_navigate_to_feedback(self):
+    def handle_navigate_to_feedback(self) -> None:
         """Thread function to send navigate_to feedback"""
         rate = self.create_rate(10)
         while rclpy.ok() and self.run_navigate_to:
@@ -470,7 +465,7 @@ class SpotROS(Node):
                 self.navigate_as.publish_feedback(NavigateToFeedback(localization_state.localization.waypoint_id))
             rate.sleep()
 
-    def handle_navigate_to(self, msg):
+    def handle_navigate_to(self, msg) -> None:
         """ROS service handler to run mission of the robot.  The robot will replay a mission"""
         # create thread to periodically publish feedback
         feedback_thread = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
@@ -530,7 +525,7 @@ class SpotROS(Node):
         
         return output
 
-    def __del__(self) -> None:
+    def __del__(self):
         is_sitting, message = self.spot_wrapper.sit()[0:1]
         
         if not is_sitting:
@@ -557,7 +552,7 @@ class SpotROS(Node):
         return SetParametersResult(successful=True)
 
 
-    def main(self):
+    def main(self) -> bool:
         """Main function for the SpotROS class.  Gets config from ROS and initializes the wrapper.  Holds lease from wrapper and updates all async tasks at the ROS rate"""
 
         ''' ROS Parameters '''
@@ -626,7 +621,7 @@ class SpotROS(Node):
             self.get_logger().info("Starting ROS driver for Spot")
         else:
             self.get_logger().fatal('Failed to launch Spot driver!')
-            exit(1)
+            return False
 
         # Images
         self.back_image_pub = self.create_publisher(Image, 'camera/back/image')
@@ -820,3 +815,5 @@ class SpotROS(Node):
             mobility_params_pub.publish(mobility_params_msg)
 
             rate.sleep()
+
+        return True

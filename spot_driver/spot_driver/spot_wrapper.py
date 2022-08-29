@@ -25,26 +25,20 @@
 #
 ############################################################################################
 
+from async_queries import *
+
+from bosdyn.api import image_pb2
 from bosdyn.geometry import EulerZXY
-from bosdyn.client import create_standard_sdk, ResponseError, RpcError
+from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.power import PowerClient
 from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
 from bosdyn.client.image import ImageClient, build_image_request
-from bosdyn.api import image_pb2
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
-from bosdyn.client import power
 
 from google.protobuf.timestamp_pb2 import Timestamp
-
-front_image_sources = ['frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth']
-"""List of image sources for front image periodic query"""
-side_image_sources = ['left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth']
-"""List of image sources for side image periodic query"""
-rear_image_sources = ['back_fisheye_image', 'back_depth']
-"""List of image sources for rear image periodic query"""
 
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
@@ -59,6 +53,10 @@ class SpotWrapper():
         self._last_sit_command = None
         self._last_motion_command = None
         self._last_motion_command_time = None
+
+        front_image_sources = ['frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth']
+        side_image_sources = ['left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth']
+        rear_image_sources = ['back_fisheye_image', 'back_depth']
 
         front_image_requests = []
         for source in front_image_sources:
