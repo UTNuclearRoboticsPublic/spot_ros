@@ -36,14 +36,14 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import SetParametersResult
 
-from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
+from std_srvs.srv import Trigger, SetBool
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
 from nav_msgs.msg import Odometry
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.api import geometry_pb2, trajectory_pb2
+from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
 
@@ -61,12 +61,8 @@ from spot_msgs.msg import SystemFaultState
 from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
-from spot_msgs.msg import NavigateToAction, NavigateToResult, NavigateToFeedback
-from spot_msgs.msg import TrajectoryAction, TrajectoryGoal, TrajectoryResult, TrajectoryFeedback
-from spot_msgs.srv import ListGraph, ListGraphResponse
-from spot_msgs.srv import SetLocomotion, SetLocomotionResponse
-from spot_msgs.srv import ClearBehaviorFault, ClearBehaviorFaultResponse
-from spot_msgs.srv import SetVelocity, SetVelocityRequest, SetVelocityResponse
+from spot_msgs.action import NavigateTo, Trajectory
+from spot_msgs.srv import ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
 
 from .ros_helpers import *
 
@@ -270,102 +266,102 @@ class SpotROS(Node):
             self.back_depth_pub.publish(image_msg)
             self.back_depth_info_pub.publish(camera_info_msg)
 
-    def handle_claim(self, _) -> TriggerResponse:
+    def handle_claim(self, _) -> Trigger.Response:
         """ROS service handler for the claim service"""
         resp = self.spot_wrapper.claim()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_release(self, _) -> TriggerResponse:
+    def handle_release(self, _) -> Trigger.Response:
         """ROS service handler for the release service"""
         resp = self.spot_wrapper.release()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_stop(self, _) -> TriggerResponse:
+    def handle_stop(self, _) -> Trigger.Response:
         """ROS service handler for the stop service"""
         resp = self.spot_wrapper.stop()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_self_right(self, _) -> TriggerResponse:
+    def handle_self_right(self, _) -> Trigger.Response:
         """ROS service handler for the self-right service"""
         resp = self.spot_wrapper.self_right()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_sit(self, _) -> TriggerResponse:
+    def handle_sit(self, _) -> Trigger.Response:
         """ROS service handler for the sit service"""
         resp = self.spot_wrapper.sit()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_stand(self, _) -> TriggerResponse:
+    def handle_stand(self, _) -> Trigger.Response:
         """ROS service handler for the stand service"""
         resp = self.spot_wrapper.stand()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_power_on(self, _) -> TriggerResponse:
+    def handle_power_on(self, _) -> Trigger.Response:
         """ROS service handler for the power-on service"""
         resp = self.spot_wrapper.power_on()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_safe_power_off(self, _) -> TriggerResponse:
+    def handle_safe_power_off(self, _) -> Trigger.Response:
         """ROS service handler for the safe-power-off service"""
         resp = self.spot_wrapper.safe_power_off()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_estop_hard(self, _) -> TriggerResponse:
+    def handle_estop_hard(self, _) -> Trigger.Response:
         """ROS service handler to hard-eStop the robot.  The robot will immediately cut power to the motors"""
         resp = self.spot_wrapper.assertEStop(True)
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_estop_soft(self, _) -> TriggerResponse:
+    def handle_estop_soft(self, _) -> Trigger.Response:
         """ROS service handler to soft-eStop the robot.  The robot will try to settle on the ground before cutting
         power to the motors """
         resp = self.spot_wrapper.assertEStop(False)
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_estop_disengage(self, _) -> TriggerResponse:
+    def handle_estop_disengage(self, _) -> Trigger.Response:
         """ROS service handler to disengage the eStop on the robot."""
         resp = self.spot_wrapper.disengageEStop()
-        return TriggerResponse(resp[0], resp[1])
+        return Trigger.Response(resp[0], resp[1])
 
-    def handle_clear_behavior_fault(self, req) -> ClearBehaviorFaultResponse:
+    def handle_clear_behavior_fault(self, req) -> ClearBehaviorFault.Response:
         """ROS service handler for clearing behavior faults"""
         resp = self.spot_wrapper.clear_behavior_fault(req.id)
-        return ClearBehaviorFaultResponse(resp[0], resp[1])
+        return ClearBehaviorFault.Response(resp[0], resp[1])
 
-    def handle_stair_mode(self, req) -> SetBoolResponse:
+    def handle_stair_mode(self, req) -> SetBool.Response:
         """ROS service handler to set a stair mode to the robot."""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
             mobility_params.stair_hint = req.data
             self.spot_wrapper.set_mobility_params(mobility_params)
-            return SetBoolResponse(True, 'Success')
+            return SetBool.Response(True, 'Success')
         except Exception as e:
-            return SetBoolResponse(False, 'Error:{}'.format(e))
+            return SetBool.Response(False, 'Error:{}'.format(e))
 
-    def handle_locomotion_mode(self, req) -> SetLocomotionResponse:
+    def handle_locomotion_mode(self, req) -> SetLocomotion.Response:
         """ROS service handler to set locomotion mode"""
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
             mobility_params.locomotion_hint = req.locomotion_mode
             self.spot_wrapper.set_mobility_params( mobility_params )
-            return SetLocomotionResponse(True, 'Success')
+            return SetLocomotion.Response(True, 'Success')
         except Exception as e:
-            return SetLocomotionResponse(False, 'Error:{}'.format(e))
+            return SetLocomotion.Response(False, 'Error:{}'.format(e))
 
-    def handle_max_vel(self, req: SetVelocityRequest) -> SetVelocityRequest:
+    def handle_max_vel(self, req: SetVelocity.Request) -> SetVelocity.Request:
         """
         Handle a max_velocity service call. This will modify the mobility params to set a limit on the maximum
         velocity that the robot can move during motion commmands. This affects trajectory commands and velocity
         commands
 
         Args:
-            req: SetVelocityRequest containing requested maximum velocity
+            req: SetVelocity.Request containing requested maximum velocity
 
-        Returns: SetVelocityResponse
+        Returns: SetVelocity.Response
         """
         if (req.velocity_limit.linear.x == 0.0 or
             req.velocity_limit.linear.y == 0.0 or
             req.velocity_limit.linear.z == 0.0):
-            return SetVelocityResponse(False, 'Cannot set a velocity limit of zero.')
+            return SetVelocity.Response(False, 'Cannot set a velocity limit of zero.')
 
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
@@ -374,18 +370,18 @@ class SpotROS(Node):
                                                                   req.velocity_limit.linear.y,
                                                                   req.velocity_limit.angular.z).to_proto()))
             self.spot_wrapper.set_mobility_params(mobility_params)
-            return SetVelocityResponse(True, 'Success')
+            return SetVelocity.Response(True, 'Success')
         except Exception as e:
-            return SetVelocityResponse(False, 'Error:{}'.format(e))
+            return SetVelocity.Response(False, 'Error:{}'.format(e))
 
-    def handle_trajectory(self, req: TrajectoryGoal) -> None:
+    def handle_trajectory(self, req: Trajectory.Goal) -> None:
         """ROS actionserver execution handler to handle receiving a request to move to a location"""
         if req.target_pose.header.frame_id != 'body':
             self.trajectory_server.set_aborted(
-                TrajectoryResult(False, 'frame_id of target_pose must be \'body\''))
+                Trajectory.Result(False, 'frame_id of target_pose must be \'body\''))
             return
         if req.duration.data.to_sec() <= 0:
-            self.trajectory_server.set_aborted(TrajectoryResult(False, 'duration must be larger than 0'))
+            self.trajectory_server.set_aborted(Trajectory.Result(False, 'duration must be larger than 0'))
             return
 
         cmd_duration = rclpy.time.Duration(req.duration.data.secs, req.duration.data.nsecs)
@@ -407,32 +403,32 @@ class SpotROS(Node):
         start_time = self.get_clock().now()
         while (rclpy.ok() and self.trajectory_server.is_active()):
             if self.trajectory_server.is_preempt_requested():
-                self.trajectory_server.set_preempted(TrajectoryFeedback(False, "Preempted"))
+                self.trajectory_server.set_preempted(Trajectory.Feedback(False, "Preempted"))
                 self.spot_wrapper.stop()
                 return
             elif self.spot_wrapper.at_goal:
-                self.trajectory_server.set_succeeded(TrajectoryResult(resp[0], resp[1]))
+                self.trajectory_server.set_succeeded(Trajectory.Result(resp[0], resp[1]))
                 return
             elif self.spot_wrapper.near_goal:
                 if self.spot_wrapper._last_trajectory_command_precise:
                     self.trajectory_server.publish_feedback(
-                        TrajectoryFeedback("Near goal, performing precise adjustments"))
+                        Trajectory.Feedback("Near goal, performing precise adjustments"))
                 else:
-                    self.trajectory_server.publish_feedback(TrajectoryFeedback("Near goal"))
+                    self.trajectory_server.publish_feedback(Trajectory.Feedback("Near goal"))
             else:
-                self.trajectory_server.publish_feedback(TrajectoryFeedback("Moving to goal"))
+                self.trajectory_server.publish_feedback(Trajectory.Feedback("Moving to goal"))
 
             # check for timeout
             if (self.get_clock().now() - start_time > cmd_duration):
                 # the action has timed out. abort.
                 self.trajectory_server.set_aborted(
-                    TrajectoryResult(False, "Failed to reach goal, timed out"))
+                    Trajectory.Result(False, "Failed to reach goal, timed out"))
                 return
 
             rate.sleep()
 
         # We timed out
-        self.trajectory_server.set_aborted(TrajectoryResult(False, "Failed to reach goal"))
+        self.trajectory_server.set_aborted(Trajectory.Result(False, "Failed to reach goal"))
 
     def cmdVelCallback(self, data) -> None:
         """Callback for cmd_vel command"""
@@ -451,10 +447,10 @@ class SpotROS(Node):
         mobility_params.body_control.CopyFrom(body_control)
         self.spot_wrapper.set_mobility_params(mobility_params)
 
-    def handle_list_graph(self, upload_path) -> ListGraphResponse:
+    def handle_list_graph(self, upload_path) -> ListGraph.Response:
         """ROS service handler for listing graph_nav waypoint_ids"""
         resp = self.spot_wrapper.list_graph(upload_path)
-        return ListGraphResponse(resp)
+        return ListGraph.Response(resp)
 
     def handle_navigate_to_feedback(self) -> None:
         """Thread function to send navigate_to feedback"""
@@ -462,7 +458,7 @@ class SpotROS(Node):
         while rclpy.ok() and self.run_navigate_to:
             localization_state = self.spot_wrapper._graph_nav_client.get_localization_state()
             if localization_state.localization.waypoint_id:
-                self.navigate_as.publish_feedback(NavigateToFeedback(localization_state.localization.waypoint_id))
+                self.navigate_as.publish_feedback(NavigateTo.Feedback(localization_state.localization.waypoint_id))
             rate.sleep()
 
     def handle_navigate_to(self, msg) -> None:
@@ -481,12 +477,12 @@ class SpotROS(Node):
 
         # check status
         if resp[0]:
-            self.navigate_as.set_succeeded(NavigateToResult(resp[0], resp[1]))
+            self.navigate_as.set_succeeded(NavigateTo.Result(resp[0], resp[1]))
         else:
-            self.navigate_as.set_aborted(NavigateToResult(resp[0], resp[1]))
+            self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
 
     def populate_camera_static_transforms(self,
-                                          image_data: bosdyn.api.image_pb2.ImageResponse,
+                                          image_data: image_pb2.ImageResponse,
                                           existing_transforms: list) -> list:
         """Check data received from one of the image tasks and use the transform snapshot to extract the camera frame
         transforms. These are the transforms from body->frontleft->frontleft_fisheye, for example. These transforms
@@ -695,7 +691,7 @@ class SpotROS(Node):
 
         nav_to_as = rclpy.action.ActionServer(
                 self,
-                NavigateToAction,
+                NavigateTo,
                 'navigate_to',
                 execute_callback=self.handle_navigate_to,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
@@ -704,7 +700,7 @@ class SpotROS(Node):
 
         trajectory_as = rclpy.action.ActionServer(
                 self,
-                TrajectoryAction,
+                Trajectory,
                 'trajectory',
                 execute_callback=self.handle_trajectory,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())

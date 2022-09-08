@@ -25,7 +25,7 @@
 #
 ############################################################################################
 
-from async_queries import *
+from .async_queries import *
 
 from bosdyn.api import image_pb2
 from bosdyn.geometry import EulerZXY

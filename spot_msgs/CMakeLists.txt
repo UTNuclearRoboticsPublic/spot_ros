@@ -10,12 +10,21 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/NavigateTo.action"
+  "action/Trajectory.action"
+
+  "srv/ClearBehaviorFault.srv"
+  "srv/ListGraph.srv"
+  "srv/SetLocomotion.srv"
+  "srv/SetVelocity.srv"
+
   "msg/BatteryStateArray.msg"
   "msg/BehaviorFault.msg"
   "msg/EStopStateArray.msg"
   "msg/FootStateArray.msg"
   "msg/LeaseArray.msg"
   "msg/LeaseOwner.msg"
+  "msg/MobilityParams.msg"
   "msg/Metrics.msg"
   "msg/SystemFault.msg"
   "msg/WiFiState.msg"

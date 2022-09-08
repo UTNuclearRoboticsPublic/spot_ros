@@ -1,4 +1,5 @@
-
+import os
+from glob import glob
 from setuptools import setup
 
 package_name = 'spot_driver'
@@ -11,6 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name), glob('launch/*launch.py')),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -18,19 +21,18 @@ setup(
     author_email='dniewinski@clearpathrobotics.com',
     maintainer='Austin Deric',
     maintainer_email='Austin.Deric@gmail.com',
-    keywords=['ROS'],
+    keywords=['ROS2'],
     classifiers=[
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: BSD',
+        'License :: Proprietary',
         'Programming Language :: Python',
-        'Topic :: Software Development',
     ],
     description='The spot_driver package',
     license='BSD',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'driver = spot_driver.spot_ros.py:main',
+            'driver = spot_driver.spot_driver:main',
         ],
     },
 )

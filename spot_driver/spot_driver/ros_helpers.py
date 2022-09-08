@@ -25,10 +25,10 @@
 #
 ############################################################################################
 
-from typing import List
+from typing import List, Tuple
 import rclpy.time
 
-from spot_wrapper import SpotWrapper
+from .spot_wrapper import SpotWrapper
 
 from tf2_msgs.msg import TFMessage
 from geometry_msgs.msg import TransformStamped
@@ -44,7 +44,7 @@ from spot_msgs.msg import BehaviorFault, BehaviorFaultState
 from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 
-from bosdyn.api import robot_state_pb2, service_fault_pb2
+from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
 from bosdyn.client.math_helpers import SE3Pose
 
 friendly_joint_names = {}
@@ -128,7 +128,7 @@ def populateTransformStamped(time: rclpy.time,
 
     return new_tf
 
-def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> tuple[Image, CameraInfo, TFMessage]:
+def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tuple[Image, CameraInfo, TFMessage]:
     """Takes the image, camera, and TF data and populates the necessary ROS messages
 
     Args:
@@ -393,7 +393,7 @@ def GetPowerStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: Spo
     power_state_msg.locomotion_estimated_runtime = rclpy.time.Time(state.power_state.locomotion_estimated_runtime.seconds, state.power_state.locomotion_estimated_runtime.nanos)
     return power_state_msg
 
-def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List(BehaviorFault):
+def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List[BehaviorFault]:
     """Helper function to strip out behavior faults into a list
 
     Args:
@@ -415,7 +415,7 @@ def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrap
 
     return faults
 
-def getSystemFaults(system_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List(SystemFault):
+def getSystemFaults(system_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List[SystemFault]:
     """Helper function to strip out system faults into a list
 
     Args:

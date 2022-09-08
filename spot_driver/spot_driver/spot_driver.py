@@ -2,6 +2,6 @@
 
 from spot_driver.spot_ros import SpotROS
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     node = SpotROS()
     node.main()
