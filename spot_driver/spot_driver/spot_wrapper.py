@@ -25,6 +25,7 @@
 #
 ############################################################################################
 
+from typing import Tuple
 from .async_queries import *
 
 from bosdyn.api import image_pb2
@@ -38,12 +39,18 @@ from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
 from bosdyn.client.image import ImageClient, build_image_request
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 
+from bosdyn.client.auth import AuthResponseError
+
 from google.protobuf.timestamp_pb2 import Timestamp
+from google.protobuf.duration_pb2 import Duration
 
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
-    def __init__(self, username, password, hostname, logger, rates = {}, callbacks = {}):
-        self._valid = True
+    def __init__(self, logger):
+        self._connected = False
+        self._logger = logger
+        self._robot = None
+        self._lease = None
 
         self._mobility_params = RobotCommandBuilder.mobility_params()
         self._is_standing = False
@@ -52,30 +59,29 @@ class SpotWrapper():
         self._last_stand_command = None
         self._last_sit_command = None
         self._last_motion_command = None
-        self._last_motion_command_time = None
 
-        front_image_sources = ['frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth']
-        side_image_sources = ['left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth']
-        rear_image_sources = ['back_fisheye_image', 'back_depth']
+    def connect(self, username, password, hostname, rates = {}, callbacks = {}) -> bool:
+        front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
+        side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
+        rear_image_sources = {'back_fisheye_image', 'back_depth'}
 
         front_image_requests = []
         for source in front_image_sources:
-            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
+            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
         side_image_requests = []
         for source in side_image_sources:
-            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
+            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
         rear_image_requests = []
         for source in rear_image_sources:
-            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.Format.FORMAT_RAW))
+            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
         try:
             self._sdk = create_standard_sdk('ros_spot')
-        except Exception as e:
-            logger.error("Error creating SDK object: %s", e)
-            self._valid = False
-            return
+        except IOError as e:
+            self._logger.error("Error creating SDK object: %s", e)
+            return False
 
         self._robot = self._sdk.create_robot(hostname)
 
@@ -83,12 +89,14 @@ class SpotWrapper():
             self._robot.authenticate(username, password)
             self._robot.start_time_sync()
         except RpcError as err:
-            logger.error("Failed to communicate with robot: %s", err)
-            self._valid = False
-            return
+            self._logger.error("Failed to communicate with robot: %s", err)
+            return False
+        except AuthResponseError as err:
+            self._logger.error('Authentication failed.\n' + str(err))
+            return False
 
         if self._robot:
-            # Clients
+            # Spot service clients
             try:
                 self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
                 self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
@@ -97,36 +105,43 @@ class SpotWrapper():
                 self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
                 self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
             except Exception as e:
-                logger.error("Unable to create client service: %s", e)
-                self._valid = False
-                return
+                self._logger.error("Unable to create client service: %s", e)
+                return False
 
             # Async Tasks
-            self._robot_state_task = AsyncRobotState(self._robot_state_client, logger, max(0.0, rates.get("robot_state", 0.0)), callbacks.get("robot_state", lambda:None))
-            self._robot_metrics_task = AsyncMetrics(self._robot_state_client, logger, max(0.0, rates.get("metrics", 0.0)), callbacks.get("metrics", lambda:None))
-            self._lease_task = AsyncLease(self._lease_client, logger, max(0.0, rates.get("lease", 0.0)), callbacks.get("lease", lambda:None))
-            self._front_image_task = AsyncImageService(self._image_client, logger, max(0.0, rates.get("front_image", 0.0)), callbacks.get("front_image", lambda:None), front_image_requests)
-            self._side_image_task = AsyncImageService(self._image_client, logger, max(0.0, rates.get("side_image", 0.0)), callbacks.get("side_image", lambda:None), side_image_requests)
-            self._rear_image_task = AsyncImageService(self._image_client, logger, max(0.0, rates.get("rear_image", 0.0)), callbacks.get("rear_image", lambda:None), rear_image_requests)
-            self._idle_task = AsyncIdle(self._robot_command_client, logger, 10.0, self)
+            self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
+            self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, rates.get("metrics", 1.0), callbacks.get("metrics", lambda:None))
+            self._lease_task = AsyncLease(self._lease_client, self._logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
+            self._front_image_task = AsyncImageService(self._image_client, self._logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
+            self._side_image_task = AsyncImageService(self._image_client, self._logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
+            self._rear_image_task = AsyncImageService(self._image_client, self._logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+            self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
 
             self._estop_endpoint = None
 
-            self._async_tasks = AsyncTasks(
-                [self._robot_state_task, self._robot_metrics_task, self._lease_task, self._front_image_task, self._side_image_task, self._rear_image_task, self._idle_task])
+            self._async_tasks = AsyncTasks([self._robot_state_task,
+                                            self._robot_metrics_task,
+                                            self._lease_task,
+                                            self._front_image_task,
+                                            self._side_image_task,
+                                            self._rear_image_task,
+                                            self._idle_task])
 
-            self._robot_id = None
-            self._lease = None
+            self._connected = True
+            return True
 
     @property
-    def is_valid(self):
+    def is_connected(self) -> bool:
         """Return boolean indicating if the wrapper initialized successfully"""
-        return self._valid
+        return self._connected
 
     @property
     def id(self):
         """Return robot's ID"""
-        return self._robot_id
+        if not self._connected:
+            return None
+            
+        return self._robot.get_id()
 
     @property
     def robot_state(self):
@@ -159,26 +174,26 @@ class SpotWrapper():
         return self._rear_image_task.proto
 
     @property
-    def is_standing(self):
+    def is_standing(self) -> bool:
         """Return boolean of standing state"""
         return self._is_standing
 
     @property
-    def is_sitting(self):
+    def is_sitting(self) -> bool:
         """Return boolean of standing state"""
         return self._is_sitting
 
     @property
-    def is_moving(self):
+    def is_moving(self) -> bool:
         """Return boolean of walking state"""
         return self._is_moving
 
     @property
-    def time_skew(self):
+    def time_skew(self) -> Duration:
         """Return the time skew between local and spot time"""
         return self._robot.time_sync.endpoint.clock_skew
 
-    def robotToLocalTime(self, timestamp):
+    def robotToLocalTime(self, timestamp) -> Timestamp:
         """Takes a timestamp and an estimated skew and return seconds and nano seconds
 
         Args:
@@ -196,28 +211,27 @@ class SpotWrapper():
 
         return rtime
 
-    def claim(self):
+    def claim(self) -> Tuple[bool,str]:
         """Get a lease for the robot, a handle on the estop endpoint, and the ID of the robot."""
         try:
-            self._robot_id = self._robot.get_id()
             self.getLease()
             self.resetEStop()
             return True, "Success"
         except (ResponseError, RpcError) as err:
-            logger.error("Failed to initialize robot communication: %s", err)
+            self._logger.error("Failed to initialize robot communication: %s", err)
             return False, str(err)
 
-    def updateTasks(self):
+    def updateTasks(self) -> None:
         """Loop through all periodic tasks and update their data if needed."""
         self._async_tasks.update()
 
-    def resetEStop(self):
+    def resetEStop(self) -> None:
         """Get keepalive for eStop"""
         self._estop_endpoint = EstopEndpoint(self._estop_client, 'ros', 9.0)
         self._estop_endpoint.force_simple_setup()  # Set this endpoint as the robot's sole estop.
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
 
-    def assertEStop(self, severe=True):
+    def assertEStop(self, severe=True) -> Tuple[bool,str]:
         """Forces the robot into eStop state.
 
         Args:
@@ -233,25 +247,25 @@ class SpotWrapper():
         except:
             return False, "Error"
 
-    def releaseEStop(self):
+    def releaseEStop(self) -> None:
         """Stop eStop keepalive"""
         if self._estop_keepalive:
             self._estop_keepalive.stop()
             self._estop_keepalive = None
             self._estop_endpoint = None
 
-    def getLease(self):
+    def getLease(self) -> None:
         """Get a lease for the robot and keep the lease alive automatically."""
         self._lease = self._lease_client.acquire()
         self._lease_keepalive = LeaseKeepAlive(self._lease_client)
 
-    def releaseLease(self):
+    def releaseLease(self) -> None:
         """Return the lease on the body."""
         if self._lease:
             self._lease_client.return_lease(self._lease)
             self._lease = None
 
-    def release(self):
+    def release(self) -> Tuple[bool,str]:
         """Return the lease on the body and the eStop handle."""
         try:
             self.releaseLease()
@@ -260,7 +274,7 @@ class SpotWrapper():
         except Exception as e:
             return False, str(e)
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         """Release control of robot as gracefully as posssible."""
         if self._robot.time_sync:
             self._robot.time_sync.stop()
@@ -292,13 +306,13 @@ class SpotWrapper():
 
     def sit(self):
         """Stop the robot's motion and sit down if able."""
-        response = self._robot_command(RobotCommandBuilder.sit_command())
+        response = self._robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = response[2]
         return response[0], response[1]
 
     def stand(self, monitor_command=True):
         """If the e-stop is enabled, and the motor power is enabled, stand the robot up."""
-        response = self._robot_command(RobotCommandBuilder.stand_command(params=self._mobility_params))
+        response = self._robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
         if monitor_command:
             self._last_stand_command = response[2]
         return response[0], response[1]
@@ -308,15 +322,20 @@ class SpotWrapper():
         response = self._robot_command(RobotCommandBuilder.safe_power_off_command())
         return response[0], response[1]
 
-    def power_on(self):
-        """Enble the motor power if e-stop is enabled."""
+    def power_on(self) -> Tuple[bool,str]:
+        """Enable the motor power if e-stop is enabled."""
         try:
             power.power_on(self._power_client)
             return True, "Success"
         except:
             return False, "Error"
 
-    def set_mobility_params(self, body_height=0, footprint_R_body=EulerZXY(), locomotion_hint=1, stair_hint=False, external_force_params=None):
+    def set_mobility_params(self,
+                            body_height=0,
+                            footprint_R_body=EulerZXY(),
+                            locomotion_hint=1,
+                            stair_hint=False,
+                            external_force_params=None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -327,17 +346,16 @@ class SpotWrapper():
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
-    def velocity_cmd(self, v_x, v_y, v_rot, cmd_duration=0.1):
+    def velocity_cmd(self, v_x, v_y, v_rot, cmd_duration=0.1) -> None:
         """Send a velocity motion command to the robot.
 
         Args:
-            v_x: Velocity in the X direction in meters
-            v_y: Velocity in the Y direction in meters
-            v_rot: Angular velocity around the Z axis in radians
-            cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 125ms (assuming 10Hz command rate).
+            v_x: Velocity in the X direction in meters per second
+            v_y: Velocity in the Y direction in meters per second
+            v_rot: Angular velocity around the Z axis in radians per second
+            cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
         """
         end_time=time.time() + cmd_duration
-        self._robot_command(RobotCommandBuilder.velocity_command(
+        self._robot_command(RobotCommandBuilder.synchro_velocity_command(
                                       v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
                                   end_time_secs=end_time)
-        self._last_motion_command_time = end_time

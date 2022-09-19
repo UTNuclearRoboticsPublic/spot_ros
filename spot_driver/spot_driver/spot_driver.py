@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 
+import rclpy
 from spot_driver.spot_ros import SpotROS
 
-if __name__ == '__main__':
+def main():
+    rclpy.init()
+
     node = SpotROS()
-    node.main()
+
+    if not node.connect():
+        return
+
+    rclpy.spin(node)
+
+    node.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()

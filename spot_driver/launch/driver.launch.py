@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution, TextSubstitution
 
@@ -20,7 +20,7 @@ def generate_launch_description():
     Node(
         package='spot_driver',
         namespace='spot',
-        executable='spot_driver.py',
+        executable='driver',
         name='spot_driver',
         parameters=[
           ParameterDescription(name='username',
@@ -36,7 +36,8 @@ def generate_launch_description():
         remappings=[
           ('tf','/tf'),
           ('joint_states','/joint_states')
-        ]
+        ],
+        on_exit=Shutdown()
     ),
 
     Node(
