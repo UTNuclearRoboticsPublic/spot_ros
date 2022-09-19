@@ -1,3 +1,4 @@
+from xmlrpc.client import Boolean
 from launch import LaunchDescription
 
 from launch.actions import DeclareLaunchArgument, Shutdown
@@ -13,7 +14,8 @@ def generate_launch_description():
   launch_args = [
     DeclareLaunchArgument("username", default_value=TextSubstitution(text="dummy_username")),
     DeclareLaunchArgument("password", default_value=TextSubstitution(text="dummy_password")),
-    DeclareLaunchArgument("hostname", default_value=TextSubstitution(text="192.168.50.3"))
+    DeclareLaunchArgument("hostname", default_value=TextSubstitution(text="192.168.50.3")),
+    DeclareLaunchArgument("auto_claim", default_value=TextSubstitution(text="False"))
   ]
 
   nodes = [
@@ -31,7 +33,10 @@ def generate_launch_description():
                                value_type=str),
           ParameterDescription(name='hostname',
                                value=LaunchConfiguration('hostname'),
-                               value_type=str)
+                               value_type=str),
+          ParameterDescription(name='auto_claim',
+                               value=LaunchConfiguration('auto_claim'),
+                               value_type=bool)
         ],
         remappings=[
           ('tf','/tf'),

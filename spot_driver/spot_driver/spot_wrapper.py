@@ -47,7 +47,7 @@ from google.protobuf.duration_pb2 import Duration
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
     def __init__(self, logger):
-        self._connected = False
+        self._is_connected = False
         self._logger = logger
         self._robot = None
         self._lease = None
@@ -58,7 +58,9 @@ class SpotWrapper():
         self._is_moving = False
         self._last_stand_command = None
         self._last_sit_command = None
-        self._last_motion_command = None
+        self._last_trajectory_command = None
+        self._last_trajectory_command_precise = None
+        self._last_velocity_command_time = None
 
     def connect(self, username, password, hostname, rates = {}, callbacks = {}) -> bool:
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
@@ -87,58 +89,59 @@ class SpotWrapper():
 
         try:
             self._robot.authenticate(username, password)
-            self._robot.start_time_sync()
         except RpcError as err:
             self._logger.error("Failed to communicate with robot: %s", err)
             return False
         except AuthResponseError as err:
-            self._logger.error('Authentication failed.\n' + str(err))
+            self._logger.error('Authentication failed. ' + str(err))
             return False
 
-        if self._robot:
-            # Spot service clients
-            try:
-                self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
-                self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
-                self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
-                self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
-                self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
-                self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
-            except Exception as e:
-                self._logger.error("Unable to create client service: %s", e)
-                return False
+        self._robot.start_time_sync()
 
-            # Async Tasks
-            self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-            self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, rates.get("metrics", 1.0), callbacks.get("metrics", lambda:None))
-            self._lease_task = AsyncLease(self._lease_client, self._logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
-            self._front_image_task = AsyncImageService(self._image_client, self._logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-            self._side_image_task = AsyncImageService(self._image_client, self._logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-            self._rear_image_task = AsyncImageService(self._image_client, self._logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-            self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
+        # Spot service clients
+        try:
+            self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
+            self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
+            self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
+            self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
+            self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
+            self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
+        except Exception as e:
+            self._logger.error("Unable to create client service: %s", e)
+            return False
 
-            self._estop_endpoint = None
+        # Async Tasks
+        self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
+        self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, rates.get("metrics", 1.0), callbacks.get("metrics", lambda:None))
+        self._lease_task = AsyncLease(self._lease_client, self._logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
+        self._front_image_task = AsyncImageService(self._image_client, self._logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
+        self._side_image_task = AsyncImageService(self._image_client, self._logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
+        self._rear_image_task = AsyncImageService(self._image_client, self._logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+        self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
 
-            self._async_tasks = AsyncTasks([self._robot_state_task,
-                                            self._robot_metrics_task,
-                                            self._lease_task,
-                                            self._front_image_task,
-                                            self._side_image_task,
-                                            self._rear_image_task,
-                                            self._idle_task])
+        self._estop_endpoint = None
 
-            self._connected = True
-            return True
+        # self._async_tasks = AsyncTasks([self._robot_state_task,
+        #                                 self._robot_metrics_task,
+        #                                 self._lease_task,
+        #                                 self._front_image_task,
+        #                                 self._side_image_task,
+        #                                 self._rear_image_task,
+        #                                 self._idle_task])
+        self._async_tasks = AsyncTasks([self._robot_state_task])
+
+        self._is_connected = True
+        return True
 
     @property
     def is_connected(self) -> bool:
         """Return boolean indicating if the wrapper initialized successfully"""
-        return self._connected
+        return self._is_connected
 
     @property
     def id(self):
         """Return robot's ID"""
-        if not self._connected:
+        if not self._is_connected:
             return None
             
         return self._robot.get_id()
@@ -276,10 +279,12 @@ class SpotWrapper():
 
     def disconnect(self) -> None:
         """Release control of robot as gracefully as posssible."""
+        if self._robot is None:
+            return
+
         if self._robot.time_sync:
             self._robot.time_sync.stop()
-        self.releaseLease()
-        self.releaseEStop()
+        self.release()
 
     def _robot_command(self, command_proto, end_time_secs=None):
         """Generic blocking function for sending commands to robots.
@@ -346,6 +351,11 @@ class SpotWrapper():
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
+    def get_mobility_params(self):
+        """Get mobility params
+        """
+        return self._mobility_params
+
     def velocity_cmd(self, v_x, v_y, v_rot, cmd_duration=0.1) -> None:
         """Send a velocity motion command to the robot.
 
@@ -359,3 +369,4 @@ class SpotWrapper():
         self._robot_command(RobotCommandBuilder.synchro_velocity_command(
                                       v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
                                   end_time_secs=end_time)
+        self._last_velocity_command_time = end_time

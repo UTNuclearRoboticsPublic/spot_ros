@@ -25,7 +25,10 @@
 #
 ############################################################################################
 
+from typing import List
+
 from rclpy.node import Node
+from rclpy.time import Time
 import rclpy.action
 import rclpy.callback_groups
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
@@ -134,9 +137,6 @@ class SpotROS(Node):
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
 
-        status_pub_period = 0.1 # seconds
-        self.timer = self.create_timer(status_pub_period, self.PublishStatus)
-
     def RobotStateCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new robot state data.
 
@@ -144,55 +144,60 @@ class SpotROS(Node):
             results: FutureWrapper object of AsyncPeriodicQuery callback
         """
         state = self.spot_wrapper.robot_state
+        
+        if not state:
+            return
 
-        if state:
-            ## joint states ##
-            joint_state = GetJointStatesFromState(state, self.spot_wrapper)
-            self.joint_state_pub.publish(joint_state)
+        odom_mode = self.get_parameter('odom_mode').value
+        
+        ## joint states ##
+        joint_state = GetJointStatesFromState(state, self.spot_wrapper)
+        self.joint_state_pub.publish(joint_state)
+        
+        ## TF ##
+        tf_msg = GetTFFromState(state, self.spot_wrapper)
+        
+        if len(tf_msg.transforms) > 0:
+            self.tf_broadcaster.sendTransform(tf_msg.transforms)
+        
+        # Odom Twist #
+        twist_odom_msg = GetOdomTwistFromState(state, self.spot_wrapper)
+        self.odom_twist_pub.publish(twist_odom_msg)
 
-            ## TF ##
-            tf_msg = GetTFFromState(state, self.spot_wrapper, self.mode_parent_odom_tf)
-            if len(tf_msg.transforms) > 0:
-                self.tf_broadcaster.sendTransform(tf_msg)
+        # Odom #
+        if odom_mode == 'vision':
+            odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=True)
+        else:
+            odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=False)
+        self.odom_pub.publish(odom_msg)
 
-            # Odom Twist #
-            twist_odom_msg = GetOdomTwistFromState(state, self.spot_wrapper)
-            self.odom_twist_pub.publish(twist_odom_msg)
+        # Feet #
+        foot_array_msg = GetFeetFromState(state, self.spot_wrapper)
+        self.feet_pub.publish(foot_array_msg)
 
-            # Odom #
-            if self.mode_parent_odom_tf == 'vision':
-                odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=True)
-            else:
-                odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=False)
-            self.odom_pub.publish(odom_msg)
+        # EStop #
+        estop_array_msg = GetEStopStateFromState(state, self.spot_wrapper)
+        self.estop_pub.publish(estop_array_msg)
 
-            # Feet #
-            foot_array_msg = GetFeetFromState(state, self.spot_wrapper)
-            self.feet_pub.publish(foot_array_msg)
+        # WIFI #
+        wifi_msg = GetWifiFromState(state)
+        self.wifi_pub.publish(wifi_msg)
 
-            # EStop #
-            estop_array_msg = GetEStopStateFromState(state, self.spot_wrapper)
-            self.estop_pub.publish(estop_array_msg)
+        # Battery States #
+        battery_states_array_msg = GetBatteryStatesFromState(state, self.spot_wrapper)
+        self.battery_pub.publish(battery_states_array_msg)
 
-            # WIFI #
-            wifi_msg = GetWifiFromState(state)
-            self.wifi_pub.publish(wifi_msg)
+        # Power State #
+        power_state_msg = GetPowerStatesFromState(state, self.spot_wrapper)
+        self.power_pub.publish(power_state_msg)
 
-            # Battery States #
-            battery_states_array_msg = GetBatteryStatesFromState(state, self.spot_wrapper)
-            self.battery_pub.publish(battery_states_array_msg)
+        # System Faults #
+        system_fault_state_msg = GetSystemFaultsFromState(state, self.spot_wrapper)
+        self.system_faults_pub.publish(system_fault_state_msg)
 
-            # Power State #
-            power_state_msg = GetPowerStatesFromState(state, self.spot_wrapper)
-            self.power_pub.publish(power_state_msg)
-
-            # System Faults #
-            system_fault_state_msg = GetSystemFaultsFromState(state, self.spot_wrapper)
-            self.system_faults_pub.publish(system_fault_state_msg)
-
-            # Behavior Faults #
-            behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
-            self.behavior_faults_pub.publish(behavior_fault_state_msg)
+        # Behavior Faults #
+        behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
+        self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
     def MetricsCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new metrics data.
@@ -204,7 +209,7 @@ class SpotROS(Node):
         if metrics:
             metrics_msg = Metrics()
             local_time = self.spot_wrapper.robotToLocalTime(metrics.timestamp)
-            metrics_msg.header.stamp = rclpy.time.Time(local_time.seconds, local_time.nanos)
+            metrics_msg.header.stamp = Time(seconds=local_time.seconds, nanoseconds=local_time.nanos)
 
             for metric in metrics.metrics:
                 if metric.label == "distance":
@@ -212,9 +217,9 @@ class SpotROS(Node):
                 elif metric.label == "gait cycles":
                     metrics_msg.gait_cycles = metric.int_value
                 elif metric.label == "time moving":
-                    metrics_msg.time_moving = rclpy.time.Time(metric.duration.seconds, metric.duration.nanos)
+                    metrics_msg.time_moving = Time(metric.duration.seconds, metric.duration.nanos)
                 elif metric.label == "electric power":
-                    metrics_msg.electric_power = rclpy.time.Time(metric.duration.seconds, metric.duration.nanos)
+                    metrics_msg.electric_power = Time(metric.duration.seconds, metric.duration.nanos)
 
             self.metrics_pub.publish(metrics_msg)
 
@@ -543,7 +548,7 @@ class SpotROS(Node):
 
     def populate_camera_static_transforms(self,
                                           image_data: image_pb2.ImageResponse,
-                                          existing_transforms: list) -> list:
+                                          existing_transforms: List[TransformStamped]) -> List[TransformStamped]:
         """Check data received from one of the image tasks and use the transform snapshot to extract the camera frame
         transforms. These are the transforms from body->frontleft->frontleft_fisheye, for example. These transforms
         never change, but they may be calibrated slightly differently for each robot so we need to generate the
@@ -554,15 +559,15 @@ class SpotROS(Node):
         """
 
         # We exclude the odometry frames from static transforms since they are not static. We can ignore the body
-        # frame because it is a child of odom or vision depending on the mode_parent_odom_tf, and will be published
+        # frame because it is a child of odom or vision depending on the odom_mode, and will be published
         # by the non-static transform publishing that is done by the state callback
-        excluded_frames = ['odom', 'vision', 'body']
+        excluded_frames = {'odom', 'vision', 'body'}
         all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
-        existing_transforms = [(transform.header.frame_id, transform.child_frame_id) for transform in existing_transforms]
-        
-        tfs_to_add = [x for x in all_tfs_from_data
-            if x.value.parent_frame_name not in excluded_frames
-            and (x.value.parent_frame_name, x.key) not in existing_transforms]
+        existing_pairs = [(transform.header.frame_id, transform.child_frame_id) for transform in existing_transforms]
+
+        tfs_to_add = {k:v for (k,v) in all_tfs_from_data.items()
+            if v.parent_frame_name not in excluded_frames
+            and (v.parent_frame_name, k) not in existing_pairs}
 
         # tf: FrameTreeSnapshot.ChildToParentEdgeMapEntry
         #    key: str
@@ -570,13 +575,13 @@ class SpotROS(Node):
         #       parent_frame_name: str
         #       parent_tform_child: bosdyn.client.math_helpers.SE3Pose
         output = existing_transforms
-        for tf in tfs_to_add:
+        for k,v in tfs_to_add.items():
             local_time = self.spot_wrapper.robotToLocalTime(image_data.shot.acquisition_time)
-            tf_time = rclpy.time.Time(local_time.seconds, local_time.nanos)
+            tf_time = Time(seconds=local_time.seconds, nanoseconds=local_time.nanos)
             static_tf = populateTransformStamped(tf_time,
-                                                 tf.value.parent_frame_name,
-                                                 tf.key,
-                                                 tf.value.parent_tform_child)
+                                                 v.parent_frame_name,
+                                                 k,
+                                                 v.parent_tform_child)
             output.append(static_tf)
         
         return output
@@ -635,8 +640,7 @@ class SpotROS(Node):
                                      self.get_parameter('hostname').value,
                                      self.get_parameters_by_prefix('rates'),
                                      callbacks):
-            #self.get_logger().info(str(type(self.spot_wrapper.id)))
-            self.get_logger().info('Starting ROS driver for Spot ' + self.spot_wrapper.id.nickname)
+            self.get_logger().info('Connecting to Spot ' + self.spot_wrapper.id.nickname)
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
@@ -733,13 +737,13 @@ class SpotROS(Node):
         
         def populate_static_transforms() -> tf2_ros.StaticTransformBroadcaster:
             while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4):
-                pass
+                self.spot_wrapper.updateTasks()
             while not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4):
-                pass
+                self.spot_wrapper.updateTasks()
             while not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2):
-                pass
+                self.spot_wrapper.updateTasks()
 
-            static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster()
+            static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
             static_tfs = []
 
             data = self.spot_wrapper.front_images
@@ -760,18 +764,25 @@ class SpotROS(Node):
 
             static_tf_broadcaster.sendTransform(static_tfs)
             return static_tf_broadcaster
-
-        _ = populate_static_transforms()
-
+        
+        self.static_broadcaster = populate_static_transforms()
+        
         # Startup routine per parameter configuration
         if self.get_parameter('auto_claim').value:
             if self.spot_wrapper.claim():
-                self.get_logger().info('Claimed lease on Spot robot %s', self.spot_wrapper.id['nickname'])
+                self.get_logger().info('Claimed lease on Spot robot ' + self.spot_wrapper.id.nickname)
                 if self.get_parameter('auto_power_on').value:
                     self.get_logger().info('Spot powered on.')
                     if self.spot_wrapper.power_on():
                         if self.get_parameter('auto_stand').value:
                             self.spot_wrapper.stand()
+
+        status_pub_period = 0.1 # seconds
+        self.timer = self.create_timer(status_pub_period, self.PublishStatus)
+
+        self.get_logger().info('Spot driver started.')
+        return True
+
 
     def PublishStatus(self):
         # call all periodic tasks
