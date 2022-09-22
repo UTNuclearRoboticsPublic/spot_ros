@@ -128,7 +128,10 @@ class SpotWrapper():
         #                                 self._side_image_task,
         #                                 self._rear_image_task,
         #                                 self._idle_task])
-        self._async_tasks = AsyncTasks([self._robot_state_task])
+        self._async_tasks = AsyncTasks([self._robot_state_task,
+                                        self._front_image_task,
+                                        self._side_image_task,
+                                        self._rear_image_task])
 
         self._is_connected = True
         return True

@@ -257,22 +257,22 @@ class SpotROS(Node):
 
         if data and len(data) == 4:
             # front left image
-            image_msg, camera_info_msg = getImageMsg(data[0], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[0], self.spot_wrapper)
             self.frontleft_image_pub.publish(image_msg)
             self.frontleft_image_info_pub.publish(camera_info_msg)
 
             # front right image
-            image_msg, camera_info_msg = getImageMsg(data[1], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[1], self.spot_wrapper)
             self.frontright_image_pub.publish(image_msg)
             self.frontright_image_info_pub.publish(camera_info_msg)
 
             # front left depth
-            image_msg, camera_info_msg = getImageMsg(data[2], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[2], self.spot_wrapper)
             self.frontleft_depth_pub.publish(image_msg)
             self.frontleft_depth_info_pub.publish(camera_info_msg)
 
             # front right depth
-            image_msg, camera_info_msg = getImageMsg(data[3], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[3], self.spot_wrapper)
             self.frontright_depth_pub.publish(image_msg)
             self.frontright_depth_info_pub.publish(camera_info_msg)
 
@@ -288,22 +288,22 @@ class SpotROS(Node):
 
         if data and len(data) == 4:
             # left image
-            image_msg, camera_info_msg = getImageMsg(data[0], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[0], self.spot_wrapper)
             self.left_image_pub.publish(image_msg)
             self.left_image_info_pub.publish(camera_info_msg)
 
             # right image
-            image_msg, camera_info_msg = getImageMsg(data[1], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[1], self.spot_wrapper)
             self.right_image_pub.publish(image_msg)
             self.right_image_info_pub.publish(camera_info_msg)
 
             # left depth
-            image_msg, camera_info_msg = getImageMsg(data[2], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[2], self.spot_wrapper)
             self.left_depth_pub.publish(image_msg)
             self.left_depth_info_pub.publish(camera_info_msg)
 
             # right depth
-            image_msg, camera_info_msg = getImageMsg(data[3], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[3], self.spot_wrapper)
             self.right_depth_pub.publish(image_msg)
             self.right_depth_info_pub.publish(camera_info_msg)
 
@@ -319,12 +319,12 @@ class SpotROS(Node):
 
         if data and len(data) == 2:
             # image
-            image_msg, camera_info_msg = getImageMsg(data[0], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[0], self.spot_wrapper)
             self.back_image_pub.publish(image_msg)
             self.back_image_info_pub.publish(camera_info_msg)
 
             # depth
-            image_msg, camera_info_msg = getImageMsg(data[1], self.spot_wrapper)
+            image_msg, camera_info_msg, _ = getImageMsg(data[1], self.spot_wrapper)
             self.back_depth_pub.publish(image_msg)
             self.back_depth_info_pub.publish(camera_info_msg)
 
@@ -637,7 +637,7 @@ class SpotROS(Node):
                                      self.get_parameter('hostname').value,
                                      self.get_parameters_by_prefix('rates'),
                                      callbacks):
-            self.get_logger().info('Connecting to Spot ' + self.spot_wrapper.id.nickname)
+            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.id.nickname)
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
@@ -733,14 +733,14 @@ class SpotROS(Node):
         # populate the static transforms for the various robot cameras
         
         def populate_static_transforms() -> tf2_ros.StaticTransformBroadcaster:
-            while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4):
-                self.spot_wrapper.updateTasks()
-            while not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4):
-                self.spot_wrapper.updateTasks()
-            while not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2):
-                self.spot_wrapper.updateTasks()
-
+            self.spot_wrapper.updateTasks()
             static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+
+            if not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
+               not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
+               not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2):
+                return static_tf_broadcaster
+
             static_tfs = []
 
             data = self.spot_wrapper.front_images

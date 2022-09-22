@@ -65,42 +65,13 @@ friendly_joint_names["hr.hx"] = "rear_right_hip_x"
 friendly_joint_names["hr.hy"] = "rear_right_hip_y"
 friendly_joint_names["hr.kn"] = "rear_right_knee"
 
-class DefaultCameraInfo(CameraInfo):
-    """Blank class extending CameraInfo ROS topic that defaults most parameters"""
-    def __init__(self):
-        super().__init__()
-        self.distortion_model = "plumb_bob"
-
-        self.d.append(0)
-        self.d.append(0)
-        self.d.append(0)
-        self.d.append(0)
-        self.d.append(0)
-
-        self.k[1] = 0
-        self.k[3] = 0
-        self.k[6] = 0
-        self.k[7] = 0
-        self.k[8] = 1
-
-        self.r[0] = 1
-        self.r[1] = 0
-        self.r[2] = 0
-        self.r[3] = 0
-        self.r[4] = 1
-        self.r[5] = 0
-        self.r[6] = 0
-        self.r[7] = 0
-        self.r[8] = 1
-
-        self.p[1] = 0
-        self.p[3] = 0
-        self.p[4] = 0
-        self.p[7] = 0
-        self.p[8] = 0
-        self.p[9] = 0
-        self.p[10] = 1
-        self.p[11] = 0
+def makeDefaultCameraInfo() -> CameraInfo:
+    """Generator function for CameraInfo msg with default values"""
+    return CameraInfo(d=[0]*5,
+                      distortion_model="plumb_bob",
+                      k=[0,0,0,0,0,0,0,0,1],
+                      r=[1,0,0,0,1,0,0,0,1],
+                      p=[0,0,0,0,0,0,0,0,0,0,1,0])
 
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: str,
@@ -206,7 +177,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
             image_msg.step = 2 * data.shot.image.cols
             image_msg.data = data.shot.image.data
 
-    camera_info_msg = DefaultCameraInfo()
+    camera_info_msg = makeDefaultCameraInfo()
     local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
     camera_info_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     camera_info_msg.header.frame_id = data.shot.frame_name_image_sensor
