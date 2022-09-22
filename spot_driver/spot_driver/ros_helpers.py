@@ -30,12 +30,13 @@ import rclpy.time
 
 from .spot_wrapper import SpotWrapper
 
-import builtin_interfaces.msg
-from tf2_msgs.msg import TFMessage
-from geometry_msgs.msg import TransformStamped
+from builtin_interfaces.msg import Time as ROSTime
+from builtin_interfaces.msg import Duration as ROSDuration
+from geometry_msgs.msg import PoseWithCovariance, TransformStamped, TwistWithCovarianceStamped
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import TwistWithCovarianceStamped
+from tf2_msgs.msg import TFMessage
 
 from spot_msgs.msg import FootState, FootStateArray
 from spot_msgs.msg import EStopState, EStopStateArray
@@ -47,6 +48,7 @@ from spot_msgs.msg import BatteryState, BatteryStateArray
 
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
 from bosdyn.client.math_helpers import SE3Pose
+from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
 
 friendly_joint_names = {}
 """Dictionary for mapping BD joint names to more friendly names"""
@@ -69,36 +71,36 @@ class DefaultCameraInfo(CameraInfo):
         super().__init__()
         self.distortion_model = "plumb_bob"
 
-        self.D.append(0)
-        self.D.append(0)
-        self.D.append(0)
-        self.D.append(0)
-        self.D.append(0)
+        self.d.append(0)
+        self.d.append(0)
+        self.d.append(0)
+        self.d.append(0)
+        self.d.append(0)
 
-        self.K[1] = 0
-        self.K[3] = 0
-        self.K[6] = 0
-        self.K[7] = 0
-        self.K[8] = 1
+        self.k[1] = 0
+        self.k[3] = 0
+        self.k[6] = 0
+        self.k[7] = 0
+        self.k[8] = 1
 
-        self.R[0] = 1
-        self.R[1] = 0
-        self.R[2] = 0
-        self.R[3] = 0
-        self.R[4] = 1
-        self.R[5] = 0
-        self.R[6] = 0
-        self.R[7] = 0
-        self.R[8] = 1
+        self.r[0] = 1
+        self.r[1] = 0
+        self.r[2] = 0
+        self.r[3] = 0
+        self.r[4] = 1
+        self.r[5] = 0
+        self.r[6] = 0
+        self.r[7] = 0
+        self.r[8] = 1
 
-        self.P[1] = 0
-        self.P[3] = 0
-        self.P[4] = 0
-        self.P[7] = 0
-        self.P[8] = 0
-        self.P[9] = 0
-        self.P[10] = 1
-        self.P[11] = 0
+        self.p[1] = 0
+        self.p[3] = 0
+        self.p[4] = 0
+        self.p[7] = 0
+        self.p[8] = 0
+        self.p[9] = 0
+        self.p[10] = 1
+        self.p[11] = 0
 
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: str,
@@ -147,7 +149,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
             transform = data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
             new_tf = TransformStamped()
             local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
-            new_tf.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+            new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
             new_tf.header.frame_id = transform.parent_frame_name
             new_tf.child_frame_id = frame_name
             new_tf.transform.translation.x = transform.parent_tform_child.position.x
@@ -161,7 +163,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
 
     image_msg = Image()
     local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
-    image_msg.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+    image_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     image_msg.header.frame_id = data.shot.frame_name_image_sensor
     image_msg.height = data.shot.image.rows
     image_msg.width = data.shot.image.cols
@@ -206,20 +208,20 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
 
     camera_info_msg = DefaultCameraInfo()
     local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
-    camera_info_msg.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+    camera_info_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     camera_info_msg.header.frame_id = data.shot.frame_name_image_sensor
     camera_info_msg.height = data.shot.image.rows
     camera_info_msg.width = data.shot.image.cols
 
-    camera_info_msg.K[0] = data.source.pinhole.intrinsics.focal_length.x
-    camera_info_msg.K[2] = data.source.pinhole.intrinsics.principal_point.x
-    camera_info_msg.K[4] = data.source.pinhole.intrinsics.focal_length.y
-    camera_info_msg.K[5] = data.source.pinhole.intrinsics.principal_point.y
+    camera_info_msg.k[0] = data.source.pinhole.intrinsics.focal_length.x
+    camera_info_msg.k[2] = data.source.pinhole.intrinsics.principal_point.x
+    camera_info_msg.k[4] = data.source.pinhole.intrinsics.focal_length.y
+    camera_info_msg.k[5] = data.source.pinhole.intrinsics.principal_point.y
 
-    camera_info_msg.P[0] = data.source.pinhole.intrinsics.focal_length.x
-    camera_info_msg.P[2] = data.source.pinhole.intrinsics.principal_point.x
-    camera_info_msg.P[5] = data.source.pinhole.intrinsics.focal_length.y
-    camera_info_msg.P[6] = data.source.pinhole.intrinsics.principal_point.y
+    camera_info_msg.p[0] = data.source.pinhole.intrinsics.focal_length.x
+    camera_info_msg.p[2] = data.source.pinhole.intrinsics.principal_point.x
+    camera_info_msg.p[5] = data.source.pinhole.intrinsics.focal_length.y
+    camera_info_msg.p[6] = data.source.pinhole.intrinsics.principal_point.y
 
     return image_msg, camera_info_msg, tf_msg
 
@@ -234,7 +236,7 @@ def GetJointStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: Spo
     """
     joint_state = JointState()
     local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
-    joint_state.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+    joint_state.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     for joint in state.kinematic_state.joint_states:
         joint_state.name.append(friendly_joint_names.get(joint.name, "ERROR"))
         joint_state.position.append(joint.position.value)
@@ -256,7 +258,7 @@ def GetEStopStateFromState(state: robot_state_pb2.RobotState, spot_wrapper: Spot
     for estop in state.estop_states:
         estop_msg = EStopState()
         local_time = spot_wrapper.robotToLocalTime(estop.timestamp)
-        estop_msg.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+        estop_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
         estop_msg.name = estop.name
         estop_msg.type = estop.type
         estop_msg.state = estop.state
@@ -270,7 +272,7 @@ def GetFeetFromState(state: robot_state_pb2.RobotState) -> FootStateArray:
     Args:
         data: Robot State proto
     Returns:
-        FootStateArray message
+        spot_msgs/FootStateArray ROS message
     """
     foot_array_msg = FootStateArray()
     for foot in state.foot_state:
@@ -294,7 +296,7 @@ def GetOdomTwistFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotW
     """
     twist_odom_msg = TwistWithCovarianceStamped()
     local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
-    twist_odom_msg.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+    twist_odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     twist_odom_msg.twist.twist.linear.x = state.kinematic_state.velocity_of_body_in_odom.linear.x
     twist_odom_msg.twist.twist.linear.y = state.kinematic_state.velocity_of_body_in_odom.linear.y
     twist_odom_msg.twist.twist.linear.z = state.kinematic_state.velocity_of_body_in_odom.linear.z
@@ -303,13 +305,46 @@ def GetOdomTwistFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotW
     twist_odom_msg.twist.twist.angular.z = state.kinematic_state.velocity_of_body_in_odom.angular.z
     return twist_odom_msg
 
+def GetOdomFromState(state, spot_wrapper, use_vision):
+    """Maps odometry data from robot state proto to ROS Odometry message
+    Args:
+        state: Robot State proto
+        spot_wrapper: A SpotWrapper object
+        use_vision: If true, use visual odometry in addition to kinematic odometry
+    Returns:
+        nav_msgs/Odometry ROS message
+    """
+    odom_msg = Odometry()
+    local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
+    odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
+    if use_vision == True:
+        odom_msg.header.frame_id = 'vision'
+        tform_body = get_vision_tform_body(state.kinematic_state.transforms_snapshot)
+    else:
+        odom_msg.header.frame_id = 'odom'
+        tform_body = get_odom_tform_body(state.kinematic_state.transforms_snapshot)
+    odom_msg.child_frame_id = 'body'
+    pose_odom_msg = PoseWithCovariance()
+    pose_odom_msg.pose.position.x = tform_body.position.x
+    pose_odom_msg.pose.position.y = tform_body.position.y
+    pose_odom_msg.pose.position.z = tform_body.position.z
+    pose_odom_msg.pose.orientation.x = tform_body.rotation.x
+    pose_odom_msg.pose.orientation.y = tform_body.rotation.y
+    pose_odom_msg.pose.orientation.z = tform_body.rotation.z
+    pose_odom_msg.pose.orientation.w = tform_body.rotation.w
+
+    odom_msg.pose = pose_odom_msg
+    twist_odom_msg = GetOdomTwistFromState(state, spot_wrapper).twist
+    odom_msg.twist = twist_odom_msg
+    return odom_msg
+
 def GetWifiFromState(state: robot_state_pb2.RobotState) -> WiFiState:
     """Maps wireless state data from robot state proto to ROS WiFiState message
 
     Args:
         data: Robot State proto
     Returns:
-        WiFiState message
+        spot_msgs/WiFiState ROS message
     """
     wifi_msg = WiFiState()
     for comm_state in state.comms_states:
@@ -335,7 +370,7 @@ def GetTFFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper)
             transform = state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
             new_tf = TransformStamped()
             local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
-            new_tf.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+            new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
             new_tf.header.frame_id = transform.parent_frame_name
             new_tf.child_frame_id = frame_name
             new_tf.transform.translation.x = transform.parent_tform_child.position.x
@@ -362,11 +397,11 @@ def GetBatteryStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: S
     for battery in state.battery_states:
         battery_msg = BatteryState()
         local_time = spot_wrapper.robotToLocalTime(battery.timestamp)
-        battery_msg.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+        battery_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
         battery_msg.identifier = battery.identifier
         battery_msg.charge_percentage = battery.charge_percentage.value
-        battery_msg.estimated_runtime = builtin_interfaces.msg.Duration(sec=battery.estimated_runtime.seconds, nanosec=battery.estimated_runtime.nanos)
+        battery_msg.estimated_runtime = ROSDuration(sec=battery.estimated_runtime.seconds, nanosec=battery.estimated_runtime.nanos)
         battery_msg.current = battery.current.value
         battery_msg.voltage = battery.voltage.value
         for temp in battery.temperatures:
@@ -387,11 +422,11 @@ def GetPowerStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: Spo
     """
     power_state_msg = PowerState()
     local_time = spot_wrapper.robotToLocalTime(state.power_state.timestamp)
-    power_state_msg.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+    power_state_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     power_state_msg.motor_power_state = state.power_state.motor_power_state
     power_state_msg.shore_power_state = state.power_state.shore_power_state
     power_state_msg.locomotion_charge_percentage = state.power_state.locomotion_charge_percentage.value
-    power_state_msg.locomotion_estimated_runtime = builtin_interfaces.msg.Time(sec=state.power_state.locomotion_estimated_runtime.seconds, nanosec=state.power_state.locomotion_estimated_runtime.nanos)
+    power_state_msg.locomotion_estimated_runtime = ROSTime(sec=state.power_state.locomotion_estimated_runtime.seconds, nanosec=state.power_state.locomotion_estimated_runtime.nanos)
     return power_state_msg
 
 def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List[BehaviorFault]:
@@ -409,7 +444,7 @@ def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrap
         new_fault = BehaviorFault()
         new_fault.behavior_fault_id = fault.behavior_fault_id
         local_time = spot_wrapper.robotToLocalTime(fault.onset_timestamp)
-        new_fault.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
+        new_fault.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
         new_fault.cause = fault.cause
         new_fault.status = fault.status
         faults.append(new_fault)
@@ -431,8 +466,8 @@ def getSystemFaults(system_faults: service_fault_pb2.ServiceFault, spot_wrapper:
         new_fault = SystemFault()
         new_fault.name = fault.name
         local_time = spot_wrapper.robotToLocalTime(fault.onset_timestamp)
-        new_fault.header.stamp = builtin_interfaces.msg.Time(sec=local_time.seconds, nanosec=local_time.nanos)
-        new_fault.duration = builtin_interfaces.msg.Duration(sec=fault.duration.seconds, nanosec=fault.duration.nanos)
+        new_fault.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
+        new_fault.duration = ROSDuration(sec=fault.duration.seconds, nanosec=fault.duration.nanos)
         new_fault.code = fault.code
         new_fault.uid = fault.uid
         new_fault.error_message = fault.error_message

@@ -165,14 +165,11 @@ class SpotROS(Node):
         self.odom_twist_pub.publish(twist_odom_msg)
 
         # Odom #
-        if odom_mode == 'vision':
-            odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=True)
-        else:
-            odom_msg = GetOdomFromState(state, self.spot_wrapper, use_vision=False)
+        odom_msg = GetOdomFromState(state, self.spot_wrapper, odom_mode == 'vision')
         self.odom_pub.publish(odom_msg)
 
         # Feet #
-        foot_array_msg = GetFeetFromState(state, self.spot_wrapper)
+        foot_array_msg = GetFeetFromState(state)
         self.feet_pub.publish(foot_array_msg)
 
         # EStop #

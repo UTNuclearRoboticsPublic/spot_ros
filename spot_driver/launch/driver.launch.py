@@ -15,7 +15,9 @@ def generate_launch_description():
     DeclareLaunchArgument("username", default_value=TextSubstitution(text="dummy_username")),
     DeclareLaunchArgument("password", default_value=TextSubstitution(text="dummy_password")),
     DeclareLaunchArgument("hostname", default_value=TextSubstitution(text="192.168.50.3")),
-    DeclareLaunchArgument("auto_claim", default_value=TextSubstitution(text="False"))
+    DeclareLaunchArgument("auto_claim", default_value=TextSubstitution(text="False")),
+    DeclareLaunchArgument("auto_power_on", default_value=TextSubstitution(text="False")),
+    DeclareLaunchArgument("auto_stand", default_value=TextSubstitution(text="False"))
   ]
 
   nodes = [
@@ -36,6 +38,12 @@ def generate_launch_description():
                                value_type=str),
           ParameterDescription(name='auto_claim',
                                value=LaunchConfiguration('auto_claim'),
+                               value_type=bool),
+          ParameterDescription(name='auto_power_on',
+                               value=LaunchConfiguration('auto_power_on'),
+                               value_type=bool),
+          ParameterDescription(name='auto_stand',
+                               value=LaunchConfiguration('auto_stand'),
                                value_type=bool)
         ],
         remappings=[
