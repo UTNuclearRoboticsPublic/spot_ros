@@ -25,7 +25,6 @@
 #
 ############################################################################################
 
-from typing import Tuple
 from .async_queries import *
 
 from bosdyn.api import image_pb2
@@ -40,6 +39,7 @@ from bosdyn.client.image import ImageClient, build_image_request
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 
 from bosdyn.client.auth import AuthResponseError
+from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.protobuf.duration_pb2 import Duration
@@ -112,7 +112,6 @@ class SpotWrapper():
 
         # Async Tasks
         self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-        self._robot_metrics_task = AsyncMetrics(self._robot_state_client, self._logger, rates.get("metrics", 1.0), callbacks.get("metrics", lambda:None))
         self._lease_task = AsyncLease(self._lease_client, self._logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
         self._front_image_task = AsyncImageService(self._image_client, self._logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
         self._side_image_task = AsyncImageService(self._image_client, self._logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
@@ -121,17 +120,13 @@ class SpotWrapper():
 
         self._estop_endpoint = None
 
-        # self._async_tasks = AsyncTasks([self._robot_state_task,
-        #                                 self._robot_metrics_task,
-        #                                 self._lease_task,
-        #                                 self._front_image_task,
-        #                                 self._side_image_task,
-        #                                 self._rear_image_task,
-        #                                 self._idle_task])
         self._async_tasks = AsyncTasks([self._robot_state_task,
                                         self._front_image_task,
                                         self._side_image_task,
-                                        self._rear_image_task])
+                                        self._rear_image_task,
+                                        self._lease_task,
+                                        self._idle_task
+                                        ])
 
         self._is_connected = True
         return True
@@ -153,11 +148,6 @@ class SpotWrapper():
     def robot_state(self):
         """Return latest proto from the _robot_state_task"""
         return self._robot_state_task.proto
-
-    @property
-    def metrics(self):
-        """Return latest proto from the _robot_metrics_task"""
-        return self._robot_metrics_task.proto
 
     @property
     def lease(self):
@@ -217,15 +207,17 @@ class SpotWrapper():
 
         return rtime
 
-    def claim(self) -> Tuple[bool,str]:
+    def claim(self) -> bool:
         """Get a lease for the robot, a handle on the estop endpoint, and the ID of the robot."""
         try:
-            self.getLease()
+            if not self.getLease():
+                return False
             self.resetEStop()
-            return True, "Success"
         except (ResponseError, RpcError) as err:
-            self._logger.error("Failed to initialize robot communication: %s", err)
-            return False, str(err)
+            self._logger.error("Failed to initialize robot communication when attempting to claim lease: %s", err)
+            return False
+        
+        return True
 
     def updateTasks(self) -> None:
         """Loop through all periodic tasks and update their data if needed."""
@@ -237,7 +229,7 @@ class SpotWrapper():
         self._estop_endpoint.force_simple_setup()  # Set this endpoint as the robot's sole estop.
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
 
-    def assertEStop(self, severe=True) -> Tuple[bool,str]:
+    def assertEStop(self, severe=True) -> bool:
         """Forces the robot into eStop state.
 
         Args:
@@ -248,10 +240,10 @@ class SpotWrapper():
                 self._estop_endpoint.stop()
             else:
                 self._estop_endpoint.settle_then_cut()
+        except Exception:
+            return False
 
-            return True, "Success"
-        except:
-            return False, "Error"
+        return True
 
     def releaseEStop(self) -> None:
         """Stop eStop keepalive"""
@@ -260,10 +252,16 @@ class SpotWrapper():
             self._estop_keepalive = None
             self._estop_endpoint = None
 
-    def getLease(self) -> None:
+    def getLease(self) -> bool:
         """Get a lease for the robot and keep the lease alive automatically."""
-        self._lease = self._lease_client.acquire()
+        try:
+            self._lease = self._lease_client.acquire()
+        except (ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError) as err:
+            self._logger.error(err.error_message)
+            return False
+        
         self._lease_keepalive = LeaseKeepAlive(self._lease_client)
+        return True
 
     def releaseLease(self) -> None:
         """Return the lease on the body."""
@@ -271,14 +269,16 @@ class SpotWrapper():
             self._lease_client.return_lease(self._lease)
             self._lease = None
 
-    def release(self) -> Tuple[bool,str]:
+    def release(self) -> bool:
         """Return the lease on the body and the eStop handle."""
         try:
             self.releaseLease()
             self.releaseEStop()
-            return True, "Success"
-        except Exception as e:
-            return False, str(e)
+        except Exception as err:
+            self._logger.error(err)
+            return False
+
+        return True
 
     def disconnect(self) -> None:
         """Release control of robot as gracefully as posssible."""
@@ -330,13 +330,13 @@ class SpotWrapper():
         response = self._robot_command(RobotCommandBuilder.safe_power_off_command())
         return response[0], response[1]
 
-    def power_on(self) -> Tuple[bool,str]:
+    def power_on(self) -> bool:
         """Enable the motor power if e-stop is enabled."""
         try:
             power.power_on(self._power_client)
-            return True, "Success"
+            return True
         except:
-            return False, "Error"
+            return False
 
     def set_mobility_params(self,
                             body_height=0,

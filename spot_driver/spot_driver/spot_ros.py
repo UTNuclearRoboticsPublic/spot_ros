@@ -38,11 +38,13 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import SetParametersResult
 
-from std_srvs.srv import Trigger, SetBool
-from sensor_msgs.msg import Image, CameraInfo
+from builtin_interfaces.msg import Time as TimeMsg
+from builtin_interfaces.msg import Duration as DurationMsg
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Image, CameraInfo
+from std_srvs.srv import Trigger, SetBool
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
@@ -52,7 +54,6 @@ from bosdyn.client import math_helpers
 import functools
 import tf2_ros
 
-from spot_msgs.msg import Metrics
 from spot_msgs.msg import LeaseArray, LeaseResource
 from spot_msgs.msg import FootStateArray
 from spot_msgs.msg import EStopStateArray
@@ -80,7 +81,7 @@ class SpotROS(Node):
         self.spot_wrapper = None
 
         ''' ROS Parameters '''
-        rates_names = ['robot_state', 'metrics', 'lease', 'front_image', 'size_image', 'rear_image']                                    
+        rates_names = ['robot_state', 'lease', 'front_image', 'size_image', 'rear_image']                                    
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback, rates_names=rates_names))
         
@@ -144,7 +145,7 @@ class SpotROS(Node):
             results: FutureWrapper object of AsyncPeriodicQuery callback
         """
         state = self.spot_wrapper.robot_state
-        
+
         if not state:
             return
 
@@ -167,7 +168,7 @@ class SpotROS(Node):
         # Odom #
         odom_msg = GetOdomFromState(state, self.spot_wrapper, odom_mode == 'vision')
         self.odom_pub.publish(odom_msg)
-
+        
         # Feet #
         foot_array_msg = GetFeetFromState(state)
         self.feet_pub.publish(foot_array_msg)
@@ -183,7 +184,7 @@ class SpotROS(Node):
         # Battery States #
         battery_states_array_msg = GetBatteryStatesFromState(state, self.spot_wrapper)
         self.battery_pub.publish(battery_states_array_msg)
-
+        
         # Power State #
         power_state_msg = GetPowerStatesFromState(state, self.spot_wrapper)
         self.power_pub.publish(power_state_msg)
@@ -196,30 +197,6 @@ class SpotROS(Node):
         behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
-    def MetricsCB(self, results) -> None:
-        """Callback for when the Spot Wrapper gets new metrics data.
-
-        Args:
-            results: FutureWrapper object of AsyncPeriodicQuery callback
-        """
-        metrics = self.spot_wrapper.metrics
-        if metrics:
-            metrics_msg = Metrics()
-            local_time = self.spot_wrapper.robotToLocalTime(metrics.timestamp)
-            metrics_msg.header.stamp = Time(seconds=local_time.seconds, nanoseconds=local_time.nanos)
-
-            for metric in metrics.metrics:
-                if metric.label == "distance":
-                    metrics_msg.distance = metric.float_value
-                elif metric.label == "gait cycles":
-                    metrics_msg.gait_cycles = metric.int_value
-                elif metric.label == "time moving":
-                    metrics_msg.time_moving = Time(metric.duration.seconds, metric.duration.nanos)
-                elif metric.label == "electric power":
-                    metrics_msg.electric_power = Time(metric.duration.seconds, metric.duration.nanos)
-
-            self.metrics_pub.publish(metrics_msg)
-
     def LeaseCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new lease data.
 
@@ -228,22 +205,25 @@ class SpotROS(Node):
         """
         lease_array_msg = LeaseArray()
         lease_list = self.spot_wrapper.lease
-        if lease_list:
-            for resource in lease_list:
-                new_resource = LeaseResource()
-                new_resource.resource = resource.resource
-                new_resource.lease.resource = resource.lease.resource
-                new_resource.lease.epoch = resource.lease.epoch
 
-                for seq in resource.lease.sequence:
-                    new_resource.lease.sequence.append(seq)
+        if not lease_list:
+            return
+        
+        for resource in lease_list:
+            new_resource = LeaseResource()
+            new_resource.resource = resource.resource
+            new_resource.lease.resource = resource.lease.resource
+            new_resource.lease.epoch = resource.lease.epoch
 
-                new_resource.lease_owner.client_name = resource.lease_owner.client_name
-                new_resource.lease_owner.user_name = resource.lease_owner.user_name
+            for seq in resource.lease.sequence:
+                new_resource.lease.sequence.append(seq)
 
-                lease_array_msg.resources.append(new_resource)
+            new_resource.lease_owner.client_name = resource.lease_owner.client_name
+            new_resource.lease_owner.user_name = resource.lease_owner.user_name
 
-            self.lease_pub.publish(lease_array_msg)
+            lease_array_msg.resources.append(new_resource)
+
+        self.lease_pub.publish(lease_array_msg)
 
     def FrontImageCB(self, results) -> None:
         """Callback for when the Spot Wrapper gets new front image data.
@@ -584,7 +564,7 @@ class SpotROS(Node):
         return output
 
     def __del__(self):
-        if self.spot_wrapper is not None:
+        if self.spot_wrapper is None:
             return
 
         if not self.spot_wrapper.is_connected():
@@ -622,14 +602,13 @@ class SpotROS(Node):
         """Dictionary listing what callback to use for what data task"""
         callbacks = {}
         callbacks["robot_state"] = self.RobotStateCB
-        callbacks["metrics"]     = self.MetricsCB
         callbacks["lease"]       = self.LeaseCB
         callbacks["front_image"] = self.FrontImageCB
         callbacks["side_image"]  = self.SideImageCB
         callbacks["rear_image"]  = self.RearImageCB
 
         # Connect to the robot
-        self.spot_wrapper = SpotWrapper(logging.getLogger('rosout'))
+        self.spot_wrapper = SpotWrapper(self.get_logger())
 
         # Verify connection
         if self.spot_wrapper.connect(self.get_parameter('username').value, 
@@ -676,7 +655,6 @@ class SpotROS(Node):
                                      depth=1)
 
         self.joint_state_pub = self.create_publisher(JointState, 'joint_states', 1)
-        self.metrics_pub = self.create_publisher(Metrics, 'status/metrics', 1)
         self.lease_pub = self.create_publisher(LeaseArray, 'status/leases', 1)
         self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, 'odometry/twist', 1)
         self.odom_pub = self.create_publisher(Odometry, 'odometry', 10)
@@ -739,6 +717,7 @@ class SpotROS(Node):
             if not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
                not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
                not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2):
+                self.get_logger().error('Failed to get static transforms for cameras.')
                 return static_tf_broadcaster
 
             static_tfs = []

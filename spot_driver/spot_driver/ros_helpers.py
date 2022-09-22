@@ -65,14 +65,6 @@ friendly_joint_names["hr.hx"] = "rear_right_hip_x"
 friendly_joint_names["hr.hy"] = "rear_right_hip_y"
 friendly_joint_names["hr.kn"] = "rear_right_knee"
 
-def makeDefaultCameraInfo() -> CameraInfo:
-    """Generator function for CameraInfo msg with default values"""
-    return CameraInfo(d=[0]*5,
-                      distortion_model="plumb_bob",
-                      k=[0,0,0,0,0,0,0,0,1],
-                      r=[1,0,0,0,1,0,0,0,1],
-                      p=[0,0,0,0,0,0,0,0,0,0,1,0])
-
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: str,
                              child_frame: str,
@@ -177,7 +169,12 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
             image_msg.step = 2 * data.shot.image.cols
             image_msg.data = data.shot.image.data
 
-    camera_info_msg = makeDefaultCameraInfo()
+    camera_info_msg = CameraInfo(d=[0]*5,
+                                 distortion_model="plumb_bob",
+                                 k=[0,0,0,0,0,0,0,0,1],
+                                 r=[1,0,0,0,1,0,0,0,1],
+                                 p=[0,0,0,0,0,0,0,0,0,0,1,0])
+
     local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
     camera_info_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     camera_info_msg.header.frame_id = data.shot.frame_name_image_sensor
@@ -397,7 +394,7 @@ def GetPowerStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: Spo
     power_state_msg.motor_power_state = state.power_state.motor_power_state
     power_state_msg.shore_power_state = state.power_state.shore_power_state
     power_state_msg.locomotion_charge_percentage = state.power_state.locomotion_charge_percentage.value
-    power_state_msg.locomotion_estimated_runtime = ROSTime(sec=state.power_state.locomotion_estimated_runtime.seconds, nanosec=state.power_state.locomotion_estimated_runtime.nanos)
+    power_state_msg.locomotion_estimated_runtime = ROSDuration(sec=state.power_state.locomotion_estimated_runtime.seconds, nanosec=state.power_state.locomotion_estimated_runtime.nanos)
     return power_state_msg
 
 def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List[BehaviorFault]:

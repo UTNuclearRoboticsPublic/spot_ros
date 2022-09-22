@@ -29,6 +29,7 @@ import time
 
 from bosdyn.api import basic_command_pb2
 from bosdyn.client.async_tasks import AsyncPeriodicQuery
+from bosdyn.client import ResponseError, RpcError
 
 class AsyncRobotState(AsyncPeriodicQuery):
     """Class to get robot state at regular intervals.  get_robot_state_async query sent to the robot at every tick.  Callback registered to defined callback function.
