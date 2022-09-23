@@ -27,6 +27,7 @@
 
 from typing import List
 
+import rclpy.utilities
 from rclpy.node import Node
 from rclpy.time import Time
 import rclpy.action
@@ -79,6 +80,8 @@ class SpotROS(Node):
         super().__init__('spot_driver')
 
         self.spot_wrapper = None
+        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
+        self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
         ''' ROS Parameters '''
         rates_names = ['robot_state', 'lease', 'front_image', 'size_image', 'rear_image']                                    
@@ -538,13 +541,13 @@ class SpotROS(Node):
         # We exclude the odometry frames from static transforms since they are not static. We can ignore the body
         # frame because it is a child of odom or vision depending on the odom_mode, and will be published
         # by the non-static transform publishing that is done by the state callback
-        excluded_frames = {'odom', 'vision', 'body'}
+        excluded_child_frames = {'odom', 'vision'}
         all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
         existing_pairs = [(transform.header.frame_id, transform.child_frame_id) for transform in existing_transforms]
 
         tfs_to_add = {k:v for (k,v) in all_tfs_from_data.items()
-            if v.parent_frame_name not in excluded_frames
-            and (v.parent_frame_name, k) not in existing_pairs}
+            if k not in excluded_child_frames and (v.parent_frame_name, k) not in existing_pairs
+            and len(v.parent_frame_name) != 0}
 
         # tf: FrameTreeSnapshot.ChildToParentEdgeMapEntry
         #    key: str
@@ -668,8 +671,6 @@ class SpotROS(Node):
         self.mobility_params_pub = self.create_publisher(MobilityParams, 'status/mobility_params', 1)
         self.feedback_pub = self.create_publisher(Feedback, 'status/feedback', qos_profile=latched_pub_qos)
 
-        self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
-
         self.create_subscription(Twist, 'cmd_vel', self.cmdVelCallback, 10)
         self.create_subscription(Pose, 'body_pose', self.bodyPoseCallback, 10)
 
@@ -710,15 +711,13 @@ class SpotROS(Node):
 
         # populate the static transforms for the various robot cameras
         
-        def populate_static_transforms() -> tf2_ros.StaticTransformBroadcaster:
-            self.spot_wrapper.updateTasks()
-            static_tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        def populate_static_transforms() -> None:
 
-            if not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
-               not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
-               not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2):
-                self.get_logger().error('Failed to get static transforms for cameras.')
-                return static_tf_broadcaster
+            while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
+                  not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
+                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
+                  rclpy.utilities.ok():
+                self.spot_wrapper.updateTasks()
 
             static_tfs = []
 
@@ -738,11 +737,10 @@ class SpotROS(Node):
             static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
             static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-            static_tf_broadcaster.sendTransform(static_tfs)
-            return static_tf_broadcaster
+            self.static_broadcaster.sendTransform(static_tfs)                
         
-        self.static_broadcaster = populate_static_transforms()
-        
+        populate_static_transforms()
+
         # Startup routine per parameter configuration
         if self.get_parameter('auto_claim').value:
             if self.spot_wrapper.claim():
@@ -756,7 +754,7 @@ class SpotROS(Node):
         status_pub_period = 0.1 # seconds
         self.timer = self.create_timer(status_pub_period, self.PublishStatus)
 
-        self.get_logger().info('Spot driver started.')
+        self.get_logger().info('Spot driver started')
         return True
 
 
