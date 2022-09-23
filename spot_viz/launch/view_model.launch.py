@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 import os
@@ -33,5 +33,6 @@ def generate_launch_description():
             executable='rviz2',
             name='rviz2',
             arguments=['-d', os.path.join(bringup_dir,'rviz', 'robot.rviz"')],
+            on_exit=Shutdown()
         )
     ])
