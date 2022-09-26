@@ -271,12 +271,12 @@
     </joint>
 
     <!-- Spot Arm -->
-    <xacro:include filename="$(find spot_description)/urdf/arm/spot_arm_include.urdf.xacro"/> 
-    <xacro:spot_arm name="arm"/>
+    <xacro:include filename="$(find spot_description)/urdf/arm/spot_arm.urdf.xacro"/> 
+    <xacro:spot_arm name="arm0"/>
 
     <joint name="arm0_mount" type="fixed">
         <origin xyz="0.292 0 0.188" rpy="0 0 0"/>
         <parent link="base_link"/>
-        <child link="arm0.base_link"/>
+        <child link="arm0_base_link"/>
     </joint>
 </robot>
