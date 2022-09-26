@@ -50,20 +50,34 @@ from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
 
-friendly_joint_names = {}
-"""Dictionary for mapping BD joint names to more friendly names"""
-friendly_joint_names["fl.hx"] = "front_left_hip_x"
-friendly_joint_names["fl.hy"] = "front_left_hip_y"
-friendly_joint_names["fl.kn"] = "front_left_knee"
-friendly_joint_names["fr.hx"] = "front_right_hip_x"
-friendly_joint_names["fr.hy"] = "front_right_hip_y"
-friendly_joint_names["fr.kn"] = "front_right_knee"
-friendly_joint_names["hl.hx"] = "rear_left_hip_x"
-friendly_joint_names["hl.hy"] = "rear_left_hip_y"
-friendly_joint_names["hl.kn"] = "rear_left_knee"
-friendly_joint_names["hr.hx"] = "rear_right_hip_x"
-friendly_joint_names["hr.hy"] = "rear_right_hip_y"
-friendly_joint_names["hr.kn"] = "rear_right_knee"
+'''Dictionaries for mapping BD joint names to more friendly names'''
+body_joint_names = {
+    'fl.hx' : 'front_left_hip_x',
+    'fl.hy' : 'front_left_hip_y',
+    'fl.kn' : 'front_left_knee',
+    'fr.hx' : 'front_right_hip_x',
+    'fr.hy' : 'front_right_hip_y',
+    'fr.kn' : 'front_right_knee',
+    'hl.hx' : 'rear_left_hip_x',
+    'hl.hy' : 'rear_left_hip_y',
+    'hl.kn' : 'rear_left_knee',
+    'hr.hx' : 'rear_right_hip_x',
+    'hr.hy' : 'rear_right_hip_y',
+    'hr.kn' : 'rear_right_knee',
+}
+
+arm_joint_names = {
+    'arm0.sh0' : 'arm0_shoulder_yaw',
+    'arm0.sh1' : 'arm0_shoulder_pitch',
+    'arm0.hr0' : 'arm0_shoulder_roll',
+    'arm0.elo0': 'arm0_elbow_pitch',
+    'arm0.elo1': 'arm0_elbow_roll',
+    'arm0.wr0': 'arm0_wrist_pitch',
+    'arm0.wr1': 'arm0_wrist_roll',
+    'arm0.f1x': 'arm0_fingers'
+}
+
+friendly_joint_names = dict(body_joint_names, **arm_joint_names)
 
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: str,
@@ -193,37 +207,40 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
 
     return image_msg, camera_info_msg, tf_msg
 
-def GetJointStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> JointState:
+def GetJointStatesFromState(kinematic_state: robot_state_pb2.KinematicState,
+                            spot_wrapper: SpotWrapper) -> JointState:
     """Maps joint state data from robot state proto to ROS JointState message
 
     Args:
-        data: Robot State proto
+        kinematic_state: KinematicState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        JointState message
+        sensor_msgs/JointState ROS message
     """
-    joint_state = JointState()
-    local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
-    joint_state.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-    for joint in state.kinematic_state.joint_states:
-        joint_state.name.append(friendly_joint_names.get(joint.name, "ERROR"))
-        joint_state.position.append(joint.position.value)
-        joint_state.velocity.append(joint.velocity.value)
-        joint_state.effort.append(joint.load.value)
+    joint_state_msg = JointState()
+    local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
+    joint_state_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
-    return joint_state
+    for joint in kinematic_state.joint_states:
+        joint_state_msg.name.append(friendly_joint_names.get(joint.name, "ERROR"))
+        joint_state_msg.position.append(joint.position.value)
+        joint_state_msg.velocity.append(joint.velocity.value)
+        joint_state_msg.effort.append(joint.load.value)
 
-def GetEStopStateFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> EStopStateArray:
-    """Maps eStop state data from robot state proto to ROS EStopArray message
+    return joint_state_msg
+
+def GetEStopStatesFromState(estop_states: robot_state_pb2.EStopState,
+                            spot_wrapper: SpotWrapper) -> EStopStateArray:
+    """Maps EStop states data from robot state proto to ROS EStopArray message
 
     Args:
-        data: Robot State proto
+        estop_states: EStopState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        EStopArray message
+        spot_msgs/EStopArray ROS message
     """
     estop_array_msg = EStopStateArray()
-    for estop in state.estop_states:
+    for estop in estop_states:
         estop_msg = EStopState()
         local_time = spot_wrapper.robotToLocalTime(estop.timestamp)
         estop_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
@@ -234,16 +251,16 @@ def GetEStopStateFromState(state: robot_state_pb2.RobotState, spot_wrapper: Spot
 
     return estop_array_msg
 
-def GetFeetFromState(state: robot_state_pb2.RobotState) -> FootStateArray:
+def GetFeetFromState(foot_states: robot_state_pb2.FootState) -> FootStateArray:
     """Maps foot position state data from robot state proto to ROS FootStateArray message
 
     Args:
-        data: Robot State proto
+        foot_states: FootState proto
     Returns:
         spot_msgs/FootStateArray ROS message
     """
     foot_array_msg = FootStateArray()
-    for foot in state.foot_state:
+    for foot in foot_states:
         foot_msg = FootState()
         foot_msg.foot_position_rt_body.x = foot.foot_position_rt_body.x
         foot_msg.foot_position_rt_body.y = foot.foot_position_rt_body.y
@@ -253,44 +270,48 @@ def GetFeetFromState(state: robot_state_pb2.RobotState) -> FootStateArray:
 
     return foot_array_msg
 
-def GetOdomTwistFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> TwistWithCovarianceStamped:
+def GetOdomTwistFromState(kinematic_state: robot_state_pb2.KinematicState,
+                          spot_wrapper: SpotWrapper) -> TwistWithCovarianceStamped:
     """Maps odometry data from robot state proto to ROS TwistWithCovarianceStamped message
 
     Args:
-        data: Robot State proto
+        kinematic_state: KinematicState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        TwistWithCovarianceStamped message
+        geometry_msgs/TwistWithCovarianceStamped ROS message
     """
     twist_odom_msg = TwistWithCovarianceStamped()
-    local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
+    local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
     twist_odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-    twist_odom_msg.twist.twist.linear.x = state.kinematic_state.velocity_of_body_in_odom.linear.x
-    twist_odom_msg.twist.twist.linear.y = state.kinematic_state.velocity_of_body_in_odom.linear.y
-    twist_odom_msg.twist.twist.linear.z = state.kinematic_state.velocity_of_body_in_odom.linear.z
-    twist_odom_msg.twist.twist.angular.x = state.kinematic_state.velocity_of_body_in_odom.angular.x
-    twist_odom_msg.twist.twist.angular.y = state.kinematic_state.velocity_of_body_in_odom.angular.y
-    twist_odom_msg.twist.twist.angular.z = state.kinematic_state.velocity_of_body_in_odom.angular.z
+    twist_odom_msg.twist.twist.linear.x = kinematic_state.velocity_of_body_in_odom.linear.x
+    twist_odom_msg.twist.twist.linear.y = kinematic_state.velocity_of_body_in_odom.linear.y
+    twist_odom_msg.twist.twist.linear.z = kinematic_state.velocity_of_body_in_odom.linear.z
+    twist_odom_msg.twist.twist.angular.x = kinematic_state.velocity_of_body_in_odom.angular.x
+    twist_odom_msg.twist.twist.angular.y = kinematic_state.velocity_of_body_in_odom.angular.y
+    twist_odom_msg.twist.twist.angular.z = kinematic_state.velocity_of_body_in_odom.angular.z
     return twist_odom_msg
 
-def GetOdomFromState(state, spot_wrapper, use_vision):
+def GetOdomFromState(kinematic_state: robot_state_pb2.KinematicState,
+                     spot_wrapper: SpotWrapper,
+                     use_vision: bool) -> Odometry:
     """Maps odometry data from robot state proto to ROS Odometry message
+
     Args:
-        state: Robot State proto
+        kinematic_state: KinematicState proto
         spot_wrapper: A SpotWrapper object
         use_vision: If true, use visual odometry in addition to kinematic odometry
     Returns:
         nav_msgs/Odometry ROS message
     """
     odom_msg = Odometry()
-    local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
+    local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
     odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     if use_vision == True:
         odom_msg.header.frame_id = 'vision'
-        tform_body = get_vision_tform_body(state.kinematic_state.transforms_snapshot)
+        tform_body = get_vision_tform_body(kinematic_state.transforms_snapshot)
     else:
         odom_msg.header.frame_id = 'odom'
-        tform_body = get_odom_tform_body(state.kinematic_state.transforms_snapshot)
+        tform_body = get_odom_tform_body(kinematic_state.transforms_snapshot)
     odom_msg.child_frame_id = 'body'
     pose_odom_msg = PoseWithCovariance()
     pose_odom_msg.pose.position.x = tform_body.position.x
@@ -302,42 +323,43 @@ def GetOdomFromState(state, spot_wrapper, use_vision):
     pose_odom_msg.pose.orientation.w = tform_body.rotation.w
 
     odom_msg.pose = pose_odom_msg
-    twist_odom_msg = GetOdomTwistFromState(state, spot_wrapper).twist
+    twist_odom_msg = GetOdomTwistFromState(kinematic_state, spot_wrapper).twist
     odom_msg.twist = twist_odom_msg
     return odom_msg
 
-def GetWifiFromState(state: robot_state_pb2.RobotState) -> WiFiState:
+def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
     """Maps wireless state data from robot state proto to ROS WiFiState message
 
     Args:
-        data: Robot State proto
+        data: CommsState proto
     Returns:
         spot_msgs/WiFiState ROS message
     """
     wifi_msg = WiFiState()
-    for comm_state in state.comms_states:
+    for comm_state in comms_states:
         if comm_state.HasField('wifi_state'):
             wifi_msg.current_mode = comm_state.wifi_state.current_mode
             wifi_msg.essid = comm_state.wifi_state.essid
 
     return wifi_msg
 
-def GetTFFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> TFMessage:
+def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
+                   spot_wrapper: SpotWrapper) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
     Args:
-        state: Robot State proto
+        kinematic_state: KinematicState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        TFMessage message
+        tf2_msgs/TFMessage message
     """
     tf_msg = TFMessage()
 
-    for frame_name in state.kinematic_state.transforms_snapshot.child_to_parent_edge_map:
-        if state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
-            transform = state.kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
+    for frame_name in kinematic_state.transforms_snapshot.child_to_parent_edge_map:
+        if kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
+            transform = kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
             new_tf = TransformStamped()
-            local_time = spot_wrapper.robotToLocalTime(state.kinematic_state.acquisition_timestamp)
+            local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
             new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
             new_tf.header.frame_id = transform.parent_frame_name
             new_tf.child_frame_id = frame_name

@@ -39,8 +39,6 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import SetParametersResult
 
-from builtin_interfaces.msg import Time as TimeMsg
-from builtin_interfaces.msg import Duration as DurationMsg
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
 from nav_msgs.msg import Odometry
@@ -70,7 +68,6 @@ from spot_msgs.srv import ClearBehaviorFault, ListGraph, SetLocomotion, SetVeloc
 
 from .ros_helpers import *
 
-import logging
 import threading
 
 class SpotROS(Node):
@@ -141,47 +138,43 @@ class SpotROS(Node):
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
 
-    def RobotStateCB(self, results) -> None:
-        """Callback for when the Spot Wrapper gets new robot state data.
-
-        Args:
-            results: FutureWrapper object of AsyncPeriodicQuery callback
-        """
+    def RobotStateCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new robot state data."""
         state = self.spot_wrapper.robot_state
-
+        self.get_logger().info(str(state.kinematic_state))
         if not state:
             return
 
         odom_mode = self.get_parameter('odom_mode').value
         
         ## joint states ##
-        joint_state = GetJointStatesFromState(state, self.spot_wrapper)
+        joint_state = GetJointStatesFromState(state.kinematic_state, self.spot_wrapper)
         self.joint_state_pub.publish(joint_state)
         
         ## TF ##
-        tf_msg = GetTFFromState(state, self.spot_wrapper)
+        tf_msg = GetTFFromState(state.kinematic_state, self.spot_wrapper)
         
         if len(tf_msg.transforms) > 0:
             self.tf_broadcaster.sendTransform(tf_msg.transforms)
         
         # Odom Twist #
-        twist_odom_msg = GetOdomTwistFromState(state, self.spot_wrapper)
+        twist_odom_msg = GetOdomTwistFromState(state.kinematic_state, self.spot_wrapper)
         self.odom_twist_pub.publish(twist_odom_msg)
 
         # Odom #
-        odom_msg = GetOdomFromState(state, self.spot_wrapper, odom_mode == 'vision')
+        odom_msg = GetOdomFromState(state.kinematic_state, self.spot_wrapper, odom_mode == 'vision')
         self.odom_pub.publish(odom_msg)
         
         # Feet #
-        foot_array_msg = GetFeetFromState(state)
+        foot_array_msg = GetFeetFromState(state.foot_state)
         self.feet_pub.publish(foot_array_msg)
 
         # EStop #
-        estop_array_msg = GetEStopStateFromState(state, self.spot_wrapper)
+        estop_array_msg = GetEStopStatesFromState(state.estop_states, self.spot_wrapper)
         self.estop_pub.publish(estop_array_msg)
 
         # WIFI #
-        wifi_msg = GetWifiFromState(state)
+        wifi_msg = GetWifiFromState(state.comms_states)
         self.wifi_pub.publish(wifi_msg)
 
         # Battery States #
@@ -200,12 +193,8 @@ class SpotROS(Node):
         behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
-    def LeaseCB(self, results) -> None:
-        """Callback for when the Spot Wrapper gets new lease data.
-
-        Args:
-            results: FutureWrapper object of AsyncPeriodicQuery callback
-        """
+    def LeaseCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new lease data."""
         lease_array_msg = LeaseArray()
         lease_list = self.spot_wrapper.lease
 
@@ -228,12 +217,8 @@ class SpotROS(Node):
 
         self.lease_pub.publish(lease_array_msg)
 
-    def FrontImageCB(self, results) -> None:
-        """Callback for when the Spot Wrapper gets new front image data.
-
-        Args:
-            results: FutureWrapper object of AsyncPeriodicQuery callback
-        """
+    def FrontImageCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new front image data."""
 
         # [front left image, front right image, front left depth, front right depth]
         data = self.spot_wrapper.front_images
@@ -259,12 +244,8 @@ class SpotROS(Node):
             self.frontright_depth_pub.publish(image_msg)
             self.frontright_depth_info_pub.publish(camera_info_msg)
 
-    def SideImageCB(self, results) -> None:
-        """Callback for when the Spot Wrapper gets new side image data.
-
-        Args:
-            results: FutureWrapper object of AsyncPeriodicQuery callback
-        """
+    def SideImageCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new side image data."""
 
         # [left image, right image, left depth, right depth]
         data = self.spot_wrapper.side_images
@@ -290,12 +271,8 @@ class SpotROS(Node):
             self.right_depth_pub.publish(image_msg)
             self.right_depth_info_pub.publish(camera_info_msg)
 
-    def RearImageCB(self, results) -> None:
-        """Callback for when the Spot Wrapper gets new rear image data.
-
-        Args:
-            results: FutureWrapper object of AsyncPeriodicQuery callback
-        """
+    def RearImageCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new rear image data."""
 
         # [image, depth]
         data = self.spot_wrapper.rear_images
