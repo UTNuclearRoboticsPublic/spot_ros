@@ -1,9 +1,11 @@
 <?xml version="1.0" ?>
 <robot name="spot" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-    <!-- We do not specify links for the cameras in the URDF. Instead, transforms for those are
-         published by the driver (see spot_driver package) during runtime, so that the transforms
-         include calibration adjustments. -->
+    <!--
+        We do not specify links for the cameras in the URDF. Instead, transforms for those are
+        published by the driver (see spot_driver package), so that the transforms can
+        include calibration adjustments.
+    -->
 
     <link name="body">
         <visual>
@@ -268,6 +270,9 @@
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.257725" />
     </joint>
 
-    <!-- Optional custom includes. -->
-    <xacro:include filename="$(optenv SPOT_URDF_EXTRAS empty.urdf)" />
+    <xacro:include filename="$(find spot_description)/urdf/arm/spot_arm_include.urdf.xacro"/> 
+    <xacro:spot_arm
+        name="arm" base_frame="front_rail"
+        x="0.06" y="0.0" z="0.0"
+        roll="0.0" pitch="0.0" yaw="0.0"/>
 </robot>
