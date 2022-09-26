@@ -1,10 +1,9 @@
 import os
 
 import launch
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
+from launch.substitutions import LaunchConfiguration
 import launch_ros.actions
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.parameter_descriptions import Parameter
 
 import xacro
 

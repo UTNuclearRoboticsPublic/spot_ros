@@ -1,208 +1,159 @@
 <?xml version="1.0" ?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
-    <xacro:macro name="spot_arm" params="name base_frame x y z roll pitch yaw" >
-        <material name="black"><color rgba="0.15 0.15 0.15 1.0" /></material>
+    <xacro:macro name="spot_arm" params="name" >
 
-        <xacro:include filename="$(find spot_description)/urdf/arm/materials.xacro" />
-        <xacro:include filename="$(find spot_description)/urdf/arm/spot_arm.trans" />
-        <xacro:include filename="$(find spot_description)/urdf/arm/spot_arm.gazebo" />
+    <link name="arm0.base_link"/>
 
-        <link name="${name}_base_link">
-        <inertial>
-            <origin rpy="0 0 0" xyz="0.009227173757711551 0.05711546040397183 -0.01795385944355127"/>
-            <mass value="0.8137272025946127"/>
-            <inertia ixx="0.000507" ixy="1e-06" ixz="-6e-06" iyy="0.000506" iyz="2e-06" izz="0.000865"/>
-        </inertial>
+    <link name="arm0.link_sh0">
         <visual>
-            <origin rpy="0 0 1.5708" xyz="0.055 -0.0095 0.038"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/base_link.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.obj"/>
+        </geometry>
+        <material name="arm0.link_sh0">
+            <color rgba="0.2 0.2 0.2 1"/>
+        </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="0 0 0"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/base_link.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.sh0" type="revolute">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <parent link="arm0.base_link"/>
+        <child link="arm0.link_sh0"/>
+        <limit effort="1000" velocity="1000.00" lower="-2.61799387799149441136" upper="3.14159265358979311599"/>
+    </joint>
 
-        <link name="${name}_bottom_v1_1">
-        <inertial>
-            <origin rpy="0 0 0" xyz="4.3834423255225546e-05 1.851716180462093e-05 0.04608850485831119"/>
-            <mass value="3.7768145403916407"/>
-            <inertia ixx="0.003419" ixy="1e-06" ixz="7e-06" iyy="0.015468" iyz="3e-06" izz="0.014948"/>
-        </inertial>
+    <link name="arm0.link_sh1">
         <visual>
-            <!-- <origin rpy="0 0 0" xyz="-0.009381 -0.055159 0.00311"/> -->
-            <origin rpy="0 0 1.5708" xyz=" 0.055159 -0.009381 0.00311"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/bottom_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh1.obj"/>
+        </geometry>
+        <material name="arm0.link_sh1">
+            <color rgba="0.2 0.2 0.2 1"/>
+        </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="-0.009381 -0.055159 0.00311"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/bottom_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.sh1" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <parent link="arm0.link_sh0"/>
+        <child link="arm0.link_sh1"/>
+        <limit effort="1000" velocity="1000.00" lower="-3.14159265358979311599" upper="0.52359877559829881565"/>
+    </joint>
 
-        <link name="${name}_1_v1_1">
-        <inertial>
-            <origin rpy="0 0 0" xyz="-0.03142910994215048 0.13773460820254285 -0.0002682558712496577"/>
-            <mass value="4.3410244605972785"/>
-            <inertia ixx="0.031102" ixy="6.4e-05" ixz="-0.0" iyy="0.002102" iyz="8.3e-05" izz="0.031758"/>
-        </inertial>
+    <link name="arm0.link_hr0">
         <visual>
-            <!-- <origin rpy="0 0 0" xyz="-0.040881 -0.055159 -0.04679"/> -->
-            <origin rpy="0 3.1416 -1.5708" xyz="-0.055159 -0.0095 0.04679"/>
-
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm_1_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.obj"/>
+        </geometry>
+            <material name="arm0.link_hr0">
+            <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="-0.040881 -0.055159 -0.04679"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm_1_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.hr0" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <parent link="arm0.link_sh1"/>
+        <child link="arm0.link_hr0"/>
+        <limit effort="1000" velocity="1000.00" lower="-1e6" upper="1e6"/>
+    </joint>
 
-        <link name="${name}_2_v1_1">
-        <inertial>
-            <origin rpy="0 0 0" xyz="-0.0400132980912803 -0.11087815619558039 0.05350854885453979"/>
-            <mass value="4.446518989183043"/>
-            <inertia ixx="0.031386" ixy="-0.000713" ixz="7.5e-05" iyy="0.004183" iyz="0.004183" izz="0.032487"/>
-        </inertial>
+    <link name="arm0.link_el0">
         <visual>
-            <origin rpy="0 0 1.5708" xyz="0.321159 -0.0095  -0.04679"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm_2_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.obj"/>
+        </geometry>
+            <material name="arm0.link_el0">
+            <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="-0.048281 -0.321159 -0.04679"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm_2_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.el0" type="revolute">
+        <origin xyz="0.3385 0 0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <parent link="arm0.link_hr0"/>
+        <child link="arm0.link_el0"/>
+        <limit effort="1000" velocity="1000.00" lower="0" upper="3.14159265358979311599"/>
+    </joint>
 
-        <link name="${name}_neck_v1_1">
-        <inertial>
-            <origin rpy="0 0 0" xyz="0.02091414181608834 -0.018445992362037696 0.00022304823726640444"/>
-            <mass value="0.8026625496929148"/>
-            <inertia ixx="0.000752" ixy="-3e-05" ixz="0.0" iyy="0.000408" iyz="4.8e-05" izz="0.000713"/>
-        </inertial>
+    <link name="arm0.link_el1">
         <visual>
-            <origin rpy="0.1 0 1.5708" xyz="0.01 -0.0095 -0.120135"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/neck_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.obj"/>
+        </geometry>
+            <material name="arm0.link_el1">
+            <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="0.009769 -0.021298 -0.120135"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/neck_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.el1" type="revolute">
+        <origin xyz="0.40330 0.0 0.0750" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <parent link="arm0.link_el0"/>
+        <child link="arm0.link_el1"/>
+        <limit effort="1000" velocity="1000.00" lower="-2.79252680319092716487" upper="2.79252680319092716487"/>
+    </joint>
 
-        <link name="${name}_head_v1_1">
-        <inertial>
-            <origin rpy="0 0 0" xyz="0.0005326054691075326 -0.05481950519531094 -0.00779651999716835"/>
-            <mass value="1.2644309089007917"/>
-            <inertia ixx="0.003243" ixy="3.8e-05" ixz="1.7e-05" iyy="0.001545" iyz="-0.000559" izz="0.002975"/>
-        </inertial>
+    <link name="arm0.link_wr0">
         <visual>
-            <origin rpy="0.1 0 1.5708" xyz="-0.04 -0.00937 -0.124436"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/head_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.obj"/>
+        </geometry>
+            <material name="arm0.link_wr0">
+            <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="-0.00937 0.027862 -0.124436"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/head_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.wr0" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <parent link="arm0.link_el1"/>
+        <child link="arm0.link_wr0"/>
+        <limit effort="1000" velocity="1000.00" lower="-1.83259571459404613236" upper="1.83259571459404613236"/>
+    </joint>
 
-        <link name="${name}_gripper_v1_1">
-        <inertial>
-            <origin rpy="0 0 0" xyz="-0.032852931223272375 -0.04190244397153055 -0.015098287029036872"/>
-            <mass value="0.8080491704220107"/>
-            <inertia ixx="0.000715" ixy="0.0" ixz="0.0" iyy="0.000727" iyz="-0.000254" izz="0.000856"/>
-        </inertial>
+    <link name="arm0.link_wr1">
         <visual>
-            <origin rpy="0 0 1.5708" xyz="-0.107781 -0.0095 -0.146383"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/gripper_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-            <material name="black"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.obj"/>
+        </geometry>
+            <material name="arm0.link_wr1">
+            <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
-        <collision>
-            <origin rpy="0 0 0" xyz="-0.044377 0.107781 -0.146383"/>
-            <geometry>
-            <mesh filename="package://spot_description/meshes/arm/gripper_v1_1.stl" scale="0.001 0.001 0.001"/>
-            </geometry>
-        </collision>
-        </link>
+    </link>
+    <joint name="arm0.wr1" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <parent link="arm0.link_wr0"/>
+        <child link="arm0.link_wr1"/>
+        <limit effort="1000" velocity="1000.00" lower="-2.87979326579064354163" upper="2.87979326579064354163"/>
+    </joint>
 
-        <joint name="rev1" type="continuous">
-            <origin rpy="0 0 0" xyz="0 0 0.035"/>
-            <parent link="${name}_base_link"/>
-            <child link="${name}_bottom_v1_1"/>
-            <axis xyz="0.0 0.0 1.0"/>
-        </joint>
-
-        <joint name="rev2" type="continuous">
-            <origin rpy="0 0 0" xyz="0.0 0.0 0.0499"/>
-            <parent link="${name}_bottom_v1_1"/>
-            <child link="${name}_1_v1_1"/>
-            <axis xyz="0.0 1.0 0.0"/>
-        </joint>
-
-        <joint name="rev3" type="continuous">
-            <origin rpy="0 0 0" xyz="0.26 0 0.0"/>
-            <parent link="${name}_1_v1_1"/>
-            <child link="${name}_2_v1_1"/>
-            <axis xyz="0.0 1.0 0.0"/>
-        </joint>
-
-        <joint name="rev4" type="continuous">
-            <origin rpy="0 0 0" xyz="0.3 0 0.073345"/>
-            <parent link="${name}_2_v1_1"/>
-            <child link="${name}_neck_v1_1"/>
-            <axis xyz="0.0 1.0 0.0"/>
-        </joint>
-
-        <joint name="rev5" type="continuous">
-            <origin rpy="0 0 0" xyz="0.051 0 0.004301"/>
-            <parent link="${name}_neck_v1_1"/>
-            <child link="${name}_head_v1_1"/>
-            <axis xyz="1 0 0"/>
-        </joint>
-
-        <joint name="rev6" type="continuous">
-            <origin rpy="0 0 0" xyz="0.0825 0 0.01"/>
-            <parent link="${name}_head_v1_1"/>
-            <child link="${name}_gripper_v1_1"/>
-            <axis xyz="0 1 0"/>
-        </joint>
-
-        <joint name="base_to_mount" type="fixed">
-            <origin rpy="${roll} ${pitch} ${yaw}" xyz="${x} ${y} ${z}"/>
-            <parent link="${base_frame}"/>
-            <child link="${name}_base_link"/>
-        </joint>
+    <link name="arm0.link_fngr">
+        <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.obj"/>
+        </geometry>
+        <material name="arm0.link_fngr">
+            <color rgba="0.2 0.2 0.2 1"/>
+        </material>
+        </visual>
+    </link>
+    <joint name="arm0.f1x" type="revolute">
+        <origin xyz="0.11745 0 0.014820" rpy="0 0 0"/>
+        <axis xyz="0.0 1.0 0.0"/>
+        <parent link="arm0.link_wr1"/>
+        <child link="arm0.link_fngr"/>
+        <limit effort="1000" velocity="1000.00" lower="-1.57" upper="0.0"/>
+    </joint>
     </xacro:macro>
 </robot>

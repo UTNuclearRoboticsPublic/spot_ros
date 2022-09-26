@@ -3,7 +3,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription, Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 import os
@@ -14,7 +14,6 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='joint_state_publisher_gui',
-            namespace='joint_state_publisher_gui',
             executable='joint_state_publisher_gui',
             name='joint_state_publisher_gui',
             remappings=[
@@ -35,7 +34,6 @@ def generate_launch_description():
         ),
         Node(
             package='rviz2',
-            namespace='rviz2',
             executable='rviz2',
             name='rviz2',
             arguments=['-d', os.path.join(bringup_dir,'rviz', 'robot.rviz"')],
