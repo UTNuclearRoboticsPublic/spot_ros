@@ -67,14 +67,14 @@ body_joint_names = {
 }
 
 arm_joint_names = {
-    'arm0.sh0' : 'arm0_shoulder_yaw',
-    'arm0.sh1' : 'arm0_shoulder_pitch',
-    'arm0.hr0' : 'arm0_shoulder_roll',
-    'arm0.elo0': 'arm0_elbow_pitch',
-    'arm0.elo1': 'arm0_elbow_roll',
-    'arm0.wr0': 'arm0_wrist_pitch',
-    'arm0.wr1': 'arm0_wrist_roll',
-    'arm0.f1x': 'arm0_fingers'
+    'arm0.sh0'  : 'arm0_shoulder_yaw',
+    'arm0.sh1'  : 'arm0_shoulder_pitch',
+    'arm0.hr0'  : 'arm0_shoulder_roll',
+    'arm0.el0' : 'arm0_elbow_pitch',
+    'arm0.el1' : 'arm0_elbow_roll',
+    'arm0.wr0'  : 'arm0_wrist_pitch',
+    'arm0.wr1'  : 'arm0_wrist_roll',
+    'arm0.f1x'  : 'arm0_fingers'
 }
 
 friendly_joint_names = dict(body_joint_names, **arm_joint_names)
@@ -217,12 +217,20 @@ def GetJointStatesFromState(kinematic_state: robot_state_pb2.KinematicState,
     Returns:
         sensor_msgs/JointState ROS message
     """
+    # static attributes of this method
     joint_state_msg = JointState()
     local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
     joint_state_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
     for joint in kinematic_state.joint_states:
-        joint_state_msg.name.append(friendly_joint_names.get(joint.name, "ERROR"))
+        try:
+            name = friendly_joint_names[joint.name]
+        except KeyError:
+            spot_wrapper.logger.error('Failed to look up friendly name for frame ' + joint.name,
+                                       once=True)
+            continue
+        
+        joint_state_msg.name.append(name)
         joint_state_msg.position.append(joint.position.value)
         joint_state_msg.velocity.append(joint.velocity.value)
         joint_state_msg.effort.append(joint.load.value)

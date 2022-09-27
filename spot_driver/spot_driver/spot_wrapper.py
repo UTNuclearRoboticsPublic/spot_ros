@@ -132,6 +132,11 @@ class SpotWrapper():
         return True
 
     @property
+    def logger(self):
+        """Return our logger"""
+        return self._logger
+
+    @property
     def is_connected(self) -> bool:
         """Return boolean indicating if the wrapper initialized successfully"""
         return self._is_connected
