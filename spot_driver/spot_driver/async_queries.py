@@ -205,5 +205,9 @@ class AsyncIdle(AsyncPeriodicQuery):
 
         self._spot_wrapper._is_moving = is_moving
 
-        if self._spot_wrapper.is_standing and not self._spot_wrapper.is_moving:
+        if (self._spot_wrapper.is_standing and not self._spot_wrapper.is_moving
+                    and self._spot_wrapper._last_trajectory_command is not None
+                    and self._spot_wrapper._last_stand_command is not None
+                    and self._spot_wrapper._last_velocity_command_time is not None
+                    and self._spot_wrapper._last_docking_command is not None):            
             self._spot_wrapper.stand(False)

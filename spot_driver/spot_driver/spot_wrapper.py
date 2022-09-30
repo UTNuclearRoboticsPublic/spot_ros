@@ -25,12 +25,14 @@
 #
 ############################################################################################
 
+from typing import Text
 from .async_queries import *
 
 from bosdyn.api import image_pb2
 from bosdyn.geometry import EulerZXY
 from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
 from bosdyn.client.async_tasks import AsyncTasks
+from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.power import PowerClient
@@ -56,6 +58,7 @@ class SpotWrapper():
         self._is_standing = False
         self._is_sitting = True
         self._is_moving = False
+        self._last_docking_command = None
         self._last_stand_command = None
         self._last_sit_command = None
         self._last_trajectory_command = None
@@ -81,8 +84,8 @@ class SpotWrapper():
 
         try:
             self._sdk = create_standard_sdk('ros_spot')
-        except IOError as e:
-            self._logger.error("Error creating SDK object: %s", e)
+        except IOError as err:
+            self._logger.error('Error creating SDK object ' + Text(err))
             return False
 
         self._robot = self._sdk.create_robot(hostname)
@@ -90,10 +93,10 @@ class SpotWrapper():
         try:
             self._robot.authenticate(username, password)
         except RpcError as err:
-            self._logger.error("Failed to communicate with robot: %s", err)
+            self._logger.error('Failed to communicate with robot: ' + err.error_message)
             return False
         except AuthResponseError as err:
-            self._logger.error('Authentication failed. ' + str(err))
+            self._logger.error('Authentication failed. ' + err.error_message)
             return False
 
         self._robot.start_time_sync()
@@ -106,6 +109,7 @@ class SpotWrapper():
             self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
             self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
             self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
+            self._docking_client = self._robot.ensure_client(DockingClient.default_service_name)
         except Exception as e:
             self._logger.error("Unable to create client service: %s", e)
             return False
@@ -194,7 +198,7 @@ class SpotWrapper():
         """Return the time skew between local and spot time"""
         return self._robot.time_sync.endpoint.clock_skew
 
-    def robotToLocalTime(self, timestamp) -> Timestamp:
+    def robotToLocalTime(self, timestamp: Timestamp) -> Timestamp:
         """Takes a timestamp and an estimated skew and return seconds and nano seconds
 
         Args:
@@ -207,8 +211,11 @@ class SpotWrapper():
         rtime.seconds = timestamp.seconds - self.time_skew.seconds
         rtime.nanos = timestamp.nanos - self.time_skew.nanos
         if rtime.nanos < 0:
-            rtime.nanos = rtime.nanos + 1000000000
+            rtime.nanos = rtime.nanos + int(1e9)
             rtime.seconds = rtime.seconds - 1
+        elif rtime.nanos > int(1e9):
+            rtime.nanos = rtime.nanos - int(1e9)
+            rtime.seconds = rtime.seconds + 1
 
         return rtime
 
@@ -329,6 +336,38 @@ class SpotWrapper():
         if monitor_command:
             self._last_stand_command = response[2]
         return response[0], response[1]
+
+    def dock(self, dock_id) -> bool:
+        """Dock the robot to the docking station with fiducial ID [dock_id]."""
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+            # Dock the robot
+            self.last_docking_command = dock_id
+            blocking_dock_robot(self._robot, dock_id)
+            self.last_docking_command = None
+            return True
+        except Exception as e:
+            return False
+
+    def undock(self, timeout: float = 20.0):
+        """Power motors on and undock the robot from the station."""
+        try:
+            # Make sure we're powered on
+            self._robot.power_on()
+
+            # Undock the robot
+            blocking_undock(self._robot, timeout)
+        except Exception as e:
+            return False, str(e)
+
+        return True, "Success"
+
+    def get_docking_state(self, **kwargs):
+        """Get docking state of robot."""
+        state = self._docking_client.get_docking_state(**kwargs)
+        return state
 
     def safe_power_off(self):
         """Stop the robot's motion and sit if possible.  Once sitting, disable motor power."""

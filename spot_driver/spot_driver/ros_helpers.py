@@ -38,6 +38,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from tf2_msgs.msg import TFMessage
 
+from spot_msgs.msg import DockState
 from spot_msgs.msg import FootState, FootStateArray
 from spot_msgs.msg import EStopState, EStopStateArray
 from spot_msgs.msg import WiFiState
@@ -47,6 +48,7 @@ from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
+from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
 
@@ -67,14 +69,14 @@ body_joint_names = {
 }
 
 arm_joint_names = {
-    'arm0.sh0'  : 'arm0_shoulder_yaw',
-    'arm0.sh1'  : 'arm0_shoulder_pitch',
-    'arm0.hr0'  : 'arm0_shoulder_roll',
+    'arm0.sh0' : 'arm0_shoulder_yaw',
+    'arm0.sh1' : 'arm0_shoulder_pitch',
+    'arm0.hr0' : 'arm0_shoulder_roll',
     'arm0.el0' : 'arm0_elbow_pitch',
     'arm0.el1' : 'arm0_elbow_roll',
-    'arm0.wr0'  : 'arm0_wrist_pitch',
-    'arm0.wr1'  : 'arm0_wrist_roll',
-    'arm0.f1x'  : 'arm0_fingers'
+    'arm0.wr0' : 'arm0_wrist_pitch',
+    'arm0.wr1' : 'arm0_wrist_roll',
+    'arm0.f1x' : 'arm0_fingers'
 }
 
 friendly_joint_names = dict(body_joint_names, **arm_joint_names)
@@ -207,8 +209,8 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
 
     return image_msg, camera_info_msg, tf_msg
 
-def GetJointStatesFromState(kinematic_state: robot_state_pb2.KinematicState,
-                            spot_wrapper: SpotWrapper) -> JointState:
+def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
+                     spot_wrapper: SpotWrapper) -> JointState:
     """Maps joint state data from robot state proto to ROS JointState message
 
     Args:
@@ -237,8 +239,8 @@ def GetJointStatesFromState(kinematic_state: robot_state_pb2.KinematicState,
 
     return joint_state_msg
 
-def GetEStopStatesFromState(estop_states: robot_state_pb2.EStopState,
-                            spot_wrapper: SpotWrapper) -> EStopStateArray:
+def EStopStatesToMsg(estop_states: robot_state_pb2.EStopState,
+                     spot_wrapper: SpotWrapper) -> EStopStateArray:
     """Maps EStop states data from robot state proto to ROS EStopArray message
 
     Args:
@@ -259,7 +261,7 @@ def GetEStopStatesFromState(estop_states: robot_state_pb2.EStopState,
 
     return estop_array_msg
 
-def GetFeetFromState(foot_states: robot_state_pb2.FootState) -> FootStateArray:
+def FeetStateToMsg(foot_states: robot_state_pb2.FootState) -> FootStateArray:
     """Maps foot position state data from robot state proto to ROS FootStateArray message
 
     Args:
@@ -335,6 +337,21 @@ def GetOdomFromState(kinematic_state: robot_state_pb2.KinematicState,
     odom_msg.twist = twist_odom_msg
     return odom_msg
 
+def DockStateToMsg(dock_state: docking_pb2.DockState) -> DockState:
+    """Maps dock state data from robot state proto to ROS DockState message
+    Args:
+        dock_state: DockState proto
+    Returns:
+        spot_msgs/DockState ROS message
+    """
+    dock_state_msg = DockState()
+    dock_state_msg.status = dock_state.status
+    dock_state_msg.dock_type = dock_state.dock_type
+    dock_state_msg.dock_id = dock_state.dock_id
+    dock_state_msg.power_status = dock_state.power_status
+    return dock_state_msg
+
+
 def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
     """Maps wireless state data from robot state proto to ROS WiFiState message
 
@@ -382,20 +399,21 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
 
     return tf_msg
 
-def GetBatteryStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> BatteryStateArray:
+def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
+                       spot_wrapper: SpotWrapper) -> BatteryStateArray:
     """Maps battery state data from robot state proto to ROS BatteryStateArray message
 
     Args:
-        data: Robot State proto
+        battery_states: BatteryState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        BatteryStateArray message
+        spot_msgs/BatteryStateArray ROS message
     """
     battery_states_array_msg = BatteryStateArray()
-    for battery in state.battery_states:
+    for battery in battery_states:
         battery_msg = BatteryState()
         local_time = spot_wrapper.robotToLocalTime(battery.timestamp)
-        battery_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
+        battery_msg.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
         battery_msg.identifier = battery.identifier
         battery_msg.charge_percentage = battery.charge_percentage.value
@@ -409,25 +427,27 @@ def GetBatteryStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: S
 
     return battery_states_array_msg
 
-def GetPowerStatesFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> PowerState:
+def PowerStatesToMsg(power_state: robot_state_pb2.PowerState,
+                     spot_wrapper: SpotWrapper) -> PowerState:
     """Maps power state data from robot state proto to ROS PowerState message
 
     Args:
-        data: Robot State proto
+        power_state: PowerState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        PowerState message
+        spot_msgs/PowerState ROS message
     """
     power_state_msg = PowerState()
-    local_time = spot_wrapper.robotToLocalTime(state.power_state.timestamp)
-    power_state_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-    power_state_msg.motor_power_state = state.power_state.motor_power_state
-    power_state_msg.shore_power_state = state.power_state.shore_power_state
-    power_state_msg.locomotion_charge_percentage = state.power_state.locomotion_charge_percentage.value
-    power_state_msg.locomotion_estimated_runtime = ROSDuration(sec=state.power_state.locomotion_estimated_runtime.seconds, nanosec=state.power_state.locomotion_estimated_runtime.nanos)
+    local_time = spot_wrapper.robotToLocalTime(power_state.timestamp)
+    power_state_msg.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
+    power_state_msg.motor_power_state = power_state.motor_power_state
+    power_state_msg.shore_power_state = power_state.shore_power_state
+    power_state_msg.locomotion_charge_percentage = power_state.locomotion_charge_percentage.value
+    power_state_msg.locomotion_estimated_runtime = ROSDuration(sec=power_state.locomotion_estimated_runtime.seconds, nanosec=power_state.locomotion_estimated_runtime.nanos)
     return power_state_msg
 
-def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List[BehaviorFault]:
+def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault,
+                      spot_wrapper: SpotWrapper) -> List[BehaviorFault]:
     """Helper function to strip out behavior faults into a list
 
     Args:
@@ -449,7 +469,8 @@ def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault, spot_wrap
 
     return faults
 
-def getSystemFaults(system_faults: service_fault_pb2.ServiceFault, spot_wrapper: SpotWrapper) -> List[SystemFault]:
+def getSystemFaults(system_faults: service_fault_pb2.ServiceFault,
+                    spot_wrapper: SpotWrapper) -> List[SystemFault]:
     """Helper function to strip out system faults into a list
 
     Args:
@@ -478,29 +499,31 @@ def getSystemFaults(system_faults: service_fault_pb2.ServiceFault, spot_wrapper:
 
     return faults
 
-def GetSystemFaultsFromState(state: robot_state_pb2.RobotState, spot_wrapper: SpotWrapper) -> SystemFaultState:
+def SystemFaultsToMsg(system_fault_state: robot_state_pb2.SystemFaultState,
+                      spot_wrapper: SpotWrapper) -> SystemFaultState:
     """Maps system fault data from robot state proto to ROS SystemFaultState message
 
     Args:
-        data: Robot State proto
+        system_fault_state: SystemFaultState proto
         spot_wrapper: A SpotWrapper object
     Returns:
-        SystemFaultState message
+        slot_msgs/SystemFaultState ROS message
     """
     system_fault_state_msg = SystemFaultState()
-    system_fault_state_msg.faults = getSystemFaults(state.system_fault_state.faults, spot_wrapper)
-    system_fault_state_msg.historical_faults = getSystemFaults(state.system_fault_state.historical_faults, spot_wrapper)
+    system_fault_state_msg.faults = getSystemFaults(system_fault_state.faults, spot_wrapper)
+    system_fault_state_msg.historical_faults = getSystemFaults(system_fault_state.historical_faults, spot_wrapper)
     return system_fault_state_msg
 
-def getBehaviorFaultsFromState(state, spot_wrapper: SpotWrapper) -> BehaviorFaultState:
+def BehaviorFaultsToMsg(behavior_fault_state: robot_state_pb2.BehaviorFaultState,
+                        spot_wrapper: SpotWrapper) -> BehaviorFaultState:
     """Maps behavior fault data from robot state proto to ROS BehaviorFaultState message
 
     Args:
-        data: Robot State proto
+        behavior_fault_state: BehaviorFaultState proto
         spot_wrapper: A SpotWrapper object
     Returns:
         BehaviorFaultState message
     """
     behavior_fault_state_msg = BehaviorFaultState()
-    behavior_fault_state_msg.faults = getBehaviorFaults(state.behavior_fault_state.faults, spot_wrapper)
+    behavior_fault_state_msg.faults = getBehaviorFaults(behavior_fault_state.faults, spot_wrapper)
     return behavior_fault_state_msg

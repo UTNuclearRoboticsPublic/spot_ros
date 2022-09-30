@@ -32,7 +32,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 import rclpy.action
 import rclpy.callback_groups
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
 
 from rcl_interfaces.msg import FloatingPointRange
 from rcl_interfaces.msg import ParameterDescriptor
@@ -64,7 +64,8 @@ from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
 from spot_msgs.action import NavigateTo, Trajectory
-from spot_msgs.srv import ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
+
+from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
 
 from .ros_helpers import *
 
@@ -148,7 +149,7 @@ class SpotROS(Node):
         odom_mode = self.get_parameter('odom_mode').value
         
         ## joint states ##
-        joint_state = GetJointStatesFromState(state.kinematic_state, self.spot_wrapper)
+        joint_state = JointStatesToMsg(state.kinematic_state, self.spot_wrapper)
         self.joint_state_pub.publish(joint_state)
         
         ## TF ##
@@ -166,11 +167,11 @@ class SpotROS(Node):
         self.odom_pub.publish(odom_msg)
         
         # Feet #
-        foot_array_msg = GetFeetFromState(state.foot_state)
+        foot_array_msg = FeetStateToMsg(state.foot_state)
         self.feet_pub.publish(foot_array_msg)
 
         # EStop #
-        estop_array_msg = GetEStopStatesFromState(state.estop_states, self.spot_wrapper)
+        estop_array_msg = EStopStatesToMsg(state.estop_states, self.spot_wrapper)
         self.estop_pub.publish(estop_array_msg)
 
         # WIFI #
@@ -178,19 +179,19 @@ class SpotROS(Node):
         self.wifi_pub.publish(wifi_msg)
 
         # Battery States #
-        battery_states_array_msg = GetBatteryStatesFromState(state, self.spot_wrapper)
+        battery_states_array_msg = BatteryStatesToMsg(state.battery_states, self.spot_wrapper)
         self.battery_pub.publish(battery_states_array_msg)
         
         # Power State #
-        power_state_msg = GetPowerStatesFromState(state, self.spot_wrapper)
+        power_state_msg = PowerStatesToMsg(state.power_state, self.spot_wrapper)
         self.power_pub.publish(power_state_msg)
 
         # System Faults #
-        system_fault_state_msg = GetSystemFaultsFromState(state, self.spot_wrapper)
+        system_fault_state_msg = SystemFaultsToMsg(state.system_fault_state, self.spot_wrapper)
         self.system_faults_pub.publish(system_fault_state_msg)
 
         # Behavior Faults #
-        behavior_fault_state_msg = getBehaviorFaultsFromState(state, self.spot_wrapper)
+        behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
     def LeaseCB(self, _) -> None:
@@ -288,40 +289,59 @@ class SpotROS(Node):
             self.back_depth_pub.publish(image_msg)
             self.back_depth_info_pub.publish(camera_info_msg)
 
-    def handle_claim(self, _) -> Trigger.Response:
+    def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
-        resp = self.spot_wrapper.claim()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.claim()
+        return res
 
-    def handle_release(self, _) -> Trigger.Response:
+    def handle_release(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the release service"""
-        resp = self.spot_wrapper.release()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.release()
+        return res
 
-    def handle_stop(self, _) -> Trigger.Response:
+    def handle_stop(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the stop service"""
         resp = self.spot_wrapper.stop()
-        return Trigger.Response(resp[0], resp[1])
+        return Trigger.Response(res[0], resp[1])
 
-    def handle_self_right(self, _) -> Trigger.Response:
+    def handle_self_right(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the self-right service"""
         resp = self.spot_wrapper.self_right()
         return Trigger.Response(resp[0], resp[1])
 
-    def handle_sit(self, _) -> Trigger.Response:
+    def handle_sit(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the sit service"""
-        resp = self.spot_wrapper.sit()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.sit()
+        return res
 
-    def handle_stand(self, _) -> Trigger.Response:
+    def handle_stand(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the stand service"""
-        resp = self.spot_wrapper.stand()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.stand()
+        return res
 
-    def handle_power_on(self, _) -> Trigger.Response:
+    def handle_dock(self, req: Dock.Request, res: Dock.Response):
+        """Dock the robot"""
+        res.success, res.message = self.spot_wrapper.dock(req.dock_id)
+        self.update_dock_state()
+        return res
+
+    def handle_undock(self, _, res: Trigger.Response):
+        """Undock the robot"""
+        res.success, res.message = self.spot_wrapper.undock()
+        self.update_dock_state()
+        return res
+
+    def update_dock_state(self):
+        """Get docking state of robot"""
+        res = self.spot_wrapper.get_docking_state()
+        self.dock_state_pub.publish(DockStateToMsg(res))
+
+    def handle_power_on(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the power-on service"""
-        resp = self.spot_wrapper.power_on()
-        return Trigger.Response(resp[0], resp[1])
+        res.success = self.spot_wrapper.power_on()
+        if res.success:
+            res.message = 'Powered on Spot robot ' + self.spot_wrapper.id.nickname
+        return res
 
     def handle_safe_power_off(self, _) -> Trigger.Response:
         """ROS service handler for the safe-power-off service"""
@@ -547,7 +567,7 @@ class SpotROS(Node):
         if self.spot_wrapper is None:
             return
 
-        if not self.spot_wrapper.is_connected():
+        if not self.spot_wrapper.is_connected:
             return
 
         is_sitting, message = self.spot_wrapper.sit()
@@ -630,23 +650,25 @@ class SpotROS(Node):
 
         ## Status Publishers
         # QoS to use for latched publishers
-        latched_pub_qos = QoSProfile(durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-                                     history=QoSHistoryPolicy.KEEP_LAST,
-                                     depth=1)
+        latched_qos = QoSProfile(durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                                 history=QoSHistoryPolicy.KEEP_LAST,
+                                 depth=1,
+                                 reliability=QoSReliabilityPolicy.RELIABLE)
 
         self.joint_state_pub = self.create_publisher(JointState, 'joint_states', 1)
+        self.dock_state_pub = self.create_publisher(DockState, 'status/dock_state', qos_profile=latched_qos)
         self.lease_pub = self.create_publisher(LeaseArray, 'status/leases', 1)
         self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, 'odometry/twist', 1)
         self.odom_pub = self.create_publisher(Odometry, 'odometry', 10)
         self.feet_pub = self.create_publisher(FootStateArray, 'status/feet', 10)
         self.estop_pub = self.create_publisher(EStopStateArray, 'status/estop', 1)
-        self.wifi_pub = self.create_publisher(WiFiState, 'status/wifi', 1)
+        self.wifi_pub = self.create_publisher(WiFiState, 'status/wifi', qos_profile=latched_qos)
         self.power_pub = self.create_publisher(PowerState, 'status/power_state', 1)
         self.battery_pub = self.create_publisher(BatteryStateArray, 'status/battery_states', 1)
         self.behavior_faults_pub = self.create_publisher(BehaviorFaultState, 'status/behavior_faults', 10)
         self.system_faults_pub = self.create_publisher(SystemFaultState, 'status/system_faults', 10)
         self.mobility_params_pub = self.create_publisher(MobilityParams, 'status/mobility_params', 1)
-        self.feedback_pub = self.create_publisher(Feedback, 'status/feedback', qos_profile=latched_pub_qos)
+        self.feedback_pub = self.create_publisher(Feedback, 'status/feedback', qos_profile=latched_qos)
 
         self.create_subscription(Twist, 'cmd_vel', self.cmdVelCallback, 10)
         self.create_subscription(Pose, 'body_pose', self.bodyPoseCallback, 10)
@@ -672,14 +694,18 @@ class SpotROS(Node):
 
         self.create_service(ListGraph, "list_graph", self.handle_list_graph, callback_group=srv_group)
 
-        self.nav_to_as = rclpy.action.ActionServer(
+        # Docking
+        self.create_service(Dock, 'dock', self.handle_dock, callback_group=srv_group)
+        self.create_service(Trigger, 'undock', self.handle_undock, callback_group=srv_group)
+
+        self._ = rclpy.action.ActionServer(
                 self,
                 NavigateTo,
                 'navigate_to',
                 execute_callback=self.handle_navigate_to,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
         
-        self.trajectory_as = rclpy.action.ActionServer(
+        self._ = rclpy.action.ActionServer(
                 self,
                 Trajectory,
                 'trajectory',
@@ -723,7 +749,7 @@ class SpotROS(Node):
             if self.spot_wrapper.claim():
                 self.get_logger().info('Claimed lease on Spot robot ' + self.spot_wrapper.id.nickname)
                 if self.get_parameter('auto_power_on').value:
-                    self.get_logger().info('Spot powered on.')
+                    self.get_logger().info('Spot powered on')
                     if self.spot_wrapper.power_on():
                         if self.get_parameter('auto_stand').value:
                             self.spot_wrapper.stand()
@@ -732,6 +758,12 @@ class SpotROS(Node):
         self.timer = self.create_timer(status_pub_period, self.PublishStatus)
 
         self.get_logger().info('Spot driver started')
+
+        # Publish initial dock state. Wait for first response
+        while self.spot_wrapper.get_docking_state().status == DockState.DOCK_STATUS_UNKNOWN:
+            pass
+        self.update_dock_state()
+
         return True
 
 

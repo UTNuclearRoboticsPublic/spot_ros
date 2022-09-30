@@ -11,7 +11,7 @@ uint8 STATE_UNKNOWN_SHORE_POWER = 0
 uint8 STATE_ON_SHORE_POWER = 1
 uint8 STATE_OFF_SHORE_POWER = 2
 
-std_msgs/Header header
+builtin_interfaces/Time stamp
 uint8 motor_power_state
 uint8 shore_power_state
 float64 locomotion_charge_percentage

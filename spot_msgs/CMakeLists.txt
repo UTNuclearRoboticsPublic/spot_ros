@@ -15,11 +15,13 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
   "srv/ClearBehaviorFault.srv"
   "srv/ListGraph.srv"
+  "srv/Dock.srv"
   "srv/SetLocomotion.srv"
   "srv/SetVelocity.srv"
 
   "msg/BatteryStateArray.msg"
   "msg/BehaviorFault.msg"
+  "msg/DockState.msg"
   "msg/EStopStateArray.msg"
   "msg/FootStateArray.msg"
   "msg/LeaseArray.msg"

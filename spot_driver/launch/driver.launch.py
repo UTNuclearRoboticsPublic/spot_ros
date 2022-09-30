@@ -63,9 +63,6 @@ def generate_launch_description():
                     'config',
                     'twist_mux.yaml"'
                 ]))
-        ],
-        remappings=[
-          ('cmd_vel_out','spot/cmd_vel')
         ]
     )
   ]
