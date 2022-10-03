@@ -25,34 +25,35 @@
 #
 ############################################################################################
 
-from typing import Text
+from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import image_pb2
+from bosdyn.api import image_pb2, header_pb2
 from bosdyn.geometry import EulerZXY
+
 from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
+from bosdyn.client.auth import AuthResponseError
 from bosdyn.client.async_tasks import AsyncTasks
+from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
+from bosdyn.client.image import ImageClient, build_image_request
+from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
+from bosdyn.client.power import PowerClient
+from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
-from bosdyn.client.power import PowerClient
-from bosdyn.client.lease import LeaseClient, LeaseKeepAlive
-from bosdyn.client.image import ImageClient, build_image_request
-from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
-
-from bosdyn.client.auth import AuthResponseError
-from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError
 
 from google.protobuf.timestamp_pb2 import Timestamp
 from google.protobuf.duration_pb2 import Duration
 
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
-    def __init__(self, logger):
+    def __init__(self, logger, has_cam_payload: bool = False):
         self._is_connected = False
         self._logger = logger
         self._robot = None
         self._lease = None
+        self._has_cam_payload = has_cam_payload
 
         self._mobility_params = RobotCommandBuilder.mobility_params()
         self._is_standing = False
@@ -109,10 +110,17 @@ class SpotWrapper():
             self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
             self._image_client = self._robot.ensure_client(ImageClient.default_service_name)
             self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
-            self._docking_client = self._robot.ensure_client(DockingClient.default_service_name)
+            self._docking_client = self._robot.ensure_client(DockingClient.default_service_name) 
         except Exception as e:
-            self._logger.error("Unable to create client service: %s", e)
+            self._logger.error('Unable to create client service: ' + Text(e))
             return False
+
+        if self._has_cam_payload:
+            try:
+                self._audio_client = self._robot.ensure_client(AudioClient.default_service_name)
+            except Exception as e:
+                self._logger.error('Unable to create client service: ' + Text(e))
+                return False
 
         # Async Tasks
         self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
@@ -417,3 +425,44 @@ class SpotWrapper():
                                       v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
                                   end_time_secs=end_time)
         self._last_velocity_command_time = end_time
+
+    def play_sound(self, name: Text, gain: float, block: bool) -> Tuple[bool, Text]:
+        if not self._has_cam_payload:
+            return False, 'This Spot has no audio capability.'
+
+        if not name:
+            return False, Text('Spot needs non-empty name for sound file')
+        if gain <= 0.0:
+            return False, Text('Audio play gain must be positive.')
+
+        if block:
+            response = self._audio_client.load_sound(name, gain)
+        else:
+            response = self._audio_client.load_sound_async(name, gain)
+
+        success = response.error.code == header_pb2.CommonError.Code.CODE_OK
+        return success, response.error.message
+
+    def load_sound(self, name: Text, data: bytes) -> Tuple[bool, Text]:
+        if not self._has_cam_payload:
+            return False, 'This Spot has no audio capability.'
+
+        if not name:
+            return False, Text('Spot needs non-empty name for sound file')
+        if not data:
+            return False, Text('Spot needs non-empty data for sound file')
+
+        response = self._audio_client.load_sound(name, data)
+        success = response.error.code == header_pb2.CommonError.Code.CODE_OK
+        return success, response.error.message
+
+    def set_volume(self, percentage: float) -> Tuple[bool, Text]:
+        if not self._has_cam_payload:
+            return False, 'This Spot has no audio capability.'
+        
+        if percentage > 100.0 or percentage < 0.0:
+            return False, Text('Could not set audio volume to invalid percentage ' + percentage)
+
+        response = self._audio_client.set_volume(percentage)
+        success = response.error.code == header_pb2.CommonError.Code.CODE_OK
+        return success, Text(response.error.message)

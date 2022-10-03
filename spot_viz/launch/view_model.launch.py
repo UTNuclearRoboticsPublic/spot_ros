@@ -15,12 +15,7 @@ def generate_launch_description():
         Node(
             package='joint_state_publisher_gui',
             executable='joint_state_publisher_gui',
-            name='joint_state_publisher_gui',
-            remappings=[
-                ('/joint_state_publisher_gui/joint_states', '/joint_states'),
-                ('/joint_state_publisher_gui/robot_description', '/robot_description'),
-                ('/joint_state_publisher_gui/parameter_events', '/parameter_events')
-            ]
+            name='joint_state_publisher_gui'
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(

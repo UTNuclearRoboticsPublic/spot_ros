@@ -25,7 +25,9 @@
 #
 ############################################################################################
 
-from typing import List
+from typing import List, Text
+import threading
+import yaml
 
 import rclpy.utilities
 from rclpy.node import Node
@@ -69,13 +71,11 @@ from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, Se
 
 from .ros_helpers import *
 
-import threading
-
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
 
     def __init__(self):
-        super().__init__('spot_driver')
+        super().__init__('spot_driver', allow_undeclared_parameters=True)
 
         self.spot_wrapper = None
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
@@ -122,6 +122,16 @@ class SpotROS(Node):
             ParameterDescriptor(description='Selects pure kinematic odometry or fused vision and kinematic odometry.',
                                 type=ParameterType.PARAMETER_STRING,
                                 additional_constraints="'odom' or 'vision'",
+                                read_only=True))
+
+        self.declare_parameter('has_cam_payload', False,
+            ParameterDescriptor(description='Set true if this robot features the Spot CAM payload.',
+                                type=ParameterType.PARAMETER_BOOL,
+                                read_only=True))
+
+        self.declare_parameter('sounds', Text(''),
+            ParameterDescriptor(description='Array of YAML files giving WAV sound files to load. Keys in the files are labels and values are the filepaths.',
+                                type=ParameterType.PARAMETER_STRING_ARRAY,
                                 read_only=True))
 
         self.declare_parameter('auto_claim', False,
@@ -389,7 +399,7 @@ class SpotROS(Node):
         except Exception as e:
             return SetLocomotion.Response(False, 'Error:{}'.format(e))
 
-    def handle_max_vel(self, req: SetVelocity.Request) -> SetVelocity.Request:
+    def handle_max_vel(self, req: SetVelocity.Request) -> SetVelocity.Response:
         """
         Handle a max_velocity service call. This will modify the mobility params to set a limit on the maximum
         velocity that the robot can move during motion commmands. This affects trajectory commands and velocity
@@ -400,10 +410,10 @@ class SpotROS(Node):
 
         Returns: SetVelocity.Response
         """
-        if (req.velocity_limit.linear.x == 0.0 or
-            req.velocity_limit.linear.y == 0.0 or
-            req.velocity_limit.linear.z == 0.0):
-            return SetVelocity.Response(False, 'Cannot set a velocity limit of zero.')
+        if (req.velocity_limit.linear.x >= 0.0 or
+            req.velocity_limit.linear.y >= 0.0 or
+            req.velocity_limit.linear.z >= 0.0):
+            return SetVelocity.Response(False, 'Cannot set a non-positive velocity limit.')
 
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
@@ -414,7 +424,7 @@ class SpotROS(Node):
             self.spot_wrapper.set_mobility_params(mobility_params)
             return SetVelocity.Response(True, 'Success')
         except Exception as e:
-            return SetVelocity.Response(False, 'Error:{}'.format(e))
+            return SetVelocity.Response(False, e)
 
     def handle_trajectory(self, req: Trajectory.Goal) -> None:
         """ROS actionserver execution handler to handle receiving a request to move to a location"""
@@ -592,7 +602,7 @@ class SpotROS(Node):
                     return SetParametersResult(
                         successful=False,
                         reason="Parameter rates/" + p.name + " must be positive.")
-
+        
         return SetParametersResult(successful=True)
 
 
@@ -607,8 +617,10 @@ class SpotROS(Node):
         callbacks["side_image"]  = self.SideImageCB
         callbacks["rear_image"]  = self.RearImageCB
 
+        has_cam_payload = self.get_parameter('has_cam_payload').value
+
         # Connect to the robot
-        self.spot_wrapper = SpotWrapper(self.get_logger())
+        self.spot_wrapper = SpotWrapper(self.get_logger(), has_cam_payload)
 
         # Verify connection
         if self.spot_wrapper.connect(self.get_parameter('username').value, 
@@ -766,6 +778,37 @@ class SpotROS(Node):
 
         return True
 
+    def loadSounds(self):
+        sounds_manifests = self.get_parameter('sounds_manifests').value
+
+        if not sounds_manifests:
+            return True
+
+        for manifest in sounds_manifests:
+            try:
+                file = open(manifest, "r")
+
+                try:
+                    sound_names = yaml.safe_load(file)
+                    
+                    if not sound_names:
+                        self.get_logger().warn('Opened sounds manifest file {}, but no contents found.'.format(sounds_manifest))
+
+                    for name in sound_names:
+                        try:
+                            with open(name+'.wav', 'rb') as wav_file:
+                                wav_data = wav_file.read()
+                        except IOError as err:
+                            self.get_logger().error(Text(err))
+                            continue
+
+                        self.spot_wrapper.load_sound(name, wav_data)
+                except yaml.YAMLError as err:
+                    self.get_logger().error(Text(err))
+            except IOError as err:
+                self.get_logger().error(Text(err))
+
+        return True
 
     def PublishStatus(self):
         # call all periodic tasks
