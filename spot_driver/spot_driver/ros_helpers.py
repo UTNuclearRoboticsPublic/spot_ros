@@ -25,7 +25,7 @@
 #
 ############################################################################################
 
-from typing import List, Tuple
+from typing import List, Text, Tuple
 import rclpy.time
 
 from .spot_wrapper import SpotWrapper
@@ -52,7 +52,7 @@ from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
 
-'''Dictionaries for mapping BD joint names to more friendly names'''
+"""Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {
     'fl.hx' : 'front_left_hip_x',
     'fl.hy' : 'front_left_hip_y',
@@ -82,8 +82,8 @@ arm_joint_names = {
 friendly_joint_names = dict(body_joint_names, **arm_joint_names)
 
 def populateTransformStamped(time: rclpy.time.Time,
-                             parent_frame: str,
-                             child_frame: str,
+                             parent_frame: Text,
+                             child_frame: Text,
                              transform: SE3Pose) -> TransformStamped:
     """Populates a TransformStamped message
 

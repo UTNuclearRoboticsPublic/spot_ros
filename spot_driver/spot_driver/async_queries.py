@@ -47,7 +47,7 @@ class AsyncRobotState(AsyncPeriodicQuery):
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
 
     def _start_query(self):
         if self._callback:
@@ -71,7 +71,7 @@ class AsyncMetrics(AsyncPeriodicQuery):
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
 
     def _start_query(self):
         if self._callback:
@@ -95,7 +95,7 @@ class AsyncLease(AsyncPeriodicQuery):
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
 
     def _start_query(self):
         if self._callback:
@@ -119,7 +119,7 @@ class AsyncImageService(AsyncPeriodicQuery):
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
         self._image_requests = image_requests
 
     def _start_query(self):

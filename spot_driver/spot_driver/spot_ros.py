@@ -81,7 +81,7 @@ class SpotROS(Node):
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
-        ''' ROS Parameters '''
+        """ ROS Parameters """
         rates_names = ['robot_state', 'lease', 'front_image', 'size_image', 'rear_image']                                    
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback, rates_names=rates_names))
@@ -329,19 +329,19 @@ class SpotROS(Node):
         res.success, res.message = self.spot_wrapper.stand()
         return res
 
-    def handle_dock(self, req: Dock.Request, res: Dock.Response):
+    def handle_dock(self, req: Dock.Request, res: Dock.Response) -> Dock.Response:
         """Dock the robot"""
         res.success, res.message = self.spot_wrapper.dock(req.dock_id)
         self.update_dock_state()
         return res
 
-    def handle_undock(self, _, res: Trigger.Response):
+    def handle_undock(self, _, res: Trigger.Response) -> Trigger.Response:
         """Undock the robot"""
         res.success, res.message = self.spot_wrapper.undock()
         self.update_dock_state()
         return res
 
-    def update_dock_state(self):
+    def update_dock_state(self) -> None:
         """Get docking state of robot"""
         res = self.spot_wrapper.get_docking_state()
         self.dock_state_pub.publish(DockStateToMsg(res))
@@ -387,7 +387,7 @@ class SpotROS(Node):
             self.spot_wrapper.set_mobility_params(mobility_params)
             return SetBool.Response(True, 'Success')
         except Exception as e:
-            return SetBool.Response(False, 'Error:{}'.format(e))
+            return SetBool.Response(False, Text(e))
 
     def handle_locomotion_mode(self, req) -> SetLocomotion.Response:
         """ROS service handler to set locomotion mode"""
@@ -397,7 +397,7 @@ class SpotROS(Node):
             self.spot_wrapper.set_mobility_params( mobility_params )
             return SetLocomotion.Response(True, 'Success')
         except Exception as e:
-            return SetLocomotion.Response(False, 'Error:{}'.format(e))
+            return SetLocomotion.Response(False, Text(e))
 
     def handle_max_vel(self, req: SetVelocity.Request) -> SetVelocity.Response:
         """
@@ -557,9 +557,9 @@ class SpotROS(Node):
             and len(v.parent_frame_name) != 0}
 
         # tf: FrameTreeSnapshot.ChildToParentEdgeMapEntry
-        #    key: str
+        #    key: Text
         #    value: FrameTreeSnapshot.ParentEdge
-        #       parent_frame_name: str
+        #       parent_frame_name: Text
         #       parent_tform_child: bosdyn.client.math_helpers.SE3Pose
         output = existing_transforms
         for k,v in tfs_to_add.items():
@@ -620,10 +620,11 @@ class SpotROS(Node):
         has_cam_payload = self.get_parameter('has_cam_payload').value
 
         # Connect to the robot
-        self.spot_wrapper = SpotWrapper(self.get_logger(), has_cam_payload)
+        self.spot_wrapper = SpotWrapper(has_cam_payload)
 
         # Verify connection
-        if self.spot_wrapper.connect(self.get_parameter('username').value, 
+        if self.spot_wrapper.connect(self.get_logger(),
+                                     self.get_parameter('username').value, 
                                      self.get_parameter('password').value,
                                      self.get_parameter('hostname').value,
                                      self.get_parameters_by_prefix('rates'),

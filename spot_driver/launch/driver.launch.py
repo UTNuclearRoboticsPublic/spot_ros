@@ -1,3 +1,5 @@
+from typing import Text
+
 from launch import LaunchDescription
 
 from launch.actions import DeclareLaunchArgument, Shutdown
@@ -26,13 +28,13 @@ def generate_launch_description():
         parameters=[
           ParameterDescription(name='username',
                                value=LaunchConfiguration('username'),
-                               value_type=str),
+                               value_type=Text),
           ParameterDescription(name='password',
                                value=LaunchConfiguration('password'),
-                               value_type=str),
+                               value_type=Text),
           ParameterDescription(name='hostname',
                                value=LaunchConfiguration('hostname'),
-                               value_type=str),
+                               value_type=Text),
           ParameterDescription(name='auto_claim',
                                value=LaunchConfiguration('auto_claim'),
                                value_type=bool),

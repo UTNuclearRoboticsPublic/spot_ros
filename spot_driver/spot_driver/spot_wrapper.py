@@ -29,6 +29,8 @@ from typing import Text, Tuple
 from .async_queries import *
 
 from bosdyn.api import image_pb2, header_pb2
+from bosdyn.api.docking import docking_pb2
+from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
 from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
@@ -43,14 +45,14 @@ from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 
-from google.protobuf.timestamp_pb2 import Timestamp
-from google.protobuf.duration_pb2 import Duration
+from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
+from google.protobuf.duration_pb2 import Duration as PB2Duration
+from google.protobuf.message import Message as PB2Message
 
 class SpotWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
-    def __init__(self, logger, has_cam_payload: bool = False):
+    def __init__(self, has_cam_payload: bool = False):
         self._is_connected = False
-        self._logger = logger
         self._robot = None
         self._lease = None
         self._has_cam_payload = has_cam_payload
@@ -66,7 +68,7 @@ class SpotWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-    def connect(self, username, password, hostname, rates = {}, callbacks = {}) -> bool:
+    def connect(self, logger, username, password, hostname, rates = {}, callbacks = {}) -> bool:
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
         side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
         rear_image_sources = {'back_fisheye_image', 'back_depth'}
@@ -86,7 +88,7 @@ class SpotWrapper():
         try:
             self._sdk = create_standard_sdk('ros_spot')
         except IOError as err:
-            self._logger.error('Error creating SDK object ' + Text(err))
+            logger.error('Error creating SDK object ' + Text(err))
             return False
 
         self._robot = self._sdk.create_robot(hostname)
@@ -94,10 +96,10 @@ class SpotWrapper():
         try:
             self._robot.authenticate(username, password)
         except RpcError as err:
-            self._logger.error('Failed to communicate with robot: ' + err.error_message)
+            logger.error('Failed to communicate with robot: ' + err.error_message)
             return False
         except AuthResponseError as err:
-            self._logger.error('Authentication failed. ' + err.error_message)
+            logger.error('Authentication failed. ' + err.error_message)
             return False
 
         self._robot.start_time_sync()
@@ -112,23 +114,23 @@ class SpotWrapper():
             self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
             self._docking_client = self._robot.ensure_client(DockingClient.default_service_name) 
         except Exception as e:
-            self._logger.error('Unable to create client service: ' + Text(e))
+            logger.error('Unable to create client service: ' + Text(e))
             return False
 
         if self._has_cam_payload:
             try:
                 self._audio_client = self._robot.ensure_client(AudioClient.default_service_name)
             except Exception as e:
-                self._logger.error('Unable to create client service: ' + Text(e))
+                logger.error('Unable to create client service: ' + Text(e))
                 return False
 
         # Async Tasks
-        self._robot_state_task = AsyncRobotState(self._robot_state_client, self._logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-        self._lease_task = AsyncLease(self._lease_client, self._logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
-        self._front_image_task = AsyncImageService(self._image_client, self._logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-        self._side_image_task = AsyncImageService(self._image_client, self._logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-        self._rear_image_task = AsyncImageService(self._image_client, self._logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-        self._idle_task = AsyncIdle(self._robot_command_client, self._logger, 10.0, self)
+        self._robot_state_task = AsyncRobotState(self._robot_state_client, logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
+        self._lease_task = AsyncLease(self._lease_client, logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
+        self._front_image_task = AsyncImageService(self._image_client, logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
+        self._side_image_task = AsyncImageService(self._image_client, logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
+        self._rear_image_task = AsyncImageService(self._image_client, logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+        self._idle_task = AsyncIdle(self._robot_command_client, logger, 10.0, self)
 
         self._estop_endpoint = None
 
@@ -142,11 +144,6 @@ class SpotWrapper():
 
         self._is_connected = True
         return True
-
-    @property
-    def logger(self):
-        """Return our logger"""
-        return self._logger
 
     @property
     def is_connected(self) -> bool:
@@ -202,11 +199,26 @@ class SpotWrapper():
         return self._is_moving
 
     @property
-    def time_skew(self) -> Duration:
+    def time_skew(self) -> PB2Duration:
         """Return the time skew between local and spot time"""
         return self._robot.time_sync.endpoint.clock_skew
 
-    def robotToLocalTime(self, timestamp: Timestamp) -> Timestamp:
+    def _robot_command(self, command_proto: PB2Message,
+                       end_time_secs: float =None) -> Tuple[bool, Text]:
+        """Generic blocking function for sending commands to robots.
+
+        Args:
+            command_proto: robot_command_pb2 protobuf message to send to the robot.
+                           Usually made with RobotCommandBuilder
+            end_time_secs: (optional) Time-to-live for the command in seconds
+        """
+        try:
+            id = self._robot_command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
+            return True, "Success", id
+        except Exception as e:
+            return False, Text(e), None
+
+    def robotToLocalTime(self, timestamp: PB2Timestamp) -> PB2Timestamp:
         """Takes a timestamp and an estimated skew and return seconds and nano seconds
 
         Args:
@@ -215,7 +227,7 @@ class SpotWrapper():
             google.protobuf.Timestamp
         """
 
-        rtime = Timestamp()
+        rtime = PB2Timestamp()
         rtime.seconds = timestamp.seconds - self.time_skew.seconds
         rtime.nanos = timestamp.nanos - self.time_skew.nanos
         if rtime.nanos < 0:
@@ -227,17 +239,16 @@ class SpotWrapper():
 
         return rtime
 
-    def claim(self) -> bool:
+    def claim(self) -> Tuple[bool, Text]:
         """Get a lease for the robot, a handle on the estop endpoint, and the ID of the robot."""
         try:
             if not self.getLease():
                 return False
             self.resetEStop()
         except (ResponseError, RpcError) as err:
-            self._logger.error("Failed to initialize robot communication when attempting to claim lease: %s", err)
-            return False
+            return False, err.error_message
         
-        return True
+        return True, 'Success'
 
     def updateTasks(self) -> None:
         """Loop through all periodic tasks and update their data if needed."""
@@ -272,16 +283,15 @@ class SpotWrapper():
             self._estop_keepalive = None
             self._estop_endpoint = None
 
-    def getLease(self) -> bool:
+    def getLease(self) -> Tuple[bool, Text]:
         """Get a lease for the robot and keep the lease alive automatically."""
         try:
             self._lease = self._lease_client.acquire()
         except (ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError) as err:
-            self._logger.error(err.error_message)
-            return False
+            return False, err.error_message
         
         self._lease_keepalive = LeaseKeepAlive(self._lease_client)
-        return True
+        return True, 'Success'
 
     def releaseLease(self) -> None:
         """Return the lease on the body."""
@@ -295,10 +305,9 @@ class SpotWrapper():
             self.releaseLease()
             self.releaseEStop()
         except Exception as err:
-            self._logger.error(err)
-            return False
+            return False, Text(err)
 
-        return True
+        return True, 'Success'
 
     def disconnect(self) -> None:
         """Release control of robot as gracefully as posssible."""
@@ -308,19 +317,6 @@ class SpotWrapper():
         if self._robot.time_sync:
             self._robot.time_sync.stop()
         self.release()
-
-    def _robot_command(self, command_proto, end_time_secs=None) -> Tuple[bool, Text]:
-        """Generic blocking function for sending commands to robots.
-
-        Args:
-            command_proto: robot_command_pb2 object to send to the robot.  Usually made with RobotCommandBuilder
-            end_time_secs: (optional) Time-to-live for the command in seconds
-        """
-        try:
-            id = self._robot_command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
-            return True, "Success", id
-        except Exception as e:
-            return False, str(e), None
 
     def stop(self) -> Tuple[bool, Text]:
         """Stop the robot's motion."""
@@ -371,7 +367,7 @@ class SpotWrapper():
             return False, Text(e)
         return True, 'Success'
 
-    def get_docking_state(self, **kwargs):
+    def get_docking_state(self, **kwargs) -> docking_pb2.DockState:
         """Get docking state of robot."""
         state = self._docking_client.get_docking_state(**kwargs)
         return state
@@ -390,11 +386,11 @@ class SpotWrapper():
             return False, Text(e)
 
     def set_mobility_params(self,
-                            body_height=0,
-                            footprint_R_body=EulerZXY(),
-                            locomotion_hint=1,
-                            stair_hint=False,
-                            external_force_params=None) -> None:
+                            body_height: float = 0.0,
+                            footprint_R_body: EulerZXY = EulerZXY(),
+                            locomotion_hint: int = 1,
+                            stair_hint: bool = False,
+                            external_force_params: robot_command_pb2.BodyExternalForceParams = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -405,12 +401,12 @@ class SpotWrapper():
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
-    def get_mobility_params(self):
+    def get_mobility_params(self) -> robot_command_pb2.MobilityParams:
         """Get mobility params
         """
         return self._mobility_params
 
-    def velocity_cmd(self, v_x, v_y, v_rot, cmd_duration=0.1) -> None:
+    def velocity_cmd(self, v_x: float, v_y: float, v_rot: float, cmd_duration=0.1) -> None:
         """Send a velocity motion command to the robot.
 
         Args:
@@ -421,8 +417,8 @@ class SpotWrapper():
         """
         end_time=time.time() + cmd_duration
         self._robot_command(RobotCommandBuilder.synchro_velocity_command(
-                                      v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
-                                  end_time_secs=end_time)
+                            v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
+                            end_time_secs=end_time)
         self._last_velocity_command_time = end_time
 
     def play_sound(self, name: Text, gain: float, block: bool) -> Tuple[bool, Text]:
