@@ -309,7 +309,7 @@ class SpotWrapper():
             self._robot.time_sync.stop()
         self.release()
 
-    def _robot_command(self, command_proto, end_time_secs=None):
+    def _robot_command(self, command_proto, end_time_secs=None) -> Tuple[bool, Text]:
         """Generic blocking function for sending commands to robots.
 
         Args:
@@ -322,30 +322,30 @@ class SpotWrapper():
         except Exception as e:
             return False, str(e), None
 
-    def stop(self):
+    def stop(self) -> Tuple[bool, Text]:
         """Stop the robot's motion."""
         response = self._robot_command(RobotCommandBuilder.stop_command())
         return response[0], response[1]
 
-    def self_right(self):
+    def self_right(self) -> Tuple[bool, Text]:
         """Have the robot self-right itself."""
         response = self._robot_command(RobotCommandBuilder.selfright_command())
         return response[0], response[1]
 
-    def sit(self):
+    def sit(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit down if able."""
         response = self._robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = response[2]
         return response[0], response[1]
 
-    def stand(self, monitor_command=True):
+    def stand(self, monitor_command=True) -> Tuple[bool, Text]:
         """If the e-stop is enabled, and the motor power is enabled, stand the robot up."""
         response = self._robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
         if monitor_command:
             self._last_stand_command = response[2]
         return response[0], response[1]
 
-    def dock(self, dock_id) -> bool:
+    def dock(self, dock_id) -> Tuple[bool, Text]:
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
         try:
             # Make sure we're powered on and standing
@@ -355,11 +355,11 @@ class SpotWrapper():
             self.last_docking_command = dock_id
             blocking_dock_robot(self._robot, dock_id)
             self.last_docking_command = None
-            return True
         except Exception as e:
-            return False
+            return False, Text(e)
+        return True, 'Success'
 
-    def undock(self, timeout: float = 20.0):
+    def undock(self, timeout: float = 20.0) -> Tuple[bool, Text]:
         """Power motors on and undock the robot from the station."""
         try:
             # Make sure we're powered on
@@ -368,27 +368,26 @@ class SpotWrapper():
             # Undock the robot
             blocking_undock(self._robot, timeout)
         except Exception as e:
-            return False, str(e)
-
-        return True, "Success"
+            return False, Text(e)
+        return True, 'Success'
 
     def get_docking_state(self, **kwargs):
         """Get docking state of robot."""
         state = self._docking_client.get_docking_state(**kwargs)
         return state
 
-    def safe_power_off(self):
+    def safe_power_off(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit if possible.  Once sitting, disable motor power."""
         response = self._robot_command(RobotCommandBuilder.safe_power_off_command())
         return response[0], response[1]
 
-    def power_on(self) -> bool:
+    def power_on(self) ->  Tuple[bool, Text]:
         """Enable the motor power if e-stop is enabled."""
         try:
             power.power_on(self._power_client)
-            return True
-        except:
-            return False
+            return True, 'Success'
+        except Exception as e:
+            return False, Text(e)
 
     def set_mobility_params(self,
                             body_height=0,

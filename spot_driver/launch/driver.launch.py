@@ -2,11 +2,10 @@ from launch import LaunchDescription
 
 from launch.actions import DeclareLaunchArgument, Shutdown
 from launch.substitutions import LaunchConfiguration
-from launch.substitutions import PathJoinSubstitution, TextSubstitution
+from launch.substitutions import TextSubstitution
 
 from launch_ros.actions import Node
-from launch_ros.parameters_type import ParameterDescription, ParameterFile
-from launch_ros.substitutions import FindPackageShare
+from launch_ros.parameters_type import ParameterDescription
 
 def generate_launch_description():
   
@@ -22,7 +21,6 @@ def generate_launch_description():
   nodes = [
     Node(
         package='spot_driver',
-        namespace='spot',
         executable='driver',
         name='spot_driver',
         parameters=[
@@ -45,25 +43,7 @@ def generate_launch_description():
                                value=LaunchConfiguration('auto_stand'),
                                value_type=bool)
         ],
-        remappings=[
-          ('tf','/tf'),
-          ('joint_states','/joint_states')
-        ],
         on_exit=Shutdown()
-    ),
-
-    Node(
-        package='twist_mux',
-        namespace='spot',
-        executable='twist_mux',
-        name='twist_mux',
-        parameters=[
-          ParameterFile(PathJoinSubstitution([
-                    FindPackageShare('spot_driver'),
-                    'config',
-                    'twist_mux.yaml"'
-                ]))
-        ]
     )
   ]
 
