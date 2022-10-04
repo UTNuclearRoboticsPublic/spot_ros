@@ -75,7 +75,7 @@ class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
 
     def __init__(self):
-        super().__init__('spot_driver', allow_undeclared_parameters=True)
+        super().__init__('spot_driver')
 
         self.spot_wrapper = None
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
@@ -637,29 +637,29 @@ class SpotROS(Node):
         ### Set up ROS interfaces
         ## Camera publishers
         # RGB Images
-        self.back_image_pub = self.create_publisher(Image, 'camera/back/image', 1)
-        self.frontleft_image_pub = self.create_publisher(Image, 'camera/frontleft/image', 1)
-        self.frontright_image_pub = self.create_publisher(Image, 'camera/frontright/image', 1)
-        self.left_image_pub = self.create_publisher(Image, 'camera/left/image', 1)
-        self.right_image_pub = self.create_publisher(Image, 'camera/right/image', 1)
+        self.back_image_pub = self.create_publisher(Image, '~/camera/back/image', 1)
+        self.frontleft_image_pub = self.create_publisher(Image, '~/camera/frontleft/image', 1)
+        self.frontright_image_pub = self.create_publisher(Image, '~/camera/frontright/image', 1)
+        self.left_image_pub = self.create_publisher(Image, '~/camera/left/image', 1)
+        self.right_image_pub = self.create_publisher(Image, '~/camera/right/image', 1)
         # Depth Images
-        self.back_depth_pub = self.create_publisher(Image, 'depth/back/image', 1)
-        self.frontleft_depth_pub = self.create_publisher(Image, 'depth/frontleft/image', 1)
-        self.frontright_depth_pub = self.create_publisher(Image, 'depth/frontright/image', 1)
-        self.left_depth_pub = self.create_publisher(Image, 'depth/left/image', 1)
-        self.right_depth_pub = self.create_publisher(Image, 'depth/right/image', 1)
+        self.back_depth_pub = self.create_publisher(Image, '~/depth/back/image', 1)
+        self.frontleft_depth_pub = self.create_publisher(Image, '~/depth/frontleft/image', 1)
+        self.frontright_depth_pub = self.create_publisher(Image, '~/depth/frontright/image', 1)
+        self.left_depth_pub = self.create_publisher(Image, '~/depth/left/image', 1)
+        self.right_depth_pub = self.create_publisher(Image, '~/depth/right/image', 1)
         # Image Camera Info
-        self.back_image_info_pub = self.create_publisher(CameraInfo, 'camera/back/camera_info', 1)
-        self.frontleft_image_info_pub = self.create_publisher(CameraInfo, 'camera/frontleft/camera_info', 1)
-        self.frontright_image_info_pub = self.create_publisher(CameraInfo, 'camera/frontright/camera_info', 1)
-        self.left_image_info_pub = self.create_publisher(CameraInfo, 'camera/left/camera_info', 1)
-        self.right_image_info_pub = self.create_publisher(CameraInfo, 'camera/right/camera_info', 1)
+        self.back_image_info_pub = self.create_publisher(CameraInfo, '~/camera/back/camera_info', 1)
+        self.frontleft_image_info_pub = self.create_publisher(CameraInfo, '~/camera/frontleft/camera_info', 1)
+        self.frontright_image_info_pub = self.create_publisher(CameraInfo, '~/camera/frontright/camera_info', 1)
+        self.left_image_info_pub = self.create_publisher(CameraInfo, '~/camera/left/camera_info', 1)
+        self.right_image_info_pub = self.create_publisher(CameraInfo, '~/camera/right/camera_info', 1)
         # Depth Camera Info
-        self.back_depth_info_pub = self.create_publisher(CameraInfo, 'depth/back/camera_info', 1)
-        self.frontleft_depth_info_pub = self.create_publisher(CameraInfo, 'depth/frontleft/camera_info', 1)
-        self.frontright_depth_info_pub = self.create_publisher(CameraInfo, 'depth/frontright/camera_info', 1)
-        self.left_depth_info_pub = self.create_publisher(CameraInfo, 'depth/left/camera_info', 1)
-        self.right_depth_info_pub = self.create_publisher(CameraInfo, 'depth/right/camera_info', 1)
+        self.back_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/back/camera_info', 1)
+        self.frontleft_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/frontleft/camera_info', 1)
+        self.frontright_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/frontright/camera_info', 1)
+        self.left_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/left/camera_info', 1)
+        self.right_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/right/camera_info', 1)
 
         ## Status Publishers
         # QoS to use for latched publishers
@@ -669,59 +669,59 @@ class SpotROS(Node):
                                  reliability=QoSReliabilityPolicy.RELIABLE)
 
         self.joint_state_pub = self.create_publisher(JointState, 'joint_states', 1)
-        self.dock_state_pub = self.create_publisher(DockState, 'status/dock_state', qos_profile=latched_qos)
-        self.lease_pub = self.create_publisher(LeaseArray, 'status/leases', 1)
-        self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, 'odometry/twist', 1)
-        self.odom_pub = self.create_publisher(Odometry, 'odometry', 10)
-        self.feet_pub = self.create_publisher(FootStateArray, 'status/feet', 10)
-        self.estop_pub = self.create_publisher(EStopStateArray, 'status/estop', 1)
-        self.wifi_pub = self.create_publisher(WiFiState, 'status/wifi', qos_profile=latched_qos)
-        self.power_pub = self.create_publisher(PowerState, 'status/power_state', 1)
-        self.battery_pub = self.create_publisher(BatteryStateArray, 'status/battery_states', 1)
-        self.behavior_faults_pub = self.create_publisher(BehaviorFaultState, 'status/behavior_faults', 10)
-        self.system_faults_pub = self.create_publisher(SystemFaultState, 'status/system_faults', 10)
-        self.mobility_params_pub = self.create_publisher(MobilityParams, 'status/mobility_params', 1)
-        self.feedback_pub = self.create_publisher(Feedback, 'status/feedback', qos_profile=latched_qos)
+        self.dock_state_pub = self.create_publisher(DockState, '~/status/dock_state', qos_profile=latched_qos)
+        self.lease_pub = self.create_publisher(LeaseArray, '~/status/leases', 1)
+        self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist', 1)
+        self.odom_pub = self.create_publisher(Odometry, '~/odometry', 10)
+        self.feet_pub = self.create_publisher(FootStateArray, '~/status/feet', 10)
+        self.estop_pub = self.create_publisher(EStopStateArray, '~/status/estop', 1)
+        self.wifi_pub = self.create_publisher(WiFiState, '~/status/wifi', qos_profile=latched_qos)
+        self.power_pub = self.create_publisher(PowerState, '~/status/power_state', 1)
+        self.battery_pub = self.create_publisher(BatteryStateArray, '~/status/battery_states', 1)
+        self.behavior_faults_pub = self.create_publisher(BehaviorFaultState, '~/status/behavior_faults', 10)
+        self.system_faults_pub = self.create_publisher(SystemFaultState, '~/status/system_faults', 10)
+        self.mobility_params_pub = self.create_publisher(MobilityParams, '~/status/mobility_params', 1)
+        self.feedback_pub = self.create_publisher(Feedback, '~/status/feedback', qos_profile=latched_qos)
 
-        self.create_subscription(Twist, 'cmd_vel', self.cmdVelCallback, 10)
-        self.create_subscription(Pose, 'body_pose', self.bodyPoseCallback, 10)
+        self.create_subscription(Twist, '~/cmd_vel', self.cmdVelCallback, 10)
+        self.create_subscription(Pose, '~/body_pose', self.bodyPoseCallback, 10)
 
         srv_group = rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
-        self.create_service(Trigger, "claim", self.handle_claim, callback_group=srv_group)
-        self.create_service(Trigger, "release", self.handle_release, callback_group=srv_group)
-        self.create_service(Trigger, "stop", self.handle_stop, callback_group=srv_group)
-        self.create_service(Trigger, "self_right", self.handle_self_right, callback_group=srv_group)
-        self.create_service(Trigger, "sit", self.handle_sit, callback_group=srv_group)
-        self.create_service(Trigger, "stand", self.handle_stand, callback_group=srv_group)
-        self.create_service(Trigger, "power_on", self.handle_power_on, callback_group=srv_group)
-        self.create_service(Trigger, "power_off", self.handle_safe_power_off, callback_group=srv_group)
+        self.create_service(Trigger, "~/claim", self.handle_claim, callback_group=srv_group)
+        self.create_service(Trigger, "~/release", self.handle_release, callback_group=srv_group)
+        self.create_service(Trigger, "~/stop", self.handle_stop, callback_group=srv_group)
+        self.create_service(Trigger, "~/self_right", self.handle_self_right, callback_group=srv_group)
+        self.create_service(Trigger, "~/sit", self.handle_sit, callback_group=srv_group)
+        self.create_service(Trigger, "~/stand", self.handle_stand, callback_group=srv_group)
+        self.create_service(Trigger, "~/power_on", self.handle_power_on, callback_group=srv_group)
+        self.create_service(Trigger, "~/power_off", self.handle_safe_power_off, callback_group=srv_group)
 
-        self.create_service(Trigger, "estop/hard", self.handle_estop_hard, callback_group=srv_group)
-        self.create_service(Trigger, "estop/gentle", self.handle_estop_soft, callback_group=srv_group)
-        self.create_service(Trigger, "estop/release", self.handle_estop_disengage, callback_group=srv_group)
+        self.create_service(Trigger, "~/estop/hard", self.handle_estop_hard, callback_group=srv_group)
+        self.create_service(Trigger, "~/estop/gentle", self.handle_estop_soft, callback_group=srv_group)
+        self.create_service(Trigger, "~/estop/release", self.handle_estop_disengage, callback_group=srv_group)
 
-        self.create_service(SetBool, "stair_mode", self.handle_stair_mode, callback_group=srv_group)
-        self.create_service(SetLocomotion, "locomotion_mode", self.handle_locomotion_mode, callback_group=srv_group)
-        self.create_service(SetVelocity, "max_velocity", self.handle_max_vel, callback_group=srv_group)
-        self.create_service(ClearBehaviorFault, "clear_behavior_fault", self.handle_clear_behavior_fault, callback_group=srv_group)
+        self.create_service(SetBool, "~/stair_mode", self.handle_stair_mode, callback_group=srv_group)
+        self.create_service(SetLocomotion, "~/locomotion_mode", self.handle_locomotion_mode, callback_group=srv_group)
+        self.create_service(SetVelocity, "~/max_velocity", self.handle_max_vel, callback_group=srv_group)
+        self.create_service(ClearBehaviorFault, "~/clear_behavior_fault", self.handle_clear_behavior_fault, callback_group=srv_group)
 
-        self.create_service(ListGraph, "list_graph", self.handle_list_graph, callback_group=srv_group)
+        self.create_service(ListGraph, "~/list_graph", self.handle_list_graph, callback_group=srv_group)
 
         # Docking
-        self.create_service(Dock, 'dock', self.handle_dock, callback_group=srv_group)
-        self.create_service(Trigger, 'undock', self.handle_undock, callback_group=srv_group)
+        self.create_service(Dock, '~/dock', self.handle_dock, callback_group=srv_group)
+        self.create_service(Trigger, '~/undock', self.handle_undock, callback_group=srv_group)
 
-        self._ = rclpy.action.ActionServer(
+        self._navigate_to_server = rclpy.action.ActionServer(
                 self,
                 NavigateTo,
-                'navigate_to',
+                '~/navigate_to',
                 execute_callback=self.handle_navigate_to,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
         
-        self._ = rclpy.action.ActionServer(
+        self._trajectory_server = rclpy.action.ActionServer(
                 self,
                 Trajectory,
-                'trajectory',
+                '~/trajectory',
                 execute_callback=self.handle_trajectory,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
 
