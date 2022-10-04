@@ -629,10 +629,21 @@ class SpotROS(Node):
                                      self.get_parameter('hostname').value,
                                      self.get_parameters_by_prefix('rates'),
                                      callbacks):
-            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.id.nickname)
+            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.id.nickname + '...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
+
+        # Startup routine per parameter configuration
+        if self.get_parameter('auto_claim').value:
+            if self.spot_wrapper.claim():
+                self.get_logger().info('Claimed lease on Spot robot ' + self.spot_wrapper.id.nickname + '...')
+                if self.get_parameter('auto_power_on').value:
+                    self.get_logger().info('Spot powered on...')
+                    if self.spot_wrapper.power_on():
+                        if self.get_parameter('auto_stand').value:
+                            self.get_logger().info('Spot standing up...')
+                            self.spot_wrapper.stand()
 
         ### Set up ROS interfaces
         ## Camera publishers
@@ -757,20 +768,10 @@ class SpotROS(Node):
         
         populate_static_transforms()
 
-        # Startup routine per parameter configuration
-        if self.get_parameter('auto_claim').value:
-            if self.spot_wrapper.claim():
-                self.get_logger().info('Claimed lease on Spot robot ' + self.spot_wrapper.id.nickname)
-                if self.get_parameter('auto_power_on').value:
-                    self.get_logger().info('Spot powered on')
-                    if self.spot_wrapper.power_on():
-                        if self.get_parameter('auto_stand').value:
-                            self.spot_wrapper.stand()
-
         status_pub_period = 0.1 # seconds
         self.timer = self.create_timer(status_pub_period, self.PublishStatus)
 
-        self.get_logger().info('Spot driver started')
+        self.get_logger().info('Spot driver startup complete.')
 
         # Publish initial dock state. Wait for first response
         while self.spot_wrapper.get_docking_state().status == DockState.DOCK_STATUS_UNKNOWN:
