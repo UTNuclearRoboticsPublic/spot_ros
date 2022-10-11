@@ -17,7 +17,10 @@ def generate_launch_description():
                 executable='teleop_twist_keyboard',
                 name='teleop_twist_keyboard',
                 prefix = 'xterm -e',
-                on_exit=Shutdown()
+                on_exit=Shutdown(),
+                remappings=[
+                    ('cmd_vel', 'keyboard/cmd_vel')
+                ]
             ),
             Node(
                 package='twist_mux',
@@ -27,8 +30,11 @@ def generate_launch_description():
                 ParameterFile(PathJoinSubstitution([
                             FindPackageShare('spot_control'),
                             'config',
-                            'twist_mux.yaml"'
+                            'twist_mux.yaml'
                         ]))
+                ],
+                remappings=[
+                    ('cmd_vel_out', 'spot_driver/cmd_vel')
                 ]
             )
     ]

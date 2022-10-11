@@ -2,11 +2,11 @@
   ros__parameters:
     topics:
       keyboard:
-        topic   : keyboard_teleop/cmd_vel
+        topic   : keyboard/cmd_vel
         timeout : 0.1
         priority: 10
       joy:
-        topic   : bluetooth_teleop/cmd_vel
+        topic   : joy/cmd_vel
         timeout : 0.1
         priority: 9
       interactive_marker:

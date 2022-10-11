@@ -28,6 +28,7 @@
 from typing import List, Text
 import threading
 import yaml
+import time as pyTime
 
 import rclpy.utilities
 from rclpy.node import Node
@@ -80,6 +81,7 @@ class SpotROS(Node):
         self.spot_wrapper = None
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
+        self.status_timer = None
 
         """ ROS Parameters """
         rates_names = ['robot_state', 'lease', 'front_image', 'size_image', 'rear_image']                                    
@@ -148,6 +150,27 @@ class SpotROS(Node):
             ParameterDescriptor(description='Automatically stand up the robot on connection.',
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
+
+    def __del__(self):
+        if self.status_timer is not None:
+            self.status_timer.destroy()
+
+        if self.spot_wrapper is None:
+            return
+
+        if not self.spot_wrapper.is_connected:
+            return
+
+        if not self.spot_wrapper.is_sitting:
+            print('Spot sitting down...')
+            is_sitting, message = self.spot_wrapper.sit()
+        
+            if not is_sitting:
+                print('Not shutting down because Spot cannot sit here! ' + message)
+                return
+
+        print('Shutting down ROS driver for Spot')
+        self.spot_wrapper.disconnect()
 
     def RobotStateCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new robot state data."""
@@ -573,22 +596,6 @@ class SpotROS(Node):
         
         return output
 
-    def __del__(self):
-        if self.spot_wrapper is None:
-            return
-
-        if not self.spot_wrapper.is_connected:
-            return
-
-        is_sitting, message = self.spot_wrapper.sit()
-        
-        if not is_sitting:
-            self.get_logger().error('Not shutting down because Spot cannot sit here! ' + message)
-            return
-
-        self.get_logger().info('Shutting down ROS driver for Spot')
-        self.spot_wrapper.disconnect()
-
     def parameters_callback(self, params, rates_names) -> SetParametersResult:
         for p in params:
             if p.name == 'odom_mode':
@@ -643,6 +650,7 @@ class SpotROS(Node):
                     if self.spot_wrapper.power_on():
                         if self.get_parameter('auto_stand').value:
                             self.get_logger().info('Spot standing up...')
+                            pyTime.sleep(1.0)
                             self.spot_wrapper.stand()
 
         ### Set up ROS interfaces
@@ -769,7 +777,7 @@ class SpotROS(Node):
         populate_static_transforms()
 
         status_pub_period = 0.1 # seconds
-        self.timer = self.create_timer(status_pub_period, self.PublishStatus)
+        self.status_timer = self.create_timer(status_pub_period, self.PublishStatus)
 
         self.get_logger().info('Spot driver startup complete.')
 
@@ -794,7 +802,7 @@ class SpotROS(Node):
                     sound_names = yaml.safe_load(file)
                     
                     if not sound_names:
-                        self.get_logger().warn('Opened sounds manifest file {}, but no contents found.'.format(sounds_manifest))
+                        self.get_logger().warn('Opened sounds manifest file {}, but no contents found.'.format(manifest))
 
                     for name in sound_names:
                         try:
