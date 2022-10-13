@@ -19,7 +19,7 @@ def generate_launch_description():
     DeclareLaunchArgument("auto_claim", default_value=TextSubstitution(text="False")),
     DeclareLaunchArgument("auto_power_on", default_value=TextSubstitution(text="False")),
     DeclareLaunchArgument("auto_stand", default_value=TextSubstitution(text="False")),
-    DeclareLaunchArgument("has_eap", description='True if the robot includes the Estended Autonomy Package',
+    DeclareLaunchArgument("has_eap", description='True if the robot includes the Extended Autonomy Package',
                           default_value=TextSubstitution(text="False"))
   ]
 
