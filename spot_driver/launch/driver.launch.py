@@ -1,13 +1,16 @@
 from typing import Text
 
+from ament_index_python.packages import get_package_share_directory
+
 from launch import LaunchDescription
 
-from launch.actions import DeclareLaunchArgument, Shutdown
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Shutdown
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.substitutions import TextSubstitution
 
 from launch_ros.actions import Node
 from launch_ros.parameters_type import ParameterDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
   
@@ -17,7 +20,9 @@ def generate_launch_description():
     DeclareLaunchArgument("hostname", default_value=TextSubstitution(text="192.168.50.3")),
     DeclareLaunchArgument("auto_claim", default_value=TextSubstitution(text="False")),
     DeclareLaunchArgument("auto_power_on", default_value=TextSubstitution(text="False")),
-    DeclareLaunchArgument("auto_stand", default_value=TextSubstitution(text="False"))
+    DeclareLaunchArgument("auto_stand", default_value=TextSubstitution(text="False")),
+    DeclareLaunchArgument("has_eap", description='True if the robot includes the Estended Autonomy Package',
+                          default_value=TextSubstitution(text="False"))
   ]
 
   nodes = [
@@ -49,7 +54,17 @@ def generate_launch_description():
     )
   ]
 
+  includes = []
+  if LaunchConfiguration('has_eap'):
+    includes.append(
+      IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+          PathJoinSubstitution(get_package_share_directory('velodyne'), 'launch',
+                               'velodyne-all-nodes-VLP16-composed-launch.py')
+        )))
+
   return LaunchDescription([
       *launch_args,
-      *nodes
+      *nodes,
+      *includes
   ])

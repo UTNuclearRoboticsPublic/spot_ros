@@ -5,6 +5,9 @@
          published by the driver (see spot_driver package) during runtime, so that the transforms
          include calibration adjustments. -->
 
+    <xacro:arg name="has_arm" default="false" />
+    <xacro:arg name="has_velodyne" default="false" />
+
     <link name="body">
         <visual>
             <geometry>
@@ -267,6 +270,27 @@
         <child link="rear_right_lower_leg" />
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.257725" />
     </joint>
+
+    <!-- Spot Arm -->
+    <xacro:if value="$(arg has_arm)">
+        <xacro:include filename="$(find spot_description)/urdf/arm/spot_arm.urdf.xacro"/> 
+        <xacro:spot_arm name="arm0"/>
+
+        <joint name="arm0_mount" type="fixed">
+            <origin xyz="0.292 0 0.188" rpy="0 0 0"/>
+            <parent link="base_link"/>
+            <child link="arm0_base_link"/>
+        </joint>
+    </xacro:if>
+
+    <!-- Spot Arm -->
+    <xacro:if value="$(arg has_velodyne)">
+        <xacro:include filename="$(find velodyne_description)/urdf/VLP-16.urdf.xacro"/> 
+
+        <xacro:VLP-16 parent="base_link" name="velodyne">
+            <origin xyz="0 0 1.0" rpy="0 0 0" />
+        </xacro:VLP-16>
+    </xacro:if>
 
     <!-- Optional custom includes. -->
     <xacro:include filename="$(optenv SPOT_URDF_EXTRAS empty.urdf)" />

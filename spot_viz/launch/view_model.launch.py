@@ -10,6 +10,9 @@ import os
 
 def generate_launch_description():
 
+    has_arm = LaunchConfiguration('show_arm', default='False')
+    has_velodyne = LaunchConfiguration('has_velodyne', default='False')
+
     bringup_dir = get_package_share_directory('spot_viz')
     return LaunchDescription([
         Node(
@@ -25,7 +28,8 @@ def generate_launch_description():
                     'description.launch.py'
                 ])
             ),
-            launch_arguments=[{'has_arm', LaunchConfiguration('show_arm', default='False')}]
+            launch_arguments=[{'has_arm', has_arm},
+                              {'has_velodyne', has_velodyne}]
         ),
         Node(
             package='rviz2',
