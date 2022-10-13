@@ -1,15 +1,13 @@
 from typing import Text
 
-from ament_index_python.packages import get_package_share_directory
-
 from launch import LaunchDescription
 
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Shutdown
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch.substitutions import TextSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 
 from launch_ros.actions import Node
 from launch_ros.parameters_type import ParameterDescription
+from launch_ros.substitutions import FindPackageShare
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
@@ -59,8 +57,8 @@ def generate_launch_description():
     includes.append(
       IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-          PathJoinSubstitution(get_package_share_directory('velodyne'), 'launch',
-                               'velodyne-all-nodes-VLP16-composed-launch.py')
+          PathJoinSubstitution([FindPackageShare('velodyne'), 'launch',
+                               'velodyne-all-nodes-VLP16-composed-launch.py'])
         )))
 
   return LaunchDescription([
