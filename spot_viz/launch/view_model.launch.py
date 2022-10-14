@@ -1,5 +1,5 @@
+import launch
 from launch import LaunchDescription
-from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 from launch.actions import IncludeLaunchDescription, Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -10,16 +10,21 @@ import os
 
 def generate_launch_description():
 
-    has_arm = LaunchConfiguration('show_arm', default='False')
-    has_velodyne = LaunchConfiguration('has_velodyne', default='False')
+    launch_args = [
+        launch.actions.DeclareLaunchArgument('has_arm', default_value='False'),
+        launch.actions.DeclareLaunchArgument('has_velodyne', default_value='False')
+    ]
 
-    bringup_dir = get_package_share_directory('spot_viz')
+    bringup_dir = FindPackageShare().find('spot_viz')
     return LaunchDescription([
+        *launch_args,
+
         Node(
             package='joint_state_publisher_gui',
             executable='joint_state_publisher_gui',
             name='joint_state_publisher_gui'
         ),
+
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([
@@ -28,9 +33,10 @@ def generate_launch_description():
                     'description.launch.py'
                 ])
             ),
-            launch_arguments=[{'has_arm', has_arm},
-                              {'has_velodyne', has_velodyne}]
+            launch_arguments=[{'has_arm', LaunchConfiguration('has_arm')},
+                              {'has_velodyne', LaunchConfiguration('has_velodyne')}]
         ),
+
         Node(
             package='rviz2',
             executable='rviz2',
