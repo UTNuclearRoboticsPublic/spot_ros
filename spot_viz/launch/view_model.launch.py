@@ -35,7 +35,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', os.path.join(bringup_dir,'rviz', 'robot.rviz"')],
+            arguments=['-d', os.path.join(bringup_dir,'rviz', 'robot.rviz')],
             on_exit=Shutdown()
         )
     ])
