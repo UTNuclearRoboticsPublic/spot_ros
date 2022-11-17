@@ -8,6 +8,7 @@
     <xacro:arg name="has_arm" default="false" />
     <xacro:arg name="has_velodyne" default="false" />
 
+    <!-- Fixed links -->
     <link name="body">
         <visual>
             <geometry>
@@ -46,6 +47,7 @@
         <child link="rear_rail" />
     </joint>
 
+    <!-- Front Left -->
     <link name="front_left_hip">
         <visual>
             <geometry>
@@ -70,7 +72,6 @@
         <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.78539816339744827899" upper="0.78539816339744827899" />
     </joint>
-
     <transmission name="front_left_hip_x_trans">
 	    <type>transmission_interface/SimpleTransmission</type>
 	    <joint name="front_left_hip_x">
@@ -116,6 +117,7 @@
             <hardwareInterface>EffortJointInterface</hardwareInterface>
         </actuator>
     </transmission>
+
     <link name="front_left_lower_leg">
         <visual>
             <geometry>
@@ -140,7 +142,6 @@
         <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.254801" />
     </joint>
-    <!-- Contact Sensor -->
     <gazebo reference="front_left_lower_leg">
         <sensor name="front_left_lower_leg_contactsensor_sensor" type="contact">
         <always_on>true</always_on>
@@ -164,6 +165,8 @@
           	<hardwareInterface>EffortJointInterface</hardwareInterface>
 	  </actuator>
     </transmission>
+
+    <!-- Front Right -->
     <link name="front_right_hip">
         <visual>
             <geometry>
@@ -198,6 +201,7 @@
           	<hardwareInterface>EffortJointInterface</hardwareInterface>
 	  </actuator>
     </transmission>
+
     <link name="front_right_upper_leg">
         <visual>
             <geometry>
@@ -232,6 +236,7 @@
             <hardwareInterface>EffortJointInterface</hardwareInterface>
         </actuator>
     </transmission>
+
     <link name="front_right_lower_leg">
         <visual>
             <geometry>
@@ -256,7 +261,6 @@
         <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.247563" />
     </joint>
-     <!-- Contact Sensor -->
     <gazebo reference="front_right_lower_leg">
         <sensor name="front_right_lower_leg_contactsensor_sensor" type="contact">
         <always_on>true</always_on>
@@ -280,6 +284,8 @@
             <hardwareInterface>EffortJointInterface</hardwareInterface>
         </actuator>
     </transmission>
+
+    <!-- Rear Left -->
     <link name="rear_left_hip">
         <visual>
             <geometry>
@@ -314,6 +320,7 @@
             <hardwareInterface>EffortJointInterface</hardwareInterface>
         </actuator>
     </transmission>
+
     <link name="rear_left_upper_leg">
         <visual>
             <geometry>
@@ -348,6 +355,7 @@
             <hardwareInterface>EffortJointInterface</hardwareInterface>
         </actuator>
     </transmission>
+
     <link name="rear_left_lower_leg">
         <visual>
             <geometry>
@@ -372,7 +380,6 @@
         <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.267153" />
     </joint>
-    <!-- Contact Sensor -->
     <gazebo reference="rear_left_lower_leg">
         <sensor name="rear_left_lower_leg_contactsensor_sensor" type="contact">
         <always_on>true</always_on>
@@ -385,7 +392,6 @@
         </plugin>
         </sensor>
     </gazebo>
-
     <transmission name="rear_left_knee_trans">
         <type>transmission_interface/SimpleTransmission</type>
         <joint name="rear_left_knee">
@@ -396,6 +402,8 @@
             <hardwareInterface>EffortJointInterface</hardwareInterface>
         </actuator>
     </transmission>
+
+    <!-- Rear Right -->
     <link name="rear_right_hip">
         <visual>
             <geometry>
@@ -488,7 +496,6 @@
         <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.257725" />
     </joint>
-    <!-- Contact Sensor -->
     <gazebo reference="rear_right_lower_leg">
         <sensor name="rear_right_lower_leg_contactsensor_sensor" type="contact">
         <always_on>true</always_on>
@@ -501,7 +508,6 @@
         </plugin>
         </sensor>
     </gazebo>
-
     <transmission name="rear_right_knee_trans">
         <type>transmission_interface/SimpleTransmission</type>
         <joint name="rear_right_knee">
