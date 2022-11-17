@@ -20,7 +20,7 @@ def generate_launch_description():
     if LaunchConfiguration('has_velodyne') == 'True':
         urdf_mappings['has_velodyne'] = 'true'
     
-    pkg_share = FindPackageShare().find('spot_description')
+    pkg_share = FindPackageShare('spot_description').find('spot_description')
     filepath = os.path.join(pkg_share, 'urdf', 'spot.urdf.xacro')
     robot_desc = xacro.process_file(filepath,
                                     mappings=urdf_mappings
