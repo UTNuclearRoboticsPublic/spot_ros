@@ -96,7 +96,7 @@ class SpotWrapper():
         try:
             self._robot.authenticate(username, password)
         except RpcError as err:
-            logger.error('Failed to communicate with robot {}: {}', hostname, err.error_message)
+            logger.error('Failed to communicate with robot {}: {}'.format(hostname, err.error_message))
             return False
         except AuthResponseError as err:
             logger.error('Authentication failed. ' + err.error_message)
