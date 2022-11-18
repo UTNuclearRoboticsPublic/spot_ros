@@ -11,11 +11,21 @@ import os
 def generate_launch_description():
 
     launch_args = [
-        launch.actions.DeclareLaunchArgument('has_arm', default_value='False'),
-        launch.actions.DeclareLaunchArgument('has_velodyne', default_value='False')
+        launch.actions.DeclareLaunchArgument('has_arm',
+            description='Boolean. Include the Spot Arm.',
+            choices=['True', 'False'],
+            default_value='False'),
+
+        launch.actions.DeclareLaunchArgument('has_eap',
+            description='Boolean. Include the Enhanced Autonomy package (EAP).',
+            choices=['True', 'False'],
+            default_value='False')
     ]
 
-    bringup_dir = FindPackageShare().find('spot_viz')
+    has_arm = LaunchConfiguration('has_arm')
+    has_eap = LaunchConfiguration('has_eap')
+    this_pkg_share = FindPackageShare('spot_viz')
+
     return LaunchDescription([
         *launch_args,
 
@@ -33,15 +43,15 @@ def generate_launch_description():
                     'description.launch.py'
                 ])
             ),
-            launch_arguments=[{'has_arm', LaunchConfiguration('has_arm')},
-                              {'has_velodyne', LaunchConfiguration('has_velodyne')}]
+            launch_arguments=[{'has_arm', has_arm},
+                              {'has_eap', has_eap}]
         ),
 
         Node(
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', os.path.join(bringup_dir,'rviz', 'robot.rviz')],
+            arguments=['-d', PathJoinSubstitution([this_pkg_share, 'rviz', 'robot.rviz'])],
             on_exit=Shutdown()
         )
     ])

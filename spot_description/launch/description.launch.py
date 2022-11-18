@@ -1,35 +1,42 @@
 import os
 
 import launch
-from launch.substitutions import LaunchConfiguration
-import launch_ros.actions
-from launch_ros.substitutions import FindPackageShare
+from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 
-import xacro
+import launch_ros.actions
+from launch_ros.descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
     launch_args = [
-        launch.actions.DeclareLaunchArgument('has_arm', default_value='False'),
-        launch.actions.DeclareLaunchArgument('has_velodyne', default_value='False')
+        launch.actions.DeclareLaunchArgument('has_arm',
+            description='Boolean. Include the Spot Arm.',
+            choices=['True', 'False'],
+            default_value='False'),
+            
+        launch.actions.DeclareLaunchArgument('has_eap',
+            description='Boolean. Include the Enhanced Autonomy package (EAP)',
+            choices=['True', 'False'],
+            default_value='False')
     ]
 
-    urdf_mappings = {}
-    if LaunchConfiguration('has_arm') == 'True':
-        urdf_mappings['has_arm'] = 'true'
-    if LaunchConfiguration('has_velodyne') == 'True':
-        urdf_mappings['has_velodyne'] = 'true'
+    has_arm = LaunchConfiguration('has_arm')
+    has_eap = LaunchConfiguration('has_eap')
+    this_pkg_share = FindPackageShare('spot_description')
     
-    pkg_share = FindPackageShare('spot_description').find('spot_description')
-    filepath = os.path.join(pkg_share, 'urdf', 'spot.urdf.xacro')
-    robot_desc = xacro.process_file(filepath,
-                                    mappings=urdf_mappings
-                                    ).toprettyxml(indent='  ')
+    # Build the URDF from the xacro, applying specified hardware accessories.
+    xacro_path = PathJoinSubstitution([this_pkg_share, 'urdf', 'spot.urdf.xacro'])
+    urdf_param = ParameterValue(
+        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap]),
+        value_type=str)
 
     rsp = launch_ros.actions.Node(package='robot_state_publisher',
                                   executable='robot_state_publisher',
                                   output='both',
-                                  parameters=[{'robot_description': robot_desc}]
+                                  parameters=[{
+                                    'robot_description': urdf_param
+                                  }]
                                  )
 
     return launch.LaunchDescription([

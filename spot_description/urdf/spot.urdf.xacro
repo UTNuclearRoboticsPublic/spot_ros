@@ -5,8 +5,8 @@
          published by the driver (see spot_driver package) during runtime, so that the transforms
          include calibration adjustments. -->
 
-    <xacro:arg name="has_arm" default="false" />
-    <xacro:arg name="has_velodyne" default="false" />
+    <xacro:arg name="has_arm" default="False" />
+    <xacro:arg name="has_eap" default="False" />
 
     <!-- Fixed links -->
     <link name="body">
@@ -535,8 +535,8 @@
         </joint>
     </xacro:if>
 
-    <!-- Spot Arm -->
-    <xacro:if value="$(arg has_velodyne)">
+    <!-- Spot Enhanced Autonomy package (EAP) -->
+    <xacro:if value="$(arg has_eap)">
         <xacro:include filename="$(find velodyne_description)/urdf/VLP-16.urdf.xacro"/> 
 
         <xacro:VLP-16 parent="base_link" name="velodyne">
