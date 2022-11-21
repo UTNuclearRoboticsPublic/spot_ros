@@ -537,10 +537,27 @@
 
     <!-- Spot Enhanced Autonomy package (EAP) -->
     <xacro:if value="$(arg has_eap)">
-        <xacro:include filename="$(find velodyne_description)/urdf/VLP-16.urdf.xacro"/> 
+        <link name="lidar_assembly">
+            <visual>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/eap_lidar.stl" />
+                </geometry>
+            </visual>
+            <collision>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/eap_lidar.stl" />
+                </geometry>
+            </collision>
+        </link>
+        <joint name="lidar_mount" type="fixed">
+            <origin xyz="-0.03 0.0 0.0" rpy="0 0 0" />
+            <parent link="rear_rail" />
+            <child link="lidar_assembly" />
+        </joint>
 
-        <xacro:VLP-16 parent="base_link" name="velodyne">
-            <origin xyz="-0.24 0 0.16" rpy="0 0 0" />
+        <xacro:include filename="$(find velodyne_description)/urdf/VLP-16.urdf.xacro"/> 
+        <xacro:VLP-16 parent="lidar_assembly" name="velodyne">
+            <origin xyz="0.0 0 0.08" rpy="0 0 0" />
         </xacro:VLP-16>
     </xacro:if>
 

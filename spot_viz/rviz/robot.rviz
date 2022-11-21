@@ -6,9 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /RobotModel1
-        - /RobotModel1/Description Topic1
-      Splitter Ratio: 0.5
+      Splitter Ratio: 0.7235293984413147
     Tree Height: 719
   - Class: rviz_common/Selection
     Name: Selection
@@ -62,55 +60,11 @@ Visualization Manager:
         Value: /robot_description
       Enabled: true
       Links:
-        All Links Enabled: true
+        All Links Enabled: false
         Expand Joint Details: false
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-        arm0_base_link:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        arm0_elbow_pitch:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_elbow_roll:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_fingers:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_shoulder_pitch:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_shoulder_roll:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_shoulder_yaw:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_wrist_pitch:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        arm0_wrist_roll:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
         base_link:
           Alpha: 1
           Show Axes: false
@@ -154,6 +108,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        lidar_assembly:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         rear_left_hip:
           Alpha: 1
           Show Axes: false
@@ -188,6 +147,16 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        velodyne:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: false
+        velodyne_base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: false
       Name: RobotModel
       TF Prefix: ""
       Update Interval: 0

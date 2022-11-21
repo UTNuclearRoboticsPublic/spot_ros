@@ -40,7 +40,7 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     FindPackageShare('spot_description'),
                     'launch',
-                    'description.launch.py'
+                    'state_publisher.launch.py'
                 ])
             ),
             launch_arguments=[{'has_arm', has_arm},
