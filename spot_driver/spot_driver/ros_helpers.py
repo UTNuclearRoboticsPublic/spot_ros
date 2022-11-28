@@ -194,12 +194,17 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
         elif data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
             image_msg.encoding = '32FC1'
             image_msg.is_bigendian = False
-            image_msg.step = 4 * data.shot.image.cols
+            image_msg.step = 2 * data.shot.image.cols
 
             # convert the uint16's into 32-bit floats
             # depth zero in OpenNI format is converted to NaN
+            assert data.shot.image.data, 'No camera data received for 32FC1 encoding.'
+            assert len(data.shot.image.data) % 2 == 0, 'Received odd number of bytes for  32FC1 encoding.'
             image_msg.data = []
-            for pixel in data.shot.image.data:
+
+            # iterate over the list two bytes at a time
+            for i,j in zip(data.shot.image.data[::2], data.shot.image.data[1::2]):
+                pixel = int(i * 256 + j)
                 value_in_meters = float32(nan)
 
                 if pixel != 0:
