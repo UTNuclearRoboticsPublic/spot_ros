@@ -51,7 +51,7 @@ def generate_launch_description():
             package='rviz2',
             executable='rviz2',
             name='rviz2',
-            arguments=['-d', PathJoinSubstitution([this_pkg_share, 'rviz', 'robot.rviz'])],
-            on_exit=Shutdown()
+            arguments=['-d', PathJoinSubstitution([this_pkg_share, 'rviz', 'model.rviz'])],
+            on_exit=Shutdown(reason='RViz exited.')
         )
     ])
