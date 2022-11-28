@@ -26,6 +26,10 @@
 ############################################################################################
 
 from typing import List, Text, Tuple
+import struct
+from numpy import float32
+from math import nan
+
 import rclpy.time
 
 from .spot_wrapper import SpotWrapper
@@ -156,34 +160,57 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
         image_msg.data = data.shot.image.data
 
     # Uncompressed.  Requires pixel_format.
-    if data.shot.image.format == image_pb2.Image.FORMAT_RAW:
+    elif data.shot.image.format == image_pb2.Image.FORMAT_RAW:
         # One byte per pixel.
         if data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_GREYSCALE_U8:
-            image_msg.encoding = "mono8"
+            image_msg.encoding = 'mono8'
             image_msg.is_bigendian = True
             image_msg.step = data.shot.image.cols
             image_msg.data = data.shot.image.data
 
         # Three bytes per pixel.
-        if data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_RGB_U8:
-            image_msg.encoding = "rgb8"
+        elif data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_RGB_U8:
+            image_msg.encoding = 'rgb8'
             image_msg.is_bigendian = True
             image_msg.step = 3 * data.shot.image.cols
             image_msg.data = data.shot.image.data
 
         # Four bytes per pixel.
-        if data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_RGBA_U8:
-            image_msg.encoding = "rgba8"
+        elif data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_RGBA_U8:
+            image_msg.encoding = 'rgba8'
             image_msg.is_bigendian = True
             image_msg.step = 4 * data.shot.image.cols
             image_msg.data = data.shot.image.data
 
-        # Little-endian uint16 z-distance from camera (mm).
-        if data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
-            image_msg.encoding = "mono16"
+        # UInt16 greyscale
+        elif data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_GREYSCALE_U16:
+            image_msg.encoding = 'mono16'
             image_msg.is_bigendian = False
             image_msg.step = 2 * data.shot.image.cols
             image_msg.data = data.shot.image.data
+
+        # Depth image. See ROS encoding convention: https://www.ros.org/reps/rep-0118.html
+        # Spot SDK outputs in OpenNI format (Little-endian uint16 z-distance from camera in mm)
+        elif data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
+            image_msg.encoding = '32FC1'
+            image_msg.is_bigendian = False
+            image_msg.step = 4 * data.shot.image.cols
+
+            # convert the uint16's into 32-bit floats
+            # depth zero in OpenNI format is converted to NaN
+            image_msg.data = []
+            for pixel in data.shot.image.data:
+                value_in_meters = float32(nan)
+
+                if pixel != 0:
+                    value_in_meters = float32(pixel * (1e-3))
+                
+                bytes = list(struct.pack('<f', value_in_meters))
+                image_msg.data.extend(bytes)
+
+    elif data.shot.image.format == image_pb2.Image.PIXEL_FORMAT_UNKNOWN:
+        spot_wrapper.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)
+        return Image(), CameraInfo(), tf_msg
 
     camera_info_msg = CameraInfo(d=[0]*5,
                                  distortion_model="plumb_bob",

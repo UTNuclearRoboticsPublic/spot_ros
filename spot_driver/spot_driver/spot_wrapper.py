@@ -72,6 +72,7 @@ class SpotWrapper():
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
         side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
         rear_image_sources = {'back_fisheye_image', 'back_depth'}
+        self._logger = logger
 
         front_image_requests = []
         for source in front_image_sources:
@@ -144,6 +145,11 @@ class SpotWrapper():
 
         self._is_connected = True
         return True
+
+    @property
+    def logger(self):
+        """Return this wrapper's logger"""
+        return self._logger
 
     @property
     def is_connected(self) -> bool:
