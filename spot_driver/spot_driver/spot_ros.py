@@ -84,7 +84,7 @@ class SpotROS(Node):
         self.status_timer = None
 
         """ ROS Parameters """
-        rates_names = ['robot_state', 'lease', 'front_image', 'size_image', 'rear_image']                                    
+        rates_names = ['robot_state', 'lease', 'front_image', 'side_image', 'rear_image']                                    
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback, rates_names=rates_names))
         
