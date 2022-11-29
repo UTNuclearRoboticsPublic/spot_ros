@@ -75,6 +75,20 @@ from .ros_helpers import *
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
 
+    """ Inner class for managing camera publishing """
+    class CameraPubs():
+        def __init__(self, parent, namespace: str):
+            self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
+            self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
+            self.spot_wrapper = parent.spot_wrapper
+
+        def process_data(self, data):
+            if self.image_pub.get_subscription_count() > 0:
+                image_msg, camera_info_msg, _ = getImageMsg(data, self.spot_wrapper)
+                self.image_pub.publish(image_msg)
+                # TODO: use latching for the camera info publisher so we don't have to constantly republish it
+                self.info_pub.publish(camera_info_msg)
+
     def __init__(self):
         super().__init__('spot_driver')
 
@@ -258,25 +272,10 @@ class SpotROS(Node):
         data = self.spot_wrapper.front_images
 
         if data and len(data) == 4:
-            # front left image
-            image_msg, camera_info_msg, _ = getImageMsg(data[0], self.spot_wrapper)
-            self.frontleft_image_pub.publish(image_msg)
-            self.frontleft_image_info_pub.publish(camera_info_msg)
-
-            # front right image
-            image_msg, camera_info_msg, _ = getImageMsg(data[1], self.spot_wrapper)
-            self.frontright_image_pub.publish(image_msg)
-            self.frontright_image_info_pub.publish(camera_info_msg)
-
-            # front left depth
-            image_msg, camera_info_msg, _ = getImageMsg(data[2], self.spot_wrapper)
-            self.frontleft_depth_pub.publish(image_msg)
-            self.frontleft_depth_info_pub.publish(camera_info_msg)
-
-            # front right depth
-            image_msg, camera_info_msg, _ = getImageMsg(data[3], self.spot_wrapper)
-            self.frontright_depth_pub.publish(image_msg)
-            self.frontright_depth_info_pub.publish(camera_info_msg)
+            self.front_left_rgb_pub.process_data(data[0])
+            self.front_right_rgb_pub.process_data(data[1])
+            self.front_left_depth_pub.process_data(data[2])
+            self.front_right_depth_pub.process_data(data[3])
 
     def SideImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new side image data."""
@@ -285,25 +284,10 @@ class SpotROS(Node):
         data = self.spot_wrapper.side_images
 
         if data and len(data) == 4:
-            # left image
-            image_msg, camera_info_msg, _ = getImageMsg(data[0], self.spot_wrapper)
-            self.left_image_pub.publish(image_msg)
-            self.left_image_info_pub.publish(camera_info_msg)
-
-            # right image
-            image_msg, camera_info_msg, _ = getImageMsg(data[1], self.spot_wrapper)
-            self.right_image_pub.publish(image_msg)
-            self.right_image_info_pub.publish(camera_info_msg)
-
-            # left depth
-            image_msg, camera_info_msg, _ = getImageMsg(data[2], self.spot_wrapper)
-            self.left_depth_pub.publish(image_msg)
-            self.left_depth_info_pub.publish(camera_info_msg)
-
-            # right depth
-            image_msg, camera_info_msg, _ = getImageMsg(data[3], self.spot_wrapper)
-            self.right_depth_pub.publish(image_msg)
-            self.right_depth_info_pub.publish(camera_info_msg)
+            self.left_rgb_pub.process_data(data[0])
+            self.right_rgb_pub.process_data(data[1])
+            self.left_depth_pub.process_data(data[2])
+            self.right_depth_pub.process_data(data[3])
 
     def RearImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new rear image data."""
@@ -312,15 +296,8 @@ class SpotROS(Node):
         data = self.spot_wrapper.rear_images
 
         if data and len(data) == 2:
-            # image
-            image_msg, camera_info_msg, _ = getImageMsg(data[0], self.spot_wrapper)
-            self.back_image_pub.publish(image_msg)
-            self.back_image_info_pub.publish(camera_info_msg)
-
-            # depth
-            image_msg, camera_info_msg, _ = getImageMsg(data[1], self.spot_wrapper)
-            self.back_depth_pub.publish(image_msg)
-            self.back_depth_info_pub.publish(camera_info_msg)
+            self.back_rgb_pub.process_data(data[0])
+            self.back_depth_pub.process_data(data[1])
 
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
@@ -663,29 +640,18 @@ class SpotROS(Node):
         ### Set up ROS interfaces
         ## Camera publishers
         # RGB Images
-        self.back_image_pub = self.create_publisher(Image, '~/camera/back/image', 1)
-        self.frontleft_image_pub = self.create_publisher(Image, '~/camera/frontleft/image', 1)
-        self.frontright_image_pub = self.create_publisher(Image, '~/camera/frontright/image', 1)
-        self.left_image_pub = self.create_publisher(Image, '~/camera/left/image', 1)
-        self.right_image_pub = self.create_publisher(Image, '~/camera/right/image', 1)
+        self.front_left_rgb_pub = self.CameraPubs(self, 'rgb/frontleft')
+        self.front_right_rgb_pub = self.CameraPubs(self, 'rgb/frontright')
+        self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
+        self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
+        self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
+
         # Depth Images
-        self.back_depth_pub = self.create_publisher(Image, '~/depth/back/image', 1)
-        self.frontleft_depth_pub = self.create_publisher(Image, '~/depth/frontleft/image', 1)
-        self.frontright_depth_pub = self.create_publisher(Image, '~/depth/frontright/image', 1)
-        self.left_depth_pub = self.create_publisher(Image, '~/depth/left/image', 1)
-        self.right_depth_pub = self.create_publisher(Image, '~/depth/right/image', 1)
-        # Image Camera Info
-        self.back_image_info_pub = self.create_publisher(CameraInfo, '~/camera/back/camera_info', 1)
-        self.frontleft_image_info_pub = self.create_publisher(CameraInfo, '~/camera/frontleft/camera_info', 1)
-        self.frontright_image_info_pub = self.create_publisher(CameraInfo, '~/camera/frontright/camera_info', 1)
-        self.left_image_info_pub = self.create_publisher(CameraInfo, '~/camera/left/camera_info', 1)
-        self.right_image_info_pub = self.create_publisher(CameraInfo, '~/camera/right/camera_info', 1)
-        # Depth Camera Info
-        self.back_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/back/camera_info', 1)
-        self.frontleft_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/frontleft/camera_info', 1)
-        self.frontright_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/frontright/camera_info', 1)
-        self.left_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/left/camera_info', 1)
-        self.right_depth_info_pub = self.create_publisher(CameraInfo, '~/depth/right/camera_info', 1)
+        self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
+        self.front_right_depth_pub = self.CameraPubs(self, 'depth/frontright')
+        self.left_depth_pub = self.CameraPubs(self, 'depth/left')
+        self.right_depth_pub = self.CameraPubs(self, 'depth/right')
+        self.back_depth_pub = self.CameraPubs(self, 'depth/back')
 
         ## Status Publishers
         # QoS to use for latched publishers

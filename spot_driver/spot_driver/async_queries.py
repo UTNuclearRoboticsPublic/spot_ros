@@ -115,7 +115,6 @@ class AsyncImageService(AsyncPeriodicQuery):
     def __init__(self, client, logger, rate: float, callback, image_requests):
         super(AsyncImageService, self).__init__("robot_image_service", client, logger,
                                            period_sec=1.0/rate)
-        logger.info(str(rate))
         self._callback = None
         if rate > 0.0:
             self._callback = callback
