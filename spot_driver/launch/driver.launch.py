@@ -36,11 +36,16 @@ def generate_launch_description():
                           default_value='False'),
     DeclareLaunchArgument('auto_stand',
                           description='Stand the robot upon connection.',
-                          default_value='False')
+                          default_value='False'),
+
+    DeclareLaunchArgument('camera_fps',
+                          description='The desired camera frames-per-second.',
+                          default_value=1.0)
   ]
 
   has_eap = LaunchConfiguration('has_eap')
   has_arm = LaunchConfiguration('has_arm')
+  camera_fps = LaunchConfiguration('camera_fps')
 
   # Two versions of this node. See the IfCondition and UnlessCondition.
   nodes = [
@@ -50,26 +55,35 @@ def generate_launch_description():
       name='spot_driver',
       parameters=[
         ParameterDescription(name='username',
-                              value=LaunchConfiguration('username'),
-                              value_type=str),
+                             value=LaunchConfiguration('username'),
+                             value_type=str),
         ParameterDescription(name='password',
-                              value=LaunchConfiguration('password'),
-                              value_type=str),
+                             value=LaunchConfiguration('password'),
+                             value_type=str),
         ParameterDescription(name='hostname',
-                              value=LaunchConfiguration('hostname'),
-                              value_type=str),
+                             value=LaunchConfiguration('hostname'),
+                             value_type=str),
         ParameterDescription(name='has_eap',
-                              value=has_eap,
-                              value_type=bool),
+                             value=has_eap,
+                             value_type=bool),
         ParameterDescription(name='auto_claim',
-                          value=LaunchConfiguration('auto_claim'),
-                          value_type=bool),
+                             value=LaunchConfiguration('auto_claim'),
+                             value_type=bool),
         ParameterDescription(name='auto_power_on',
-                              value=LaunchConfiguration('auto_power_on'),
-                              value_type=bool),
+                             value=LaunchConfiguration('auto_power_on'),
+                             value_type=bool),
         ParameterDescription(name='auto_stand',
-                              value=LaunchConfiguration('auto_stand'),
-                              value_type=bool)
+                             value=LaunchConfiguration('auto_stand'),
+                             value_type=bool),
+        ParameterDescription(name='rates.front_image',
+                             value=camera_fps,
+                             value_type=float),
+        ParameterDescription(name='rates.side_image',
+                             value=camera_fps,
+                             value_type=float),
+        ParameterDescription(name='rates.rear_image',
+                             value=camera_fps,
+                             value_type=float)
       ],
       on_exit=Shutdown()
     )

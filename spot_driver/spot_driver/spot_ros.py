@@ -84,7 +84,7 @@ class SpotROS(Node):
         self.status_timer = None
 
         """ ROS Parameters """
-        rates_names = ['robot_state', 'lease', 'front_image', 'side_image', 'rear_image']                                    
+        rates_names = {'rates.'+param for param in {'robot_state', 'lease', 'front_image', 'side_image', 'rear_image'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback, rates_names=rates_names))
         
@@ -102,7 +102,7 @@ class SpotROS(Node):
             ParameterDescriptor(description='Spot computer hostname.',
                                 type=ParameterType.PARAMETER_STRING,
                                 read_only=True))
-        
+
         self.declare_parameter('estop_timeout', 9.0,
             ParameterDescriptor(description='The E-Stop engages if we lose connection for this long.',
                                 type=ParameterType.PARAMETER_INTEGER,
@@ -111,7 +111,7 @@ class SpotROS(Node):
                                 read_only=True))
 
         for name in rates_names:
-            self.declare_parameter('rates/'+name, 0.0,
+            self.declare_parameter(name, 1.0,
                 ParameterDescriptor(description='Publish rate for robot state topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
@@ -605,16 +605,20 @@ class SpotROS(Node):
                         successful=False,
                         reason="Parameter 'odom_mode' must take value 'odom' or 'vision'.")
             elif p.name in rates_names:
-                if p.value.float_value < 0.0:
+                if p.value <= 0.0:
                     return SetParametersResult(
                         successful=False,
-                        reason="Parameter rates/" + p.name + " must be positive.")
+                        reason="Parameter rates." + p.name + " must be positive.")
         
         return SetParametersResult(successful=True)
 
 
     def connect(self) -> bool:
-        """Main function for the SpotROS class.  Gets config from ROS and initializes the wrapper.  Holds lease from wrapper and updates all async tasks at the ROS rate"""
+        """
+            Main function for the SpotROS class.
+            Gets config from ROS and initializes the wrapper.
+            Holds lease from wrapper and updates all async tasks at the ROS rate
+        """
 
         """Dictionary listing what callback to use for what data task"""
         callbacks = {}
@@ -629,12 +633,15 @@ class SpotROS(Node):
         # Connect to the robot
         self.spot_wrapper = SpotWrapper(has_cam_payload)
 
+        # Dictionary of all param values in the 'rates' namespace
+        rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
+
         # Verify connection
         if self.spot_wrapper.connect(self.get_logger(),
                                      self.get_parameter('username').value, 
                                      self.get_parameter('password').value,
                                      self.get_parameter('hostname').value,
-                                     self.get_parameters_by_prefix('rates'),
+                                     rates_dict,
                                      callbacks):
             self.get_logger().info('Connected to Spot ' + self.spot_wrapper.id.nickname + '...')
         else:

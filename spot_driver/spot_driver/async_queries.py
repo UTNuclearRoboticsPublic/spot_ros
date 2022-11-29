@@ -40,14 +40,14 @@ class AsyncRobotState(AsyncPeriodicQuery):
             rate: Rate (Hz) to trigger the query
             callback: Callback function to call when the results of the query are available
     """
-    def __init__(self, client, logger, rate, callback):
+    def __init__(self, client, logger, rate: float, callback):
         super(AsyncRobotState, self).__init__("robot-state", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
+                                           period_sec=1.0/rate)
         self._callback = None
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
 
     def _start_query(self):
         if self._callback:
@@ -64,14 +64,14 @@ class AsyncMetrics(AsyncPeriodicQuery):
             rate: Rate (Hz) to trigger the query
             callback: Callback function to call when the results of the query are available
     """
-    def __init__(self, client, logger, rate, callback):
+    def __init__(self, client, logger, rate: float, callback):
         super(AsyncMetrics, self).__init__("robot-metrics", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
+                                           period_sec=1.0/rate)
         self._callback = None
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
 
     def _start_query(self):
         if self._callback:
@@ -88,14 +88,14 @@ class AsyncLease(AsyncPeriodicQuery):
             rate: Rate (Hz) to trigger the query
             callback: Callback function to call when the results of the query are available
     """
-    def __init__(self, client, logger, rate, callback):
+    def __init__(self, client, logger, rate: float, callback):
         super(AsyncLease, self).__init__("lease", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
+                                           period_sec=1.0/rate)
         self._callback = None
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
 
     def _start_query(self):
         if self._callback:
@@ -112,14 +112,15 @@ class AsyncImageService(AsyncPeriodicQuery):
             rate: Rate (Hz) to trigger the query
             callback: Callback function to call when the results of the query are available
     """
-    def __init__(self, client, logger, rate, callback, image_requests):
+    def __init__(self, client, logger, rate: float, callback, image_requests):
         super(AsyncImageService, self).__init__("robot_image_service", client, logger,
-                                           period_sec=1.0/max(rate, 1.0))
+                                           period_sec=1.0/rate)
+        logger.info(str(rate))
         self._callback = None
         if rate > 0.0:
             self._callback = callback
         else:
-          raise ValueError('Publish rates for async queries must be positive. Received value ' + Text(rate))
+          raise ValueError('Publish rates for async queries must be positive. Received value ' + str(rate))
         self._image_requests = image_requests
 
     def _start_query(self):

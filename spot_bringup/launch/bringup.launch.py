@@ -1,7 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
 from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
@@ -37,6 +37,8 @@ def generate_launch_description():
     has_eap = LaunchConfiguration('has_eap')
     has_arm = LaunchConfiguration('has_arm')
 
+    camera_fps = 1.0
+
     ## Robot bringup
     driver_include = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
@@ -49,7 +51,8 @@ def generate_launch_description():
                  'has_arm':       has_arm,
                  'auto_claim':    LaunchConfiguration('auto_claim'),
                  'auto_power_on': LaunchConfiguration('auto_power_on'),
-                 'auto_stand':    LaunchConfiguration('auto_stand')
+                 'auto_stand':    LaunchConfiguration('auto_stand'),
+                 'camera_fps':    TextSubstitution(text=str(camera_fps))
                 }.items()
             )
 
