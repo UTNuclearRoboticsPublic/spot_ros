@@ -40,7 +40,7 @@ def generate_launch_description():
 
     DeclareLaunchArgument('camera_fps',
                           description='The desired camera frames-per-second.',
-                          default_value=1.0)
+                          default_value='1.0')
   ]
 
   has_eap = LaunchConfiguration('has_eap')
