@@ -746,7 +746,7 @@ class SpotROS(Node):
                   not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
                   not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
                   rclpy.utilities.ok():
-                self.spot_wrapper.updateTasks()
+                self.spot_wrapper.updateSensorTasks()
 
             static_tfs = []
 
@@ -815,7 +815,7 @@ class SpotROS(Node):
         if self.spot_wrapper is None:
             return
 
-        if not self.spot_wrapper.is_connected():
+        if not self.spot_wrapper.is_connected:
             return
 
         # call sensor periodic tasks
@@ -825,7 +825,7 @@ class SpotROS(Node):
         if self.spot_wrapper is None:
             return
 
-        if not self.spot_wrapper.is_connected():
+        if not self.spot_wrapper.is_connected:
             return
 
         # call state periodic tasks
