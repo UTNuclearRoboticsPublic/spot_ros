@@ -135,13 +135,15 @@ class SpotWrapper():
 
         self._estop_endpoint = None
 
-        self._async_tasks = AsyncTasks([self._robot_state_task,
-                                        self._front_image_task,
-                                        self._side_image_task,
-                                        self._rear_image_task,
-                                        self._lease_task,
-                                        self._idle_task
-                                        ])
+        self._async_status_tasks = AsyncTasks([self._robot_state_task,
+                                               self._lease_task,
+                                               self._idle_task
+                                              ])
+
+        self._async_sensor_tasks = AsyncTasks([self._front_image_task,
+                                               self._side_image_task,
+                                               self._rear_image_task
+                                               ])
 
         self._is_connected = True
         return True
@@ -256,9 +258,13 @@ class SpotWrapper():
         
         return True, 'Success'
 
-    def updateTasks(self) -> None:
-        """Loop through all periodic tasks and update their data if needed."""
-        self._async_tasks.update()
+    def updateStatusTasks(self) -> None:
+        """Loop through the state, and lease periodic tasks and update their data if needed."""
+        self._async_status_tasks.update()
+
+    def updateSensorTasks(self) -> None:
+        """Loop through the sensor query periodic tasks and update their data if needed."""
+        self._async_sensor_tasks.update()
 
     def resetEStop(self) -> None:
         """Get keepalive for eStop"""

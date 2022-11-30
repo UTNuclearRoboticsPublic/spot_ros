@@ -97,10 +97,17 @@ class SpotROS(Node):
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         self.status_timer = None
 
+        pub_period = 0.1
+        self.status_timer = self.create_timer(pub_period, self.publishStatus)
+        self.sensors_timer = self.create_timer(pub_period, self.publishSensors)
+
         """ ROS Parameters """
-        rates_names = {'rates.'+param for param in {'robot_state', 'lease', 'front_image', 'side_image', 'rear_image'}}
+        status_rate_params = {'rates.status'+param for param in {'robot_state', 'lease'}}
+        sensor_rate_params = {'rates.sensors'+param for param in {'front_image', 'side_image', 'rear_image'}}
         self.add_on_set_parameters_callback(
-            functools.partial(self.parameters_callback, rates_names=rates_names))
+            functools.partial(self.parameters_callback,
+                              status_rate_params=status_rate_params,
+                              sensor_rate_params=sensor_rate_params))
         
         self.declare_parameter('username', 'default_value',
             ParameterDescriptor(description='Spot computer username.',
@@ -124,9 +131,17 @@ class SpotROS(Node):
                                     from_value=0.0, to_value=1.0e9, step=0.0)],
                                 read_only=True))
 
-        for name in rates_names:
+        for name in status_rate_params:
             self.declare_parameter(name, 1.0,
-                ParameterDescriptor(description='Publish rate for robot state topics.',
+                ParameterDescriptor(description='Publish rate for robot status topics.',
+                                    type=ParameterType.PARAMETER_DOUBLE,
+                                    floating_point_range=[FloatingPointRange(
+                                        from_value=0.0, to_value=1.0e9, step=0.0)],
+                                    read_only=True))
+        
+        for name in sensor_rate_params:
+            self.declare_parameter(name, 1.0,
+                ParameterDescriptor(description='Publish rate for sensor topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
                                         from_value=0.0, to_value=1.0e9, step=0.0)],
@@ -573,7 +588,8 @@ class SpotROS(Node):
         
         return output
 
-    def parameters_callback(self, params, rates_names) -> SetParametersResult:
+    def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
+
         for p in params:
             if p.name == 'odom_mode':
                 allowed = {'odom','vision'}
@@ -581,7 +597,12 @@ class SpotROS(Node):
                     return SetParametersResult(
                         successful=False,
                         reason="Parameter 'odom_mode' must take value 'odom' or 'vision'.")
-            elif p.name in rates_names:
+            elif p.name in status_rate_params:
+                if p.value <= 0.0:
+                    return SetParametersResult(
+                        successful=False,
+                        reason="Parameter rates." + p.name + " must be positive.")
+            elif p.name in sensor_rate_params:
                 if p.value <= 0.0:
                     return SetParametersResult(
                         successful=False,
@@ -749,9 +770,6 @@ class SpotROS(Node):
         
         populate_static_transforms()
 
-        status_pub_period = 0.1 # seconds
-        self.status_timer = self.create_timer(status_pub_period, self.PublishStatus)
-
         self.get_logger().info('Spot driver startup complete.')
 
         # Publish initial dock state. Wait for first response
@@ -793,9 +811,25 @@ class SpotROS(Node):
 
         return True
 
-    def PublishStatus(self):
-        # call all periodic tasks
-        self.spot_wrapper.updateTasks()
+    def publishSensors(self):
+        if self.spot_wrapper is None:
+            return
+
+        if not self.spot_wrapper.is_connected():
+            return
+
+        # call sensor periodic tasks
+        self.spot_wrapper.updateSensorTasks()
+
+    def publishStatus(self):
+        if self.spot_wrapper is None:
+            return
+
+        if not self.spot_wrapper.is_connected():
+            return
+
+        # call state periodic tasks
+        self.spot_wrapper.updateStatusTasks()
 
         # publish robot feedback state
         feedback_msg = Feedback()
