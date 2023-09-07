@@ -2,7 +2,7 @@
 
 This packages handles low level control of the Spot robot and provides a bridge between the original Boston Dynamics python API and ROS2. 
 
-## Heiarchy
+## Hierarchy
 
 ### Spot Wrapper
 The ```SpotWrapper``` python class handles the interface with the Boston Dyamics API, including claiming a Lease on the robot, managing internal robot state management, access to cameras, managing the E-stop, etc. This interface also manages most other commands you would normally send to the robot via the tablet controller such as docking, pose commands, and instantaneous velocity commands.
