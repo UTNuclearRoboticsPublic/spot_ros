@@ -44,6 +44,8 @@ from bosdyn.client.power import PowerClient
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
+from bosdyn.client.robot_id import RobotIdClient
+import bosdyn.client.util
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
@@ -68,7 +70,7 @@ class SpotWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-    def connect(self, logger, username, password, hostname, rates = {}, callbacks = {}) -> bool:
+    def connect(self, logger, hostname, rates = {}, callbacks = {}) -> bool:
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
         side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
         rear_image_sources = {'back_fisheye_image', 'back_depth'}
@@ -92,7 +94,7 @@ class SpotWrapper():
             hand_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
         try:
-            self._sdk = create_standard_sdk('ros_spot')
+            self._sdk = bosdyn.client.create_standard_sdk('ros_spot')
         except IOError as err:
             logger.error('Error creating SDK object ' + Text(err))
             return False
@@ -100,7 +102,7 @@ class SpotWrapper():
         self._robot = self._sdk.create_robot(hostname)
 
         try:
-            self._robot.authenticate(username, password)
+            bosdyn.client.util.authenticate(self._robot)
         except RpcError as err:
             logger.error('Failed to communicate with robot {}: {}'.format(hostname, err.error_message))
             return False
@@ -529,7 +531,6 @@ class SpotWrapper():
             self.stand()
             self.arm_unstow()
 
-
             self._robot_command_client.robot_command(RobotCommandBuilder.claw_gripper_close_command())
             return True, 'Success'
         except Exception as e:
@@ -541,7 +542,6 @@ class SpotWrapper():
             self._robot.power_on()
             self.stand()
             self.arm_unstow()
-
 
             self._robot_command_client.robot_command(RobotCommandBuilder.claw_gripper_open_command())
             return True, 'Success'
@@ -582,15 +582,22 @@ class SpotWrapper():
     #     except Exception as e:
     #         return False, Text(e)
 
-    # def force_trajectory(self, data) -> Tuple[bool, Text]:
-    #     try:
-    #         # Make sure we're powered on and standing
-    #         self._robot.power_on()
-    #         self.stand()
+    def force_trajectory(self, data) -> Tuple[bool, Text]:
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+            self.arm_unstow()
 
+            def create_wrench_from_msg(forces, torques):
+                force = geometry_pb2.Vec3(x=forces[0], y=forces[1], z=forces[2])
+                torque = geometry_pb2.Vec3(x=torques[0], y=torques[1], z=torques[2])
+                return geometry_pb2.Wrench(force=force, torque=torque)
 
-    #     except Exception as e:
-    #         return False, Text(e)
+            
+
+        except Exception as e:
+            return False, Text(e)
 
     # def force_virtual_trajectory(self, data) -> Tuple[bool, Text]:
     #     """Send a 
