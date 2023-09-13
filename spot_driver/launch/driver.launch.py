@@ -83,8 +83,12 @@ def generate_launch_description():
                              value_type=float),
         ParameterDescription(name='rates.rear_image',
                              value=camera_fps,
+                             value_type=float),
+        ParameterDescription(name='rates.hand_image',
+                             value=camera_fps,
                              value_type=float)
       ],
+      output='screen',
       on_exit=Shutdown()
     )
   ]
