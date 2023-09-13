@@ -28,7 +28,7 @@
 from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import image_pb2, header_pb2
+from bosdyn.api import image_pb2, header_pb2, geometry_pb2, trajectory_pb2, arm_command_pb2, gripper_command_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
@@ -72,6 +72,7 @@ class SpotWrapper():
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
         side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
         rear_image_sources = {'back_fisheye_image', 'back_depth'}
+        hand_image_sources = {'hand_image', 'hand_depth', 'hand_color_image', 'hand_depth_in_hand_color_frame'}
         self._logger = logger
 
         front_image_requests = []
@@ -85,6 +86,10 @@ class SpotWrapper():
         rear_image_requests = []
         for source in rear_image_sources:
             rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+        hand_image_requests = []
+        for source in hand_image_sources:
+            hand_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
         try:
             self._sdk = create_standard_sdk('ros_spot')
@@ -131,6 +136,7 @@ class SpotWrapper():
         self._front_image_task = AsyncImageService(self._image_client, logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
         self._side_image_task = AsyncImageService(self._image_client, logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
         self._rear_image_task = AsyncImageService(self._image_client, logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+        self._hand_image_task = AsyncImageService(self._image_client, logger, rates.get("hand_image", 1.0), callbacks.get("hand_image", lambda:None), hand_image_requests)
         self._idle_task = AsyncIdle(self._robot_command_client, logger, 10.0, self)
 
         self._estop_endpoint = None
@@ -190,6 +196,11 @@ class SpotWrapper():
     def rear_images(self):
         """Return latest proto from the _rear_image_task"""
         return self._rear_image_task.proto
+
+    @property
+    def hand_images(self):
+        """Return latest proto from the _hand_image_task"""
+        return self._hand_image_task.proto
 
     @property
     def is_standing(self) -> bool:
@@ -314,6 +325,7 @@ class SpotWrapper():
     def release(self) -> bool:
         """Return the lease on the body and the eStop handle."""
         try:
+            self.sit()
             self.releaseLease()
             self.releaseEStop()
         except Exception as err:
@@ -342,6 +354,7 @@ class SpotWrapper():
 
     def sit(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit down if able."""
+        self.arm_stow()
         response = self._robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = response[2]
         return response[0], response[1]
@@ -473,3 +486,216 @@ class SpotWrapper():
         response = self._audio_client.set_volume(percentage)
         success = response.error.code == header_pb2.CommonError.Code.CODE_OK
         return success, Text(response.error.message)
+
+
+    # ARM ######
+    def arm_carry(self) -> Tuple[bool, Text]:
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+
+            self._robot_command_client.robot_command(RobotCommandBuilder.arm_carry_command())
+            return True, 'Success'
+        except Exception as e: 
+            return False, Text(e)
+
+    def arm_stow(self) -> Tuple[bool, Text]:
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+
+            self._robot_command_client.robot_command(RobotCommandBuilder.arm_stow_command())
+            return True, 'Success'
+        except Exception as e:
+            return False, Text(e)
+
+    def arm_unstow(self) -> Tuple[bool, Text]:
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+
+            self._robot_command_client.robot_command(RobotCommandBuilder.arm_ready_command())
+            return True, 'Success'
+        except Exception as e:
+            return False, Text(e)
+
+    def gripper_close(self) -> Tuple[bool, Text]:
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+            self.arm_unstow()
+
+
+            self._robot_command_client.robot_command(RobotCommandBuilder.claw_gripper_close_command())
+            return True, 'Success'
+        except Exception as e:
+            return False, Text(e)
+
+    def gripper_open(self) -> Tuple[bool, Text]:
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+            self.arm_unstow()
+
+
+            self._robot_command_client.robot_command(RobotCommandBuilder.claw_gripper_open_command())
+            return True, 'Success'
+        except Exception as e:
+            return False, Text(e)
+
+    # def set_gripper_params(self, max_velocity, max_acceleration)
+    #     gripper_command_pb2.ClawGripperCommand.Request(maximum_open_close_velocity = 5, maximum_open_close_acceleration = 20)
+
+    def gripper_angle_open(self, gripper_ang: float) -> Tuple[bool, Text]:
+        if gripper_ang > 90.0 or gripper_ang < 0.0: 
+            return False, Text('Could not set gripper angle to invalid angle' + gripper_ang)
+
+        try:
+            # Make sure we're powered on and standing
+            self._robot.power_on()
+            self.stand()
+            self.arm_unstow()
+
+            # The open angle command does not take degrees but the limits
+            # defined in the urdf, that is why we have to interpolate
+            closed = 0.349066
+            opened = -1.396263
+            angle = gripper_ang / 90.0 * (opened - closed) + closed
+
+            self._robot_command_client.robot_command(RobotCommandBuilder.claw_gripper_open_angle_command(angle))
+            return True, 'Success'
+        except Exception as e:
+            return False, Text(e)
+
+    # def hand_pose(self, pose_points) -> Tuple[bool, Text]:
+    #     try:
+    #         # Make sure we're powered on and standing
+    #         self._robot.power_on()
+    #         self.stand()
+
+
+    #     except Exception as e:
+    #         return False, Text(e)
+
+    # def force_trajectory(self, data) -> Tuple[bool, Text]:
+    #     try:
+    #         # Make sure we're powered on and standing
+    #         self._robot.power_on()
+    #         self.stand()
+
+
+    #     except Exception as e:
+    #         return False, Text(e)
+
+    # def force_virtual_trajectory(self, data) -> Tuple[bool, Text]:
+    #     """Send a 
+
+    #     Args:
+    #         v_x: Velocity in the X direction in meters per second
+    #         v_y: Velocity in the Y direction in meters per second
+    #         v_rot: Angular velocity around the Z axis in radians per second
+    #         cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
+    #     """
+    #     try:
+    #         # Make sure we're powered on and standing
+    #         self._robot.power_on()
+    #         self.stand()
+    #         self.arm_unstow()
+
+
+    #     except Exception as e:
+    #         return False, Text(e)
+
+    # def make_arm_trajectory_command(self, arm_joint_trajectory) -> Tuple[bool, Text]:
+    #     try:
+    #         # Make sure we're powered on and standing
+    #         self._robot.power_on()
+    #         self.stand()
+
+    #     except Exception as e:
+    #         return False, Text(e)
+
+
+    # def arm_joint_move(self, joint_targets) -> Tuple[bool, Text]:
+    #     # All perspectives are given when looking at the robot from behind after the unstow service is called
+    #     # Joint1: 0.0 arm points to the front. positive: turn left, negative: turn right)
+    #     # RANGE: -3.14 -> 3.14
+    #     # Joint2: 0.0 arm points to the front. positive: move down, negative move up
+    #     # RANGE: 0.4 -> -3.13 (
+    #     # Joint3: 0.0 arm straight. moves the arm down
+    #     # RANGE: 0.0 -> 3.1415
+    #     # Joint4: 0.0 middle position. negative: moves ccw, positive moves cw
+    #     # RANGE: -2.79253 -> 2.79253
+    #     # # Joint5: 0.0 gripper points to the front. positive moves the gripper down
+    #     # RANGE: -1.8326 -> 1.8326
+    #     # Joint6: 0.0 Gripper is not rolled, positive is ccw
+    #     # RANGE: -2.87 -> 2.87
+    #     # Values after unstow are: [0.0, -0.9, 1.8, 0.0, -0.9, 0.0]
+    #     if abs(joint_targets[0]) > 3.14:
+    #         msg = "Joint 1 has to be between -3.14 and 3.14"
+    #         self._logger.warn(msg)
+    #         return False, msg
+    #     elif joint_targets[1] > 0.4 or joint_targets[1] < -3.13:
+    #         msg = "Joint 2 has to be between -3.13 and 0.4"
+    #         self._logger.warn(msg)
+    #         return False, msg
+    #     elif joint_targets[2] > 3.14 or joint_targets[2] < 0.0:
+    #         msg = "Joint 3 has to be between 0.0 and 3.14"
+    #         self._logger.warn(msg)
+    #         return False, msg
+    #     elif abs(joint_targets[3]) > 2.79253:
+    #         msg = "Joint 4 has to be between -2.79253 and 2.79253"
+    #         self._logger.warn(msg)
+    #         return False, msg
+    #     elif abs(joint_targets[4]) > 1.8326:
+    #         msg = "Joint 5 has to be between -1.8326 and 1.8326"
+    #         self._logger.warn(msg)
+    #         return False, msg
+    #     elif abs(joint_targets[5]) > 2.87:
+    #         msg = "Joint 6 has to be between -2.87 and 2.87"
+    #         self._logger.warn(msg)
+    #         return False, msg
+    #     try:
+    #         # Make sure we're powered on and standing
+    #         self._robot.power_on()
+    #         self.stand()
+
+    #         trajectory_point = (
+    #             RobotCommandBuilder.create_arm_joint_trajectory_point(
+    #                 joint_targets[0],
+    #                 joint_targets[1],
+    #                 joint_targets[2],
+    #                 joint_targets[3],
+    #                 joint_targets[4],
+    #                 joint_targets[5],
+    #             )
+    #         )
+    #         arm_joint_trajectory = arm_command_pb2.ArmJointTrajectory(
+    #             points=[trajectory_point]
+    #         )
+    #         arm_command = self.make_arm_trajectory_command(arm_joint_trajectory)
+
+    #         # Send the request
+    #         cmd_id = self._robot_command_client.robot_command(arm_command)
+
+    #         # Query for feedback to determine how long it will take
+    #         feedback_resp = self._robot_command_client.robot_command_feedback(
+    #             cmd_id
+    #         )
+    #         joint_move_feedback = (
+    #             feedback_resp.feedback.synchronized_feedback.arm_command_feedback.arm_joint_move_feedback
+    #         )
+    #         time_to_goal: Duration = joint_move_feedback.time_to_goal
+    #         time_to_goal_in_seconds: float = time_to_goal.seconds + (
+    #             float(time_to_goal.nanos) / float(10**9)
+    #         )
+    #         time.sleep(time_to_goal_in_seconds)
+    #         return True, 'Success'
+
+    #     except Exception as e:
+    #         return False, Text(e)

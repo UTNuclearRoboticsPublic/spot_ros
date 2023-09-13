@@ -7,6 +7,7 @@
     front_image: 10.0
     side_image: 10.0
     rear_image: 10.0
+    hand_image: 10.0
   auto_claim: false
   auto_power_on: false
   auto_stand: false

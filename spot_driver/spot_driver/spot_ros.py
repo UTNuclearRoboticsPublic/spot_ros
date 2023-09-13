@@ -69,7 +69,8 @@ from spot_msgs.msg import MobilityParams
 from spot_msgs.action import NavigateTo, Trajectory
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
-
+from spot_msgs.srv import ArmJointMovement, GripperAngleMove, ArmForceTrajectory, HandPose
+    
 from .ros_helpers import *
 
 class SpotROS(Node):
@@ -103,7 +104,7 @@ class SpotROS(Node):
 
         """ ROS Parameters """
         status_rate_params = {'rates.status'+param for param in {'robot_state', 'lease'}}
-        sensor_rate_params = {'rates.sensors'+param for param in {'front_image', 'side_image', 'rear_image'}}
+        sensor_rate_params = {'rates.sensors'+param for param in {'front_image', 'side_image', 'rear_image', 'hand_image'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -314,8 +315,21 @@ class SpotROS(Node):
             self.back_rgb_pub.process_data(data[0])
             self.back_depth_pub.process_data(data[1])
 
+    def HandImageCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new hand image data."""
+
+        # [hand image, hand depth, hand image color, hand depth color]
+        data = self.spot_wrapper.hand_images
+
+        if data and len(data) == 4:
+            self.hand_mono_rgb_pub.process_data(data[0])
+            self.hand_depth_pub.process_data(data[1])
+            self.hand_rgb_pub.process_data(data[2])
+            self.hand_depth_in_color_pub.process_data(data[3])
+        
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
+        print('Debug 1')
         res.success, res.message = self.spot_wrapper.claim()
         return res
 
@@ -363,7 +377,7 @@ class SpotROS(Node):
 
     def handle_power_on(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the power-on service"""
-        res.success = self.spot_wrapper.power_on()
+        res.success, res.message = self.spot_wrapper.power_on()
         if res.success:
             res.message = 'Powered on Spot robot ' + self.spot_wrapper.id.nickname
         return res
@@ -610,6 +624,54 @@ class SpotROS(Node):
         
         return SetParametersResult(successful=True)
 
+    # Arm ######
+    def handle_arm_stow(self, _, res: Trigger.Response) -> Trigger.Response:
+        """ROS service handler to command the arm to stow, home position"""
+        res.success, res.message = self.spot_wrapper.arm_stow()
+        return res
+
+    def handle_arm_unstow(self, _, res: Trigger.Response) -> Trigger.Response:
+        """ROS service handler to command the arm to unstow, joints are all zeros"""
+        res.success, res.message = self.spot_wrapper.arm_unstow()
+        return res
+
+    def handle_gripper_open(self, _, res: Trigger.Response) -> Trigger.Response:
+        """ROS service handler to open the gripper"""
+        res.success, res.message = self.spot_wrapper.gripper_open()
+        return res
+
+    def handle_gripper_angle_open(self, req: GripperAngleMove.Request, res: GripperAngleMove.Response) -> GripperAngleMove.Response:
+        """ROS service handler to open the gripper at an angle"""
+        res.success, res.message = self.spot_wrapper.gripper_angle_open(gripper_ang=req.gripper_angle)
+        return res
+
+    def handle_gripper_close(self, _, res: Trigger.Response) -> Trigger.Response:
+        """ROS service handler to close the gripper"""
+        res.success, res.message = self.spot_wrapper.gripper_close()
+        return res
+
+    def handle_arm_carry(self, _, res: Trigger.Response) -> Trigger.Response:
+        """ROS service handler to put arm in carry mode"""
+        res.success, res.message = self.spot_wrapper.arm_carry()
+        return res
+
+
+    # def handle_arm_joint_move(self, _, req: ArmJointMovement.Request, res: ArmJointMovement.Response) -> ArmJointMovement.Response:
+    #     """ROS service handler to send joint movement to the arm to execute"""
+    #     resp = self.spot_wrapper.arm_joint_move(joint_targets=req.joint_target)
+    #     return ArmJointMovement.Response(resp[0], resp[1])
+
+    # def handle_force_trajectory(self, _, req: ArmForceTrajectory.Request, res: ArmForceTrajectory.Response) -> ArmForceTrajectory.Response:
+    #     """ROS service handler to send a force trajectory up or down a vertical force"""
+    #     resp = self.spot_wrapper.force_trajectory(data=req)
+    #     return ArmForceTrajectory.Response(resp[0], resp[1])
+
+    # def handle_hand_pose(self, _, req: HandPose.Request, res: HandPose.Response) -> HandPose.Response:
+    #     """ROS service to give a position to the gripper"""
+    #     resp = self.spot_wrapper.hand_pose(pose_points=req.pose_point)
+    #     return HandPose.Response(resp[0], resp[1])
+
+######
 
     def connect(self) -> bool:
         """
@@ -625,6 +687,7 @@ class SpotROS(Node):
         callbacks["front_image"] = self.FrontImageCB
         callbacks["side_image"]  = self.SideImageCB
         callbacks["rear_image"]  = self.RearImageCB
+        callbacks["hand_image"]  = self.HandImageCB
 
         has_cam_payload = self.get_parameter('has_cam_payload').value
 
@@ -666,6 +729,8 @@ class SpotROS(Node):
         self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
         self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
         self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
+        self.hand_rgb_pub = self.CameraPubs(self, 'rgb/hand_color')
+        self.hand_mono_rgb_pub = self.CameraPubs(self, 'rgb/hand_mono')
 
         # Depth Images
         self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
@@ -673,6 +738,8 @@ class SpotROS(Node):
         self.left_depth_pub = self.CameraPubs(self, 'depth/left')
         self.right_depth_pub = self.CameraPubs(self, 'depth/right')
         self.back_depth_pub = self.CameraPubs(self, 'depth/back')
+        self.hand_depth_pub = self.CameraPubs(self, 'depth/hand')
+        self.hand_depth_in_color_pub = self.CameraPubs(self, 'depth/hand/depth_in_color')
 
         ## Status Publishers
         # QoS to use for latched publishers
@@ -724,6 +791,14 @@ class SpotROS(Node):
         self.create_service(Dock, '~/dock', self.handle_dock, callback_group=srv_group)
         self.create_service(Trigger, '~/undock', self.handle_undock, callback_group=srv_group)
 
+        # Arm
+        self.create_service(Trigger, '~/arm/stow', self.handle_arm_stow, callback_group=srv_group)
+        self.create_service(Trigger, '~/arm/unstow', self.handle_arm_unstow, callback_group=srv_group)
+        self.create_service(Trigger, '~/arm/carry', self.handle_arm_carry, callback_group=srv_group)
+        self.create_service(Trigger, '~/arm/gripper_open', self.handle_gripper_open, callback_group=srv_group)
+        self.create_service(Trigger, '~/arm/gripper_close', self.handle_gripper_close, callback_group=srv_group)
+        self.create_service(GripperAngleMove, '~/arm/gripper_angle_open', self.handle_gripper_angle_open, callback_group=srv_group)
+
         self._navigate_to_server = rclpy.action.ActionServer(
                 self,
                 NavigateTo,
@@ -747,6 +822,11 @@ class SpotROS(Node):
                   not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
                   rclpy.utilities.ok():
                 self.spot_wrapper.updateSensorTasks()
+<<<<<<< Updated upstream
+=======
+                # self.get_logger().self.spot_wrapper.hand_images
+                # add ros logging. Examples shown previously in code
+>>>>>>> Stashed changes
 
             static_tfs = []
 
@@ -765,6 +845,13 @@ class SpotROS(Node):
             data = self.spot_wrapper.rear_images
             static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
             static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+
+            # if self.spot_wrapper.hand_images is not None
+            #     data = self.spot_wrapper.hand_images
+            #     static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
             self.static_broadcaster.sendTransform(static_tfs)                
         

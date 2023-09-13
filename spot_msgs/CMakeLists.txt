@@ -18,6 +18,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Dock.srv"
   "srv/SetLocomotion.srv"
   "srv/SetVelocity.srv"
+  "srv/ArmForceTrajectory.srv"
+  "srv/ArmJointMovement.srv"
+  "srv/ConstrainedArmJointMovement.srv"
+  "srv/GripperAngleMove.srv"
+  "srv/HandPose.srv"
 
   "msg/BatteryStateArray.msg"
   "msg/BehaviorFault.msg"
