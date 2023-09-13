@@ -699,8 +699,8 @@ class SpotROS(Node):
 
         # Verify connection
         if self.spot_wrapper.connect(self.get_logger(),
-                                     self.get_parameter('username').value, 
-                                     self.get_parameter('password').value,
+                                     #self.get_parameter('username').value, 
+                                     #self.get_parameter('password').value,
                                      self.get_parameter('hostname').value,
                                      rates_dict,
                                      callbacks):
@@ -822,11 +822,9 @@ class SpotROS(Node):
                   not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
                   rclpy.utilities.ok():
                 self.spot_wrapper.updateSensorTasks()
-<<<<<<< Updated upstream
-=======
+
                 # self.get_logger().self.spot_wrapper.hand_images
                 # add ros logging. Examples shown previously in code
->>>>>>> Stashed changes
 
             static_tfs = []
 
@@ -923,7 +921,8 @@ class SpotROS(Node):
         feedback_msg.standing = self.spot_wrapper.is_standing
         feedback_msg.sitting = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
-        id = self.spot_wrapper.id
+        # id = self.spot_wrapper.id
+        id = None
         if id:
             feedback_msg.serial_number = id.serial_number
             feedback_msg.species = id.species
