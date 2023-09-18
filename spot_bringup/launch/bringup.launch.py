@@ -17,10 +17,10 @@ def generate_launch_description():
                             default_value='no_value'),
         DeclareLaunchArgument('has_eap',
                             description="Robot includes the Extended Autonomy Package.",
-                            default_value="False"),
+                            default_value="True"),
         DeclareLaunchArgument('has_arm',
                             description='Robot includes the Spot Arm',
-                            default_value="False"),
+                            default_value="True"),
         
 
         DeclareLaunchArgument('auto_claim',
