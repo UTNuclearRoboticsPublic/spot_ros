@@ -704,7 +704,7 @@ class SpotROS(Node):
                                      self.get_parameter('hostname').value,
                                      rates_dict,
                                      callbacks):
-            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.id.nickname + '...')
+            self.get_logger().info('Connected to Spot ')# + self.spot_wrapper.id.nickname + '...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
