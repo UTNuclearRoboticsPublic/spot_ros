@@ -318,14 +318,17 @@ class SpotROS(Node):
     def HandImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new hand image data."""
 
-        # [hand image, hand depth, hand image color, hand depth color]
-        data = self.spot_wrapper.hand_images
+        # Data order is non-deterministic, so we check the names before processing
+        for image in self.spot_wrapper.hand_images:
+            if image.source.name == "hand_image":
+                self.hand_mono_rgb_pub.process_data(image)
+            elif image.source.name == "hand_depth":
+                self.hand_depth_pub.process_data(image)
+            elif image.source.name == "hand_color_image":
+                self.hand_rgb_pub.process_data(image)
+            elif image.source.name == "hand_depth_in_hand_color_frame":
+                self.hand_depth_in_color_pub.process_data(image)
 
-        if data and len(data) == 4:
-            self.hand_mono_rgb_pub.process_data(data[0])
-            self.hand_depth_pub.process_data(data[1])
-            self.hand_rgb_pub.process_data(data[2])
-            self.hand_depth_in_color_pub.process_data(data[3])
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
@@ -681,6 +684,7 @@ class SpotROS(Node):
         """
 
         """Dictionary listing what callback to use for what data task"""
+        self.get_logger().info("Setting sensor callbacks")
         callbacks = {}
         callbacks["robot_state"] = self.RobotStateCB
         callbacks["lease"]       = self.LeaseCB
@@ -817,14 +821,13 @@ class SpotROS(Node):
         
         def populate_static_transforms() -> None:
 
+            # TODO: Handle the case of no arm (i.e. arm images will never appear)
             while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
                   not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
-                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
+                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) or\
+                  not (self. self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
                   rclpy.utilities.ok():
                 self.spot_wrapper.updateSensorTasks()
-
-                # self.get_logger().self.spot_wrapper.hand_images
-                # add ros logging. Examples shown previously in code
 
             static_tfs = []
 
@@ -844,12 +847,12 @@ class SpotROS(Node):
             static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
             static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-            # if self.spot_wrapper.hand_images is not None
-            #     data = self.spot_wrapper.hand_images
-            #     static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-            #     static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-            #     static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-            #     static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
+            # if self.spot_wrapper.hand_images is not None:
+            data = self.spot_wrapper.hand_images
+            static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+            static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+            static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+            static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
             self.static_broadcaster.sendTransform(static_tfs)                
         

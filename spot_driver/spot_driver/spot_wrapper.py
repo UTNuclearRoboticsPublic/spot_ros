@@ -150,7 +150,8 @@ class SpotWrapper():
 
         self._async_sensor_tasks = AsyncTasks([self._front_image_task,
                                                self._side_image_task,
-                                               self._rear_image_task
+                                               self._rear_image_task,
+                                               self._hand_image_task
                                                ])
 
         self._is_connected = True
