@@ -561,6 +561,8 @@
         </xacro:VLP-16>
     </xacro:if>
 
+    <xacro:include filename="$(find spot_description)/urdf/realsense_mount.urdf.xacro"/>
+
     <!-- Optional custom includes. -->
     <xacro:include filename="$(optenv SPOT_URDF_EXTRAS empty.urdf)" />
 </robot>
