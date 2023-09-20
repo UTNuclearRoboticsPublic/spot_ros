@@ -825,7 +825,7 @@ class SpotROS(Node):
             while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
                   not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
                   not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) or\
-                  not (self. self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
+                  not (self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
                   rclpy.utilities.ok():
                 self.spot_wrapper.updateSensorTasks()
 
@@ -847,12 +847,12 @@ class SpotROS(Node):
             static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
             static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-            # if self.spot_wrapper.hand_images is not None:
-            data = self.spot_wrapper.hand_images
-            static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
+            if self.spot_wrapper.hand_images is not None:
+                data = self.spot_wrapper.hand_images
+                static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+                static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+                static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+                static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
             self.static_broadcaster.sendTransform(static_tfs)                
         
