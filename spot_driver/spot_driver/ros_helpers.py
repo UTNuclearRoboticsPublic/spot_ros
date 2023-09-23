@@ -192,26 +192,31 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
         # Depth image. See ROS encoding convention: https://www.ros.org/reps/rep-0118.html
         # Spot SDK outputs in OpenNI format (Little-endian uint16 z-distance from camera in mm)
         elif data.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
-            image_msg.encoding = '32FC1'
+            image_msg.encoding = '16UC1'
             image_msg.is_bigendian = False
             image_msg.step = 2 * data.shot.image.cols
+            image_msg.data = data.shot.image.data
 
-            # convert the uint16's into 32-bit floats
-            # depth zero in OpenNI format is converted to NaN
-            assert data.shot.image.data, 'No camera data received for 32FC1 encoding.'
-            assert len(data.shot.image.data) % 2 == 0, 'Received odd number of bytes for  32FC1 encoding.'
-            image_msg.data = []
+            # image_msg.encoding = '32FC1'
+            # image_msg.is_bigendian = False
+            # image_msg.step = 2 * data.shot.image.cols
 
-            # iterate over the list two bytes at a time
-            for i,j in zip(data.shot.image.data[::2], data.shot.image.data[1::2]):
-                pixel = int(i * 256 + j)
-                value_in_meters = float32(nan)
+            # # convert the uint16's into 32-bit floats
+            # # depth zero in OpenNI format is converted to NaN
+            # assert data.shot.image.data, 'No camera data received for 32FC1 encoding.'
+            # assert len(data.shot.image.data) % 2 == 0, 'Received odd number of bytes for  32FC1 encoding.'
+            # image_msg.data = []
 
-                if pixel != 0:
-                    value_in_meters = float32(pixel * (1e-3))
+            # # iterate over the list two bytes at a time
+            # for i,j in zip(data.shot.image.data[::2], data.shot.image.data[1::2]):
+            #     pixel = int(i * 256 + j)
+            #     value_in_meters = float32(nan)
+
+            #     if pixel != 0:
+            #         value_in_meters = float32(pixel / data.source.depth_scale)
                 
-                bytes = list(struct.pack('<f', value_in_meters))
-                image_msg.data.extend(bytes)
+            #     bytes = list(struct.pack('<f', value_in_meters))
+            #     image_msg.data.extend(bytes)
 
     elif data.shot.image.format == image_pb2.Image.PIXEL_FORMAT_UNKNOWN:
         spot_wrapper.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)
