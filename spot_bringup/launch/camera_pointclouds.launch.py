@@ -14,7 +14,7 @@ import contextlib
 def generate_launch_description():
 
     launch_args = [
-        DeclareLaunchArgument('rgb',
+        DeclareLaunchArgument('texture',
                             description='Whether to include color in pointclouds',
                             default_value='True'),
 
@@ -61,9 +61,9 @@ def generate_launch_description():
     def addAllNodeDescriptions(context, *args, **kwargs):
 
         # Determine if to publish pointcloud with color data
-        if LaunchConfigurationEquals('rgb', 'True').evaluate(context):
+        if LaunchConfigurationEquals('texture', 'True').evaluate(context):
             plugin_name = 'depth_image_proc::PointCloudXyzrgbNode'
-            output_suffix = '_rgb'
+            output_suffix = '_texture'
         else:
             plugin_name = 'depth_image_proc::PointCloudXyzNode'
             output_suffix = ''
@@ -117,10 +117,14 @@ def generate_launch_description():
         # Deterine if the name that was passed is indeed an existing component container
         container_exists = False
         if LaunchConfigurationNotEquals('container', '__new_container__').evaluate(context):
+            
+            logging.get_logger('launch.user').info("\033[32mYou may safely ignore the warnings between these lines -----------------------------------\033[0m\n")
             rclpy.init()
             node = rclpy.create_node("find_container_nodes")
             node_names = ros2node.api.get_node_names(node=node)
             containers = ros2component.api.find_container_node_names(node=node, node_names=node_names)
+            print("")
+            logging.get_logger('launch.user').info("\033[32m------------------------------------------------------------------------------------------\033[0m")
 
             passed_container_name = container.perform(context)
             for container_name in containers:
@@ -129,7 +133,7 @@ def generate_launch_description():
                     break
         
             if not container_exists:
-                container_message = LogInfo(msg=f"\033[33mWARNING: Passed container \"{passed_container_name}\" does not exist\033[0m")
+                container_message = LogInfo(msg=f"\033[33mWARNING: Passed container \"{passed_container_name}\" does not exist, your nodes will not launch until it is created\033[0m")
             else:
                 container_message = LogInfo(msg=f"Found component container \"{passed_container_name}")
         
