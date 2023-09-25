@@ -71,7 +71,7 @@ def generate_launch_description():
         # Factory function for adding nodes to launched based on the Launch Configuration
         node_descriptions = []
         def addNodeDescription(camera_ns: str, depth_ns: str) -> None:
-            if LaunchConfigurationEquals(camera_ns, 'True').evaluate(context) or LaunchConfigurationEquals('all', 'True').evaluate(context):
+            if IfCondition(LaunchConfiguration(camera_ns)).evaluate(context) or IfCondition(LaunchConfiguration('all')).evaluate(context):
                 node_descriptions.append(
                     ComposableNode(
                         package='depth_image_proc',
