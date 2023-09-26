@@ -50,6 +50,7 @@ from spot_msgs.msg import PowerState
 from spot_msgs.msg import BehaviorFault, BehaviorFaultState
 from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
+from spot_msgs.msg import ManipulatorState
 
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
 from bosdyn.api.docking import docking_pb2
@@ -564,3 +565,27 @@ def BehaviorFaultsToMsg(behavior_fault_state: robot_state_pb2.BehaviorFaultState
     behavior_fault_state_msg = BehaviorFaultState()
     behavior_fault_state_msg.faults = getBehaviorFaults(behavior_fault_state.faults, spot_wrapper)
     return behavior_fault_state_msg
+
+def ManipulatorStatesToMsg(manipulator_state: robot_state_pb2.ManipulatorState,
+                           spot_wrapper: SpotWrapper) -> ManipulatorState:
+    """Maps manipulator state data from robot state proto to ROS ManipulatorState message
+
+    Args:
+        manipulator_state: ManipulatorState proto
+        spot_wrapper: A SpotWrapper object
+    Returns:
+        spot_msgs/ManipulatorState ROS message
+    """
+    if manipulator_state is None:
+        return ManipulatorState()
+    manipulator_state_msg = ManipulatorState()
+    manipulator_state_msg.gripper_open_percentage = manipulator_state.gripper_open_percentage
+    manipulator_state_msg.is_gripper_holding_item = manipulator_state.is_gripper_holding_item
+    manipulator_state_msg.estimated_end_effector_force_in_hand.x = manipulator_state.estimated_end_effector_force_in_hand.x
+    manipulator_state_msg.estimated_end_effector_force_in_hand.y = manipulator_state.estimated_end_effector_force_in_hand.y
+    manipulator_state_msg.estimated_end_effector_force_in_hand.z = manipulator_state.estimated_end_effector_force_in_hand.z
+    manipulator_state_msg.stow_state = manipulator_state.stow_state
+    # manipulator_state_msg.velocity_of_hand_in_vision = manipulator_state.velocity_of_hand_in_vision
+    # manipulator_state_msg.velocity_of_hand_in_odom = manipulator_state.velocity_of_hand_in_odom
+    manipulator_state_msg.carry_state = manipulator_state.carry_state
+    return manipulator_state_msg

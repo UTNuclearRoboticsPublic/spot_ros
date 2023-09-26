@@ -66,6 +66,7 @@ from spot_msgs.msg import SystemFaultState
 from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
+from spot_msgs.msg import ManipulatorState
 from spot_msgs.action import NavigateTo, Trajectory
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
@@ -103,8 +104,8 @@ class SpotROS(Node):
         self.sensors_timer = self.create_timer(pub_period, self.publishSensors)
 
         """ ROS Parameters """
-        status_rate_params = {'rates.status'+param for param in {'robot_state', 'lease'}}
-        sensor_rate_params = {'rates.sensors'+param for param in {'front_image', 'side_image', 'rear_image', 'hand_image'}}
+        status_rate_params = {'rates.status.'  + param for param in {'robot_state', 'lease'}}
+        sensor_rate_params = {'rates.sensors.' + param for param in {'front_image', 'side_image', 'rear_image', 'hand_image'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -141,7 +142,7 @@ class SpotROS(Node):
                                     read_only=True))
         
         for name in sensor_rate_params:
-            self.declare_parameter(name, 1.0,
+            self.declare_parameter(name, 1.5,
                 ParameterDescriptor(description='Publish rate for sensor topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
@@ -256,6 +257,9 @@ class SpotROS(Node):
         # Behavior Faults #
         behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
+
+        manipulator_state_msg = ManipulatorStatesToMsg(state.manipulator_state, self.spot_wrapper)
+        self.manipulator_state_pub.publish(manipulator_state_msg)
 
     def LeaseCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
@@ -658,16 +662,15 @@ class SpotROS(Node):
         res.success, res.message = self.spot_wrapper.arm_carry()
         return res
 
-
     # def handle_arm_joint_move(self, _, req: ArmJointMovement.Request, res: ArmJointMovement.Response) -> ArmJointMovement.Response:
     #     """ROS service handler to send joint movement to the arm to execute"""
     #     resp = self.spot_wrapper.arm_joint_move(joint_targets=req.joint_target)
     #     return ArmJointMovement.Response(resp[0], resp[1])
 
-    # def handle_force_trajectory(self, _, req: ArmForceTrajectory.Request, res: ArmForceTrajectory.Response) -> ArmForceTrajectory.Response:
-    #     """ROS service handler to send a force trajectory up or down a vertical force"""
-    #     resp = self.spot_wrapper.force_trajectory(data=req)
-    #     return ArmForceTrajectory.Response(resp[0], resp[1])
+    def handle_force_trajectory(self, _, req: ArmForceTrajectory.Request, res: ArmForceTrajectory.Response) -> ArmForceTrajectory.Response:
+        """ROS service handler to send a force trajectory up or down a vertical force"""
+        resp = self.spot_wrapper.force_trajectory(data=req)
+        return ArmForceTrajectory.Response(resp[0], resp[1])
 
     # def handle_hand_pose(self, _, req: HandPose.Request, res: HandPose.Response) -> HandPose.Response:
     #     """ROS service to give a position to the gripper"""
@@ -700,6 +703,7 @@ class SpotROS(Node):
 
         # Dictionary of all param values in the 'rates' namespace
         rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
+        self.get_logger().info(f"Rates: {rates_dict}")
 
         # Verify connection
         if self.spot_wrapper.connect(self.get_logger(),
@@ -766,6 +770,7 @@ class SpotROS(Node):
         self.system_faults_pub = self.create_publisher(SystemFaultState, '~/status/system_faults', 10)
         self.mobility_params_pub = self.create_publisher(MobilityParams, '~/status/mobility_params', 1)
         self.feedback_pub = self.create_publisher(Feedback, '~/status/feedback', qos_profile=latched_qos)
+        self.manipulator_state_pub = self.create_publisher(ManipulatorState, '~/status/manipulator_states', qos_profile=latched_qos)
 
         self.create_subscription(Twist, '~/cmd_vel', self.cmdVelCallback, 10)
         self.create_subscription(Pose, '~/body_pose', self.bodyPoseCallback, 10)
