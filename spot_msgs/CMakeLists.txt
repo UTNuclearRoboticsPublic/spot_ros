@@ -37,6 +37,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WiFiState.msg"
   "msg/BatteryState.msg"
   "msg/BehaviorFaultState.msg"
+  "msg/ManipulatorState.msg"
   "msg/EStopState.msg"
   "msg/Feedback.msg"
   "msg/FootState.msg"

@@ -9,6 +9,7 @@ from launch_ros.parameters_type import ParameterDescription
 from launch_ros.substitutions import FindPackageShare
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
+
 def generate_launch_description():
   
   launch_args = [
@@ -25,7 +26,7 @@ def generate_launch_description():
                           default_value="False"),
     DeclareLaunchArgument('has_arm',
                           description='Robot includes the Spot Arm',
-                          default_value="False"),
+                          default_value="True"),
     
 
     DeclareLaunchArgument('auto_claim',
@@ -40,7 +41,10 @@ def generate_launch_description():
 
     DeclareLaunchArgument('camera_fps',
                           description='The desired camera frames-per-second.',
-                          default_value='1.0')
+                          default_value='1.0'),
+    DeclareLaunchArgument('robot_state_update_rate',
+                          description='The update rate of the robot state (including TF) in Hz',
+                          default_value='10.0')
   ]
 
   has_eap = LaunchConfiguration('has_eap')
@@ -75,17 +79,20 @@ def generate_launch_description():
         ParameterDescription(name='auto_stand',
                              value=LaunchConfiguration('auto_stand'),
                              value_type=bool),
-        ParameterDescription(name='rates.front_image',
+        ParameterDescription(name='rates.sensors.front_image',
                              value=camera_fps,
                              value_type=float),
-        ParameterDescription(name='rates.side_image',
+        ParameterDescription(name='rates.sensors.side_image',
                              value=camera_fps,
                              value_type=float),
-        ParameterDescription(name='rates.rear_image',
+        ParameterDescription(name='rates.sensors.rear_image',
                              value=camera_fps,
                              value_type=float),
-        ParameterDescription(name='rates.hand_image',
+        ParameterDescription(name='rates.sensors.hand_image',
                              value=camera_fps,
+                             value_type=float),
+        ParameterDescription(name='rates.status.robot_state',
+                             value=LaunchConfiguration('robot_state_update_rate'),
                              value_type=float)
       ],
       output='screen',

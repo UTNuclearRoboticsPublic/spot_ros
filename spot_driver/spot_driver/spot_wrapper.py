@@ -28,7 +28,8 @@
 from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import image_pb2, header_pb2, geometry_pb2, trajectory_pb2, arm_command_pb2, gripper_command_pb2
+from bosdyn.api import (image_pb2, header_pb2, geometry_pb2, trajectory_pb2, 
+                        arm_command_pb2, gripper_command_pb2, synchronized_command_pb2)
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
@@ -38,6 +39,7 @@ from bosdyn.client.auth import AuthResponseError
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
+from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.image import ImageClient, build_image_request
 from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
 from bosdyn.client.power import PowerClient
@@ -46,6 +48,7 @@ from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.robot_id import RobotIdClient
 import bosdyn.client.util
+from bosdyn.util import seconds_to_duration
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
@@ -133,12 +136,12 @@ class SpotWrapper():
                 return False
 
         # Async Tasks
-        self._robot_state_task = AsyncRobotState(self._robot_state_client, logger, rates.get("robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-        self._lease_task = AsyncLease(self._lease_client, logger, rates.get("lease", 1.0), callbacks.get("lease", lambda:None))
-        self._front_image_task = AsyncImageService(self._image_client, logger, rates.get("front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-        self._side_image_task = AsyncImageService(self._image_client, logger, rates.get("side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-        self._rear_image_task = AsyncImageService(self._image_client, logger, rates.get("rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-        self._hand_image_task = AsyncImageService(self._image_client, logger, rates.get("hand_image", 1.0), callbacks.get("hand_image", lambda:None), hand_image_requests)
+        self._robot_state_task = AsyncRobotState(self._robot_state_client, logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
+        self._lease_task = AsyncLease(self._lease_client, logger, rates.get("status.lease", 1.0), callbacks.get("lease", lambda:None))
+        self._front_image_task = AsyncImageService(self._image_client, logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
+        self._side_image_task = AsyncImageService(self._image_client, logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
+        self._rear_image_task = AsyncImageService(self._image_client, logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+        self._hand_image_task = AsyncImageService(self._image_client, logger, rates.get("sensors.hand_image", 1.0), callbacks.get("hand_image", lambda:None), hand_image_requests)
         self._idle_task = AsyncIdle(self._robot_command_client, logger, 10.0, self)
 
         self._estop_endpoint = None
@@ -595,8 +598,56 @@ class SpotWrapper():
                 torque = geometry_pb2.Vec3(x=torques[0], y=torques[1], z=torques[2])
                 return geometry_pb2.Wrench(force=force, torque=torque)
 
-            
+            # Duration in seconds.
+            traj_duration = 5
 
+            # first point on trajectory
+            wrench0 = create_wrench_from_msg(data.forces_pt0, data.torques_pt0)
+            t0 = seconds_to_duration(0)
+            traj_point0 = trajectory_pb2.WrenchTrajectoryPoint(
+                wrench=wrench0, time_since_reference=t0
+            )
+
+            # Second point on the trajectory
+            wrench1 = create_wrench_from_msg(data.forces_pt1, data.torques_pt1)
+            t1 = seconds_to_duration(traj_duration)
+            traj_point1 = trajectory_pb2.WrenchTrajectoryPoint(
+                wrench=wrench1, time_since_reference=t1
+            )
+
+            # Build the trajectory
+            trajectory = trajectory_pb2.WrenchTrajectory(
+                points=[traj_point0, traj_point1]
+            )
+
+            # Build the trajectory request, putting all axes into force mode
+            arm_cartesian_command = arm_command_pb2.ArmCartesianCommand.Request(
+                root_frame_name=ODOM_FRAME_NAME,
+                wrench_trajectory_in_task=trajectory,
+                x_axis=arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_FORCE,
+                y_axis=arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_FORCE,
+                z_axis=arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_FORCE,
+                rx_axis=arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_FORCE,
+                ry_axis=arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_FORCE,
+                rz_axis=arm_command_pb2.ArmCartesianCommand.Request.AXIS_MODE_FORCE,
+            )
+            arm_command = arm_command_pb2.ArmCommand.Request(
+                arm_cartesian_command=arm_cartesian_command
+            )
+            synchronized_command = synchronized_command_pb2.SynchronizedCommand.Request(
+                arm_command=arm_command
+            )
+            robot_command = robot_command_pb2.RobotCommand(
+                synchronized_command=synchronized_command
+            )
+
+            # Send the request
+            self._robot_command_client.robot_command(robot_command)
+            self._logger.info("Force trajectory command sent")
+
+            time.sleep(10.0)
+            
+            return True, 'Success'
         except Exception as e:
             return False, Text(e)
 

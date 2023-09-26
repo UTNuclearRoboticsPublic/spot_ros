@@ -155,5 +155,12 @@
         <child link="${name}_fingers"/>
         <limit effort="1000" velocity="1000.00" lower="-1.57" upper="0.0"/>
     </joint>
+
+    <link name="${name}.link_wr1"/>
+    <joint name="${name}_link_wr1_to_wrist" type = "fixed">
+        <parent link = "${name}_wrist_roll"/>
+        <child  link = "${name}.link_wr1"/>
+        <origin xyz = "0 0 0"/>
+    </joint>
     </xacro:macro>
 </robot>
