@@ -29,6 +29,7 @@ from typing import List, Text
 import threading
 import yaml
 import time as pyTime
+import math
 
 import rclpy.utilities
 from rclpy.node import Node
@@ -584,7 +585,7 @@ class SpotROS(Node):
         # We exclude the odometry frames from static transforms since they are not static. We can ignore the body
         # frame because it is a child of odom or vision depending on the odom_mode, and will be published
         # by the non-static transform publishing that is done by the state callback
-        excluded_child_frames = {'odom', 'vision'}
+        excluded_child_frames = {'odom', 'vision', 'arm0.link_wr1', 'hand_color_image_sensor'}
         all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
         existing_pairs = [(transform.header.frame_id, transform.child_frame_id) for transform in existing_transforms]
 
@@ -607,6 +608,15 @@ class SpotROS(Node):
                                                  v.parent_tform_child)
             output.append(static_tf)
         
+        # The API gets the color camera frame 90 degrees off, so we handle that manually
+        hand_color_tf = TransformStamped()
+        hand_color_tf.header.frame_id = "hand_depth_sensor"
+        hand_color_tf.child_frame_id  = "hand_color_image_sensor"
+        hand_color_tf.header.stamp    = self.get_clock().now().to_msg()
+        hand_color_tf.transform.rotation.w = math.sqrt(0.5)
+        hand_color_tf.transform.rotation.z = -math.sqrt(0.5)
+        output.append(hand_color_tf)
+
         return output
 
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
