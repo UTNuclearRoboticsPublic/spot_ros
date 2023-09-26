@@ -41,7 +41,10 @@ def generate_launch_description():
 
     DeclareLaunchArgument('camera_fps',
                           description='The desired camera frames-per-second.',
-                          default_value='1.0')
+                          default_value='1.0'),
+    DeclareLaunchArgument('robot_state_update_rate',
+                          description='The update rate of the robot state (including TF) in Hz',
+                          default_value='10.0')
   ]
 
   has_eap = LaunchConfiguration('has_eap')
@@ -87,6 +90,9 @@ def generate_launch_description():
                              value_type=float),
         ParameterDescription(name='rates.sensors.hand_image',
                              value=camera_fps,
+                             value_type=float),
+        ParameterDescription(name='rates.status.robot_state',
+                             value=LaunchConfiguration('robot_state_update_rate'),
                              value_type=float)
       ],
       output='screen',
