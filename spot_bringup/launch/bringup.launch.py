@@ -37,7 +37,7 @@ def generate_launch_description():
     has_eap = LaunchConfiguration('has_eap')
     has_arm = LaunchConfiguration('has_arm')
 
-    camera_fps = 1.0
+    camera_fps = 10.0
 
     ## Robot bringup
     driver_include = IncludeLaunchDescription(
@@ -69,9 +69,23 @@ def generate_launch_description():
                         'has_eap': has_eap}.items()
     )
 
+    realsense_include = IncludeLaunchDescription(
+        launch_description_source = PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('realsense2_camera'),
+                'launch',
+                'rs_launch.py'
+            ])
+        ),
+        launch_arguments={
+            'pointcloud.enable': 'True'
+        }.items()
+    )
+
     ## Launch
     return LaunchDescription([
         *launch_args,
         driver_include,
-        state_publisher_include
+        state_publisher_include,
+        realsense_include
     ])
