@@ -33,6 +33,7 @@ setup(
     entry_points={
         'console_scripts': [
             'driver = spot_driver.spot_driver:main',
+            'test_driver = spot_driver.spot_driver_testing:main'
         ],
     },
 )

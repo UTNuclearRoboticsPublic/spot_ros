@@ -54,6 +54,9 @@ from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
 
+from .spot_base_wrapper import SpotBaseWrapper
+from .spot_body_wrapper import SpotBodyWrapper
+
 import functools
 import tf2_ros
 
@@ -689,7 +692,7 @@ class SpotROS(Node):
 
 ######
 
-    def connect(self) -> bool:
+    def connect(self, base_wrapper: SpotBaseWrapper) -> bool:
         """
             Main function for the SpotROS class.
             Gets config from ROS and initializes the wrapper.
@@ -709,19 +712,15 @@ class SpotROS(Node):
         has_cam_payload = self.get_parameter('has_cam_payload').value
 
         # Connect to the robot
-        self.spot_wrapper = SpotWrapper(has_cam_payload)
+        # self.spot_wrapper = SpotWrapper(has_cam_payload)
+        self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_cam_payload)
 
         # Dictionary of all param values in the 'rates' namespace
         rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
         self.get_logger().info(f"Rates: {rates_dict}")
 
         # Verify connection
-        if self.spot_wrapper.connect(self.get_logger(),
-                                     #self.get_parameter('username').value, 
-                                     #self.get_parameter('password').value,
-                                     self.get_parameter('hostname').value,
-                                     rates_dict,
-                                     callbacks):
+        if self.spot_wrapper.connect(base_wrapper, rates_dict, callbacks):
             self.get_logger().info('Connected to Spot ')# + self.spot_wrapper.id.nickname + '...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
