@@ -51,7 +51,10 @@ def generate_launch_description():
 
         DeclareLaunchArgument('container',
                             description='Composition container in which to launch depth_image_proc nodes. If not set a new container will be created',
-                            default_value='__new_container__')
+                            default_value='__new_container__'),
+
+        DeclareLaunchArgument('use_sim_time',
+                            default_value='False')
     ]
 
     container = LaunchConfiguration('container')
@@ -76,6 +79,9 @@ def generate_launch_description():
                         package='depth_image_proc',
                         plugin=plugin_name,
                         name=f'{camera_ns}_cloud',
+                        parameters=[
+                            {'use_sim_time': LaunchConfiguration('use_sim_time')}
+                        ],
                         remappings=[
                             ('points',                      f'{camera_ns}_points{output_suffix}'),
                             ('image_rect',                  f'/spot_driver/depth/{depth_ns}/image'),
