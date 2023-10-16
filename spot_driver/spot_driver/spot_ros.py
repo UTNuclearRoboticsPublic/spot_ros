@@ -83,7 +83,7 @@ class SpotROS(Node):
 
     """ Inner class for managing camera publishing """
     class CameraPubs():
-        def __init__(self, parent, namespace: str):
+        def __init__(self, parent: Node, namespace: str):
             self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
             self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
             self.spot_wrapper = parent.spot_wrapper

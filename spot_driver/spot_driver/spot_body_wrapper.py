@@ -85,7 +85,8 @@ class SpotBodyWrapper():
         # Have the base wrapper connect to the robot
         self._base_wrapper = base_wrapper
         if not self._base_wrapper.is_connected:
-            if not self._base_wrapper.connect(self._logger, self._hostname, rates, callbacks):
+            self._base_wrapper.setLogger(self._logger)
+            if not self._base_wrapper.connect(self._hostname, rates, callbacks):
                 return False
 
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
@@ -119,7 +120,7 @@ class SpotBodyWrapper():
 
         if self._has_cam_payload:
             try:
-                self._audio_client = self._robot.ensure_client(AudioClient.default_service_name)
+                self._audio_client = self._base_wrapper.robot.ensure_client(AudioClient.default_service_name)
             except Exception as e:
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
@@ -129,12 +130,15 @@ class SpotBodyWrapper():
         self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
         self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
         self._hand_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.hand_image", 1.0), callbacks.get("hand_image", lambda:None), hand_image_requests)
+        self._idle_task = AsyncIdle(self._base_wrapper.command_client, self.logger, 10.0, self)
 
         self._async_sensor_tasks = AsyncTasks([self._front_image_task,
                                                self._side_image_task,
                                                self._rear_image_task,
                                                self._hand_image_task
                                                ])
+        
+        self._async_idle_task = AsyncTasks([self._idle_task])
 
         self._is_connected = True
         return True
@@ -150,7 +154,7 @@ class SpotBodyWrapper():
         return self._is_connected
 
     @property
-    def id(self):
+    def robot_id(self):
         """Return robot's ID"""
         if not self._is_connected:
             return None
@@ -211,6 +215,25 @@ class SpotBodyWrapper():
         """Loop through the sensor query periodic tasks and update their data if needed."""
         self._async_sensor_tasks.update()
 
+    def claim(self) -> bool:
+        """Add this driver as an EStop and Lease owner of the base wrapper"""
+        if self._base_wrapper is None:
+            self.logger.warn("Cannot claim a lease without first connecting to a BaseWrapper!")
+            return False
+        
+        self._base_wrapper.registerLeaseOwner(id(self))
+        return True        
+    
+    def disconnect(self) -> None:
+        """Return the lease on the body and the eStop handle."""
+        try:
+            self.sit()
+            self._base_wrapper.disconnect(id(self))
+        except Exception as err:
+            return False, Text(err)
+
+        return True, 'Success'
+
     def disconnect(self) -> None:
         """Release control of robot as gracefully as posssible."""
         if self._robot is None:
@@ -262,10 +285,10 @@ class SpotBodyWrapper():
         """Power motors on and undock the robot from the station."""
         try:
             # Make sure we're powered on
-            self._robot.power_on()
+            self._base_wrapper.robot.power_on()
 
             # Undock the robot
-            blocking_undock(self._robot, timeout)
+            blocking_undock(self._base_wrapper.robot, timeout)
         except Exception as e:
             return False, Text(e)
         return True, 'Success'
