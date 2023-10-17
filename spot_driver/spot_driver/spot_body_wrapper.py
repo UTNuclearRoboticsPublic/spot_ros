@@ -131,6 +131,7 @@ class SpotBodyWrapper():
         self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
         self._hand_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.hand_image", 1.0), callbacks.get("hand_image", lambda:None), hand_image_requests)
         self._idle_task = AsyncIdle(self._base_wrapper.command_client, self.logger, 10.0, self)
+        self._robot_state_task = AsyncRobotState(self._base_wrapper._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
 
         self._async_sensor_tasks = AsyncTasks([self._front_image_task,
                                                self._side_image_task,
@@ -138,7 +139,8 @@ class SpotBodyWrapper():
                                                self._hand_image_task
                                                ])
         
-        self._async_idle_task = AsyncTasks([self._idle_task])
+        self._async_idle_task  = AsyncTasks([self._idle_task])
+        self._async_state_task = AsyncTasks([self._robot_state_task])
 
         self._is_connected = True
         return True
@@ -164,7 +166,7 @@ class SpotBodyWrapper():
     @property
     def robot_state(self):
         """Return latest proto from the _robot_state_task"""
-        return self._base_wrapper.robot_state
+        return self._robot_state_task.proto
 
     @property
     def lease(self):
@@ -210,6 +212,18 @@ class SpotBodyWrapper():
     def time_skew(self) -> PB2Duration:
         """Return the time skew between local and spot time"""
         return self._base_wrapper.time_skew
+    
+    def robotToLocalTime(self, timestamp: PB2Timestamp) -> PB2Timestamp:
+        if self._base_wrapper is not None:
+            return self._base_wrapper.robotToLocalTime(timestamp)
+
+    def updateStateTasks(self) -> None:
+        """Update the robot state"""
+        self._async_state_task.update()
+
+    def updateIdleTasks(self) -> None:
+        """Update the idle task"""
+        self._async_idle_task.update()
 
     def updateSensorTasks(self) -> None:
         """Loop through the sensor query periodic tasks and update their data if needed."""
@@ -224,8 +238,8 @@ class SpotBodyWrapper():
         self._base_wrapper.registerLeaseOwner(id(self))
         return True        
     
-    def disconnect(self) -> None:
-        """Return the lease on the body and the eStop handle."""
+    def release(self) -> None:
+        """Return the lease on the body"""
         try:
             self.sit()
             self._base_wrapper.disconnect(id(self))
@@ -234,35 +248,44 @@ class SpotBodyWrapper():
 
         return True, 'Success'
 
-    def disconnect(self) -> None:
-        """Release control of robot as gracefully as posssible."""
-        if self._robot is None:
-            return
+    # def disconnect(self) -> None:
+    #     """Release control of robot as gracefully as posssible."""
+    #     if self._base_wrapper.robot is None:
+    #         return
 
-        if self._robot.time_sync:
-            self._robot.time_sync.stop()
-        self.release()
+    #     if self._base_wrapper.robot.time_sync:
+    #         self._base_wrapper.robot.time_sync.stop()
+    #     self.release()
+    def power_on(self) -> Tuple[bool, Text]:
+        """Power on the robot's motors"""
+        success, response = self._base_wrapper.power_on()
+        return success, response
+
+    def power_off(self) -> Tuple[bool, Text]:
+        """Safely power off the robot"""
+        success, response = self._base_wrapper.safe_power_off()
+        return success, response
 
     def stop(self) -> Tuple[bool, Text]:
         """Stop the robot's motion."""
-        response = self._robot_command(RobotCommandBuilder.stop_command())
+        response = self._base_wrapper.robot_command(RobotCommandBuilder.stop_command())
         return response[0], response[1]
 
     def self_right(self) -> Tuple[bool, Text]:
         """Have the robot self-right itself."""
-        response = self._robot_command(RobotCommandBuilder.selfright_command())
+        response = self._base_wrapper.robot_command(RobotCommandBuilder.selfright_command())
         return response[0], response[1]
 
     def sit(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit down if able."""
-        self.arm_stow()
-        response = self._robot_command(RobotCommandBuilder.synchro_sit_command())
+        # self.arm_stow()
+        response = self._base_wrapper.robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = response[2]
         return response[0], response[1]
 
     def stand(self, monitor_command=True) -> Tuple[bool, Text]:
         """If the e-stop is enabled, and the motor power is enabled, stand the robot up."""
-        response = self._robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+        response = self._base_wrapper.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
         if monitor_command:
             self._last_stand_command = response[2]
         return response[0], response[1]
@@ -271,11 +294,11 @@ class SpotBodyWrapper():
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
         try:
             # Make sure we're powered on and standing
-            self._robot.power_on()
+            self._base_wrapper.robot.power_on()
             self.stand()
             # Dock the robot
             self.last_docking_command = dock_id
-            blocking_dock_robot(self._robot, dock_id)
+            blocking_dock_robot(self._base_wrapper.robot, dock_id)
             self.last_docking_command = None
         except Exception as e:
             return False, Text(e)
@@ -329,7 +352,7 @@ class SpotBodyWrapper():
             cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
         """
         end_time=time.time() + cmd_duration
-        self._robot_command(RobotCommandBuilder.synchro_velocity_command(
+        self._base_wrapper.robot_command(RobotCommandBuilder.synchro_velocity_command(
                             v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
                             end_time_secs=end_time)
         self._last_velocity_command_time = end_time

@@ -27,6 +27,7 @@
 
 from typing import Text, Tuple
 from .async_queries import *
+import atexit
 
 from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
 from bosdyn.client.auth import AuthResponseError
@@ -79,6 +80,8 @@ class SpotBaseWrapper():
         # Keep track of who is using the lease
         self._lease_owners = []
 
+        atexit.register(self.safe_power_off)
+
     def setLogger(self, logger):
         """Set the logger"""
         self._logger = logger
@@ -124,9 +127,8 @@ class SpotBaseWrapper():
             return False
 
         # Async Tasks
-        self._robot_state_task = AsyncRobotState(self._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
         self._lease_task = AsyncLease(self._lease_client, self.logger, rates.get("status.lease", 1.0), callbacks.get("lease", lambda:None))
-        self._async_status_tasks = AsyncTasks([self._robot_state_task, self._lease_task])
+        self._async_lease_task = AsyncTasks([self._lease_task])
 
         self._estop_endpoint = None
         self._is_connected = True
@@ -160,11 +162,6 @@ class SpotBaseWrapper():
         return self._robot.get_id()
 
     @property
-    def robot_state(self):
-        """Return latest proto from the _robot_state_task"""
-        return self._robot_state_task.proto
-
-    @property
     def lease(self):
         """Return latest proto from the _lease_task"""
         return self._lease_task.proto
@@ -179,16 +176,20 @@ class SpotBaseWrapper():
         """Return the time skew between local and spot time"""
         return self._robot.time_sync.endpoint.clock_skew
     
-    def registerLeaseOwner(self, owner_id):
+    def registerLeaseOwner(self, owner_id) -> Tuple[bool, Text]:
         if owner_id in self._lease_owners:
             self.logger.warn(f"Lease already owned for object with id {owner_id}")
-            return
-        
-        self._lease_owners.append(owner_id)
-        self.logger().info(f"Lease owner added with id {owner_id}. Total owners: {len(self._lease_owners)}")
+            return True, 'You already own this lease'
 
+        success = True
         if self._lease is None:
-            self.claim()
+            success, msg = self.claim()
+        
+        if success:
+            self._lease_owners.append(owner_id)
+            self.logger.info(f"Lease owner added with id {owner_id}. Total owners: {len(self._lease_owners)}")
+
+        return success, msg
 
     def isRegisteredLeaseOwner(self, ID) -> bool:
         """Check to see if a particular object is a registered lease owner
@@ -200,7 +201,7 @@ class SpotBaseWrapper():
         """
         return True if ID in self._lease_owners else False 
 
-    def _robot_command(self, command_proto: PB2Message,
+    def robot_command(self, command_proto: PB2Message,
                        end_time_secs: float =None) -> Tuple[bool, Text]:
         """Generic blocking function for sending commands to robots.
 
@@ -239,17 +240,14 @@ class SpotBaseWrapper():
     def claim(self) -> Tuple[bool, Text]:
         """Get a lease for the robot, a handle on the estop endpoint, and the ID of the robot."""
         try:
-            if not self.getLease():
-                return False
+            got_lease, msg = self.getLease()
+            if not got_lease:
+                return False, msg
             self.resetEStop()
         except (ResponseError, RpcError) as err:
             return False, err.error_message
         
         return True, 'Success'
-
-    def updateStatusTasks(self) -> None:
-        """Loop through the state, and lease periodic tasks and update their data if needed."""
-        self._async_status_tasks.update()
 
     def resetEStop(self) -> None:
         """Get keepalive for eStop"""
@@ -324,5 +322,6 @@ class SpotBaseWrapper():
 
     def safe_power_off(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit if possible.  Once sitting, disable motor power."""
-        response = self._robot_command(RobotCommandBuilder.safe_power_off_command())
+        self.logger.info("Powering off")
+        response = self.robot_command(RobotCommandBuilder.safe_power_off_command())
         return response[0], response[1]

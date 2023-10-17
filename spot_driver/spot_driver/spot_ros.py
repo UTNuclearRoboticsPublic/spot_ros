@@ -205,7 +205,7 @@ class SpotROS(Node):
                 return
 
         print('Shutting down ROS driver for Spot')
-        self.spot_wrapper.disconnect()
+        self.spot_wrapper.release()
 
     def RobotStateCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new robot state data."""
@@ -340,8 +340,7 @@ class SpotROS(Node):
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
-        print('Debug 1')
-        res.success, res.message = self.spot_wrapper.claim()
+        res.success = self.spot_wrapper.claim()
         return res
 
     def handle_release(self, _, res: Trigger.Response) -> Trigger.Response:
@@ -390,13 +389,13 @@ class SpotROS(Node):
         """ROS service handler for the power-on service"""
         res.success, res.message = self.spot_wrapper.power_on()
         if res.success:
-            res.message = 'Powered on Spot robot ' + self.spot_wrapper.id.nickname
+            res.message = 'Powered on Spot robot ' + self.spot_wrapper.robot_id.nickname
         return res
 
-    def handle_safe_power_off(self, _) -> Trigger.Response:
+    def handle_safe_power_off(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler for the safe-power-off service"""
-        resp = self.spot_wrapper.safe_power_off()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.power_off()
+        return res
 
     def handle_estop_hard(self, _) -> Trigger.Response:
         """ROS service handler to hard-eStop the robot.  The robot will immediately cut power to the motors"""
@@ -765,7 +764,7 @@ class SpotROS(Node):
                                  depth=1,
                                  reliability=QoSReliabilityPolicy.RELIABLE)
 
-        self.joint_state_pub = self.create_publisher(JointState, 'joint_states', 1)
+        self.joint_state_pub = self.create_publisher(JointState, '~/joint_states', 1)
         self.dock_state_pub = self.create_publisher(DockState, '~/status/dock_state', qos_profile=latched_qos)
         self.lease_pub = self.create_publisher(LeaseArray, '~/status/leases', 1)
         self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist', 1)
@@ -931,7 +930,8 @@ class SpotROS(Node):
             return
 
         # call state periodic tasks
-        self.spot_wrapper.updateStatusTasks()
+        self.spot_wrapper.updateIdleTasks()
+        self.spot_wrapper.updateStateTasks()
 
         # publish robot feedback state
         feedback_msg = Feedback()
