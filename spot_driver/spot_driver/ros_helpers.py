@@ -33,6 +33,7 @@ from math import nan
 import rclpy.time
 
 from .spot_wrapper import SpotWrapper
+from scipy import spatial
 
 from builtin_interfaces.msg import Time as ROSTime
 from builtin_interfaces.msg import Duration as ROSDuration
@@ -406,6 +407,49 @@ def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
 
     return wifi_msg
 
+def invertTransform(transform: TransformStamped) -> TransformStamped:
+    """Calculates and return the inverse of a geometry_msgs/TransformStamped
+    The new transform will have the same time stamp, but the parent and
+    child frame ID's will be swapped and the transformtation inverted
+    
+    Args:
+        transform: TransformStamped
+    Returns:
+        TransformStamped
+    """
+    
+    # Extract the components of the transformation
+    rotation = spatial.transform.Rotation.from_quat([
+        transform.transform.rotation.x, 
+        transform.transform.rotation.y, 
+        transform.transform.rotation.z, 
+        transform.transform.rotation.w
+    ])
+    translation = [transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z]
+
+    # Invert the individual components
+    inv_rotation = rotation.inv()
+    inv_translation = -1.0*inv_rotation.apply(translation)
+
+    # Create the inverse transform
+    inverse = TransformStamped()
+    inverse.header.stamp    = transform.header.stamp
+    inverse.header.frame_id = transform.child_frame_id
+    inverse.child_frame_id  = transform.header.frame_id
+
+    inverse.transform.translation.x = inv_translation[0]
+    inverse.transform.translation.y = inv_translation[1]
+    inverse.transform.translation.z = inv_translation[2]
+
+    q_inv = inv_rotation.as_quat()
+    inverse.transform.rotation.x = q_inv[0]
+    inverse.transform.rotation.y = q_inv[1]
+    inverse.transform.rotation.z = q_inv[2]
+    inverse.transform.rotation.w = q_inv[3]
+
+    return inverse
+
+
 def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
                    spot_wrapper: SpotWrapper) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
@@ -433,6 +477,11 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
             new_tf.transform.rotation.y = transform.parent_tform_child.rotation.y
             new_tf.transform.rotation.z = transform.parent_tform_child.rotation.z
             new_tf.transform.rotation.w = transform.parent_tform_child.rotation.w
+
+            # Account for the fact that Spot publishes a body->odom transform but we want odom->body
+            if frame_name == "odom":
+                new_tf = invertTransform(new_tf)
+
             tf_msg.transforms.append(new_tf)
 
     return tf_msg
