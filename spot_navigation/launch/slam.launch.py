@@ -1,4 +1,5 @@
 import os
+import math
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -6,17 +7,11 @@ from launch.actions import IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import Node
 
 def generate_launch_description():
 
     launch_args = [
-        DeclareLaunchArgument('map',
-            default_value=os.path.join(
-                FindPackageShare('spot_navigation').find('spot_navigation'),
-                'map',
-                'map.yaml'),
-            description='Full path to map file to load'),
-
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
@@ -29,17 +24,30 @@ def generate_launch_description():
     return LaunchDescription([
         *launch_args,
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                PathJoinSubstitution([FindPackageShare('nav2_bringup'), 'launch', 'bringup_launch.py'])),
-            launch_arguments={
-                'map': LaunchConfiguration('map'),
-                'use_sim_time': LaunchConfiguration('use_sim_time', default='false'),
-                'params_file': params_file}.items(),
+        Node(
+            package="pointcloud_to_laserscan",
+            executable="pointcloud_to_laserscan_node",
+            name="pointcloud_to_laserscan_node",
+            parameters=[
+                {"angle_min": -math.pi},
+                {"angle_max":  math.pi},
+                {"angle_increment": math.radians(1.0)},
+                {"target_frame": "gpe"},
+                {"min_height": 0.20},
+                {"max_height": 1.5}
+            ],
+            remappings=[
+                ("cloud_in", "/velodyne_points"),
+                ("scan", "/spot/pointcloud_scan")
+            ]
         ),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([FindPackageShare('slam_toolbox'), 'launch', 'online_async_launch.py'])),
+                launch_arguments={
+                    'slam_params_file': params_file,
+                    'use_sim_time': LaunchConfiguration('use_sim_time')
+                }.items()
         )
     ])
