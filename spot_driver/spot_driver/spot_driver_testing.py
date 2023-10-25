@@ -2,15 +2,15 @@
 
 import rclpy
 from spot_driver.spot_ros import SpotROS
-from spot_driver.spot_base_wrapper import SpotBaseWrapper
+from spot_driver.spot_lease_manager import SpotLeaseManager
 
 def main():
     rclpy.init()
 
-    base_wrapper = SpotBaseWrapper()
+    lease_manager = SpotLeaseManager()
     body_node = SpotROS()
 
-    if not body_node.connect(base_wrapper):
+    if not body_node.connect(lease_manager):
         return
 
     rclpy.spin(body_node)

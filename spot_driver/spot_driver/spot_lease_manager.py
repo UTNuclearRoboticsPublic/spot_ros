@@ -60,7 +60,7 @@ class DefaultLogger():
     def fatal(self, msg):
         self.error(msg)
 
-class SpotBaseWrapper():
+class SpotLeaseManager():
     """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
     def __init__(self):        
         # State

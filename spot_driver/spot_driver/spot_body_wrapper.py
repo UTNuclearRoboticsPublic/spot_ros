@@ -54,7 +54,7 @@ from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
-from .spot_base_wrapper import SpotBaseWrapper
+from .spot_lease_manager import SpotLeaseManager
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features"""
@@ -64,7 +64,7 @@ class SpotBodyWrapper():
 
         self._is_connected = False
         self._has_cam_payload = has_cam_payload
-        self._base_wrapper = None
+        self._lease_manager = None
 
         self._mobility_params = RobotCommandBuilder.mobility_params()
         self._is_standing = False
@@ -77,16 +77,16 @@ class SpotBodyWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-    def connect(self, base_wrapper: SpotBaseWrapper, rates = {}, callbacks = {}) -> bool:
-        if base_wrapper is None:
+    def connect(self, lease_manager: SpotLeaseManager, rates = {}, callbacks = {}) -> bool:
+        if lease_manager is None:
             self.logger().fatal("Cannot connect to robot without a valid base wrapper object")
             return False
         
         # Have the base wrapper connect to the robot
-        self._base_wrapper = base_wrapper
-        if not self._base_wrapper.is_connected:
-            self._base_wrapper.setLogger(self._logger)
-            if not self._base_wrapper.connect(self._hostname, rates, callbacks):
+        self._lease_manager = lease_manager
+        if not self._lease_manager.is_connected:
+            self._lease_manager.setLogger(self._logger)
+            if not self._lease_manager.connect(self._hostname, rates, callbacks):
                 return False
 
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
@@ -112,15 +112,15 @@ class SpotBodyWrapper():
 
         # Spot service clients
         try:
-            self._image_client = self._base_wrapper.robot.ensure_client(ImageClient.default_service_name)
-            self._docking_client = self._base_wrapper.robot.ensure_client(DockingClient.default_service_name) 
+            self._image_client = self._lease_manager.robot.ensure_client(ImageClient.default_service_name)
+            self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
 
         if self._has_cam_payload:
             try:
-                self._audio_client = self._base_wrapper.robot.ensure_client(AudioClient.default_service_name)
+                self._audio_client = self._lease_manager.robot.ensure_client(AudioClient.default_service_name)
             except Exception as e:
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
@@ -130,8 +130,8 @@ class SpotBodyWrapper():
         self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
         self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
         self._hand_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.hand_image", 1.0), callbacks.get("hand_image", lambda:None), hand_image_requests)
-        self._idle_task = AsyncIdle(self._base_wrapper.command_client, self.logger, 10.0, self)
-        self._robot_state_task = AsyncRobotState(self._base_wrapper._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
+        self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
+        self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
 
         self._async_sensor_tasks = AsyncTasks([self._front_image_task,
                                                self._side_image_task,
@@ -148,7 +148,7 @@ class SpotBodyWrapper():
     @property
     def logger(self):
         """Return this wrapper's logger"""
-        return self._base_wrapper.logger
+        return self._lease_manager.logger
 
     @property
     def is_connected(self) -> bool:
@@ -161,7 +161,7 @@ class SpotBodyWrapper():
         if not self._is_connected:
             return None
             
-        return self._base_wrapper.robot.get_id()
+        return self._lease_manager.robot.get_id()
 
     @property
     def robot_state(self):
@@ -171,7 +171,7 @@ class SpotBodyWrapper():
     @property
     def lease(self):
         """Return latest proto from the _lease_task"""
-        return self._base_wrapper.lease
+        return self._lease_manager.lease
 
     @property
     def front_images(self):
@@ -211,11 +211,11 @@ class SpotBodyWrapper():
     @property
     def time_skew(self) -> PB2Duration:
         """Return the time skew between local and spot time"""
-        return self._base_wrapper.time_skew
+        return self._lease_manager.time_skew
     
     def robotToLocalTime(self, timestamp: PB2Timestamp) -> PB2Timestamp:
-        if self._base_wrapper is not None:
-            return self._base_wrapper.robotToLocalTime(timestamp)
+        if self._lease_manager is not None:
+            return self._lease_manager.robotToLocalTime(timestamp)
 
     def updateStateTasks(self) -> None:
         """Update the robot state"""
@@ -231,18 +231,18 @@ class SpotBodyWrapper():
 
     def claim(self) -> bool:
         """Add this driver as an EStop and Lease owner of the base wrapper"""
-        if self._base_wrapper is None:
+        if self._lease_manager is None:
             self.logger.warn("Cannot claim a lease without first connecting to a BaseWrapper!")
             return False
         
-        self._base_wrapper.registerLeaseOwner(id(self))
+        self._lease_manager.registerLeaseOwner(id(self))
         return True        
     
     def release(self) -> None:
         """Return the lease on the body"""
         try:
             self.sit()
-            self._base_wrapper.disconnect(id(self))
+            self._lease_manager.disconnect(id(self))
         except Exception as err:
             return False, Text(err)
 
@@ -250,42 +250,42 @@ class SpotBodyWrapper():
 
     # def disconnect(self) -> None:
     #     """Release control of robot as gracefully as posssible."""
-    #     if self._base_wrapper.robot is None:
+    #     if self._lease_manager.robot is None:
     #         return
 
-    #     if self._base_wrapper.robot.time_sync:
-    #         self._base_wrapper.robot.time_sync.stop()
+    #     if self._lease_manager.robot.time_sync:
+    #         self._lease_manager.robot.time_sync.stop()
     #     self.release()
     def power_on(self) -> Tuple[bool, Text]:
         """Power on the robot's motors"""
-        success, response = self._base_wrapper.power_on()
+        success, response = self._lease_manager.power_on()
         return success, response
 
     def power_off(self) -> Tuple[bool, Text]:
         """Safely power off the robot"""
-        success, response = self._base_wrapper.safe_power_off()
+        success, response = self._lease_manager.safe_power_off()
         return success, response
 
     def stop(self) -> Tuple[bool, Text]:
         """Stop the robot's motion."""
-        response = self._base_wrapper.robot_command(RobotCommandBuilder.stop_command())
+        response = self._lease_manager.robot_command(RobotCommandBuilder.stop_command())
         return response[0], response[1]
 
     def self_right(self) -> Tuple[bool, Text]:
         """Have the robot self-right itself."""
-        response = self._base_wrapper.robot_command(RobotCommandBuilder.selfright_command())
+        response = self._lease_manager.robot_command(RobotCommandBuilder.selfright_command())
         return response[0], response[1]
 
     def sit(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit down if able."""
         # self.arm_stow()
-        response = self._base_wrapper.robot_command(RobotCommandBuilder.synchro_sit_command())
+        response = self._lease_manager.robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = response[2]
         return response[0], response[1]
 
     def stand(self, monitor_command=True) -> Tuple[bool, Text]:
         """If the e-stop is enabled, and the motor power is enabled, stand the robot up."""
-        response = self._base_wrapper.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+        response = self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
         if monitor_command:
             self._last_stand_command = response[2]
         return response[0], response[1]
@@ -294,11 +294,11 @@ class SpotBodyWrapper():
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
         try:
             # Make sure we're powered on and standing
-            self._base_wrapper.robot.power_on()
+            self._lease_manager.robot.power_on()
             self.stand()
             # Dock the robot
             self.last_docking_command = dock_id
-            blocking_dock_robot(self._base_wrapper.robot, dock_id)
+            blocking_dock_robot(self._lease_manager.robot, dock_id)
             self.last_docking_command = None
         except Exception as e:
             return False, Text(e)
@@ -308,10 +308,10 @@ class SpotBodyWrapper():
         """Power motors on and undock the robot from the station."""
         try:
             # Make sure we're powered on
-            self._base_wrapper.robot.power_on()
+            self._lease_manager.robot.power_on()
 
             # Undock the robot
-            blocking_undock(self._base_wrapper.robot, timeout)
+            blocking_undock(self._lease_manager.robot, timeout)
         except Exception as e:
             return False, Text(e)
         return True, 'Success'
@@ -352,7 +352,7 @@ class SpotBodyWrapper():
             cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
         """
         end_time=time.time() + cmd_duration
-        self._base_wrapper.robot_command(RobotCommandBuilder.synchro_velocity_command(
+        self._lease_manager.robot_command(RobotCommandBuilder.synchro_velocity_command(
                             v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
                             end_time_secs=end_time)
         self._last_velocity_command_time = end_time
