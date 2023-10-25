@@ -1,4 +1,5 @@
 from launch import LaunchDescription
+from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
@@ -69,6 +70,7 @@ def generate_launch_description():
                         'has_eap': has_eap}.items()
     )
 
+    # Realsense
     realsense_include = IncludeLaunchDescription(
         launch_description_source = PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -83,10 +85,38 @@ def generate_launch_description():
         }.items()
     )
 
+    # Teleop
+    joy_node = Node(
+        package='joy',
+        executable='joy_node',
+        name='joy_node',
+    )
+
+    teleop_twist_joy_node = Node(
+        package='teleop_twist_joy',
+        executable='teleop_node',
+        name='spot_teleop_node',
+        parameters=[
+            {'require_enable_button': True},
+            {'enable_button': 4},
+            {'axis_linear.x': 1},
+            {'axis_linear.y': 0},
+            {'scale_linear.x': 0.3},
+            {'scale_linear.y': 0.3},
+            {'axis_angular.yaw': 2},
+            {'scale_angular.yaw': 0.3}
+        ],
+        remappings=[
+            ('cmd_vel', '/spot_driver/cmd_vel')
+        ]
+    )
+
     ## Launch
     return LaunchDescription([
         *launch_args,
         driver_include,
         state_publisher_include,
-        realsense_include
+        realsense_include,
+        joy_node,
+        teleop_twist_joy_node
     ])
