@@ -1,0 +1,19 @@
+octomap_server_node:
+  ros__parameters:
+    base_frame_id: "gpe"
+    filter_ground_plane: false
+    filter_speckles: true
+    frame_id: "odom"
+    ground_filter:
+      angle: 7.5
+      distance: 0.05
+      plane_distance: 0.10
+    latch: true
+    occupancy_max_z: 3.0
+    resolution: 0.05
+    sensor_model:
+      hit: 0.7
+      max: 1.0
+      max_range: 100.0
+      min: 0.0
+      miss: 0.4

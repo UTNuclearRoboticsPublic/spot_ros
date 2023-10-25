@@ -609,15 +609,6 @@ class SpotROS(Node):
                                                  k,
                                                  v.parent_tform_child)
             output.append(static_tf)
-        
-        # The API gets the color camera frame 90 degrees off, so we handle that manually
-        hand_color_tf = TransformStamped()
-        hand_color_tf.header.frame_id = "hand_depth_sensor"
-        hand_color_tf.child_frame_id  = "hand_color_image_sensor"
-        hand_color_tf.header.stamp    = self.get_clock().now().to_msg()
-        hand_color_tf.transform.rotation.w = math.sqrt(0.5)
-        hand_color_tf.transform.rotation.z = -math.sqrt(0.5)
-        output.append(hand_color_tf)
 
         return output
 
