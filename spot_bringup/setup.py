@@ -31,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'driver_combined = spot_bringup.driver_combined:main',
+            'spot_joy = spot_bringup.spot_joy:main'
         ],
     },
 )
