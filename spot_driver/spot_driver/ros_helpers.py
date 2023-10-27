@@ -449,6 +449,18 @@ def invertTransform(transform: TransformStamped) -> TransformStamped:
 
     return inverse
 
+def createBaseFootprintTransform(transform_odom2body: TransformStamped, transform_odom2gpe: TransformStamped):
+    transform_body2basefootprint = TransformStamped()
+    transform_body2basefootprint.header.frame_id = "base_link"
+    transform_body2basefootprint.child_frame_id  = "base_footprint"
+    transform_body2basefootprint.header.stamp = transform_odom2body.header.stamp
+
+    transform_body2basefootprint.transform.translation.x = transform_odom2gpe.transform.translation.x - transform_odom2body.transform.translation.x
+    transform_body2basefootprint.transform.translation.y = transform_odom2gpe.transform.translation.y - transform_odom2body.transform.translation.y
+    transform_body2basefootprint.transform.translation.z = transform_odom2gpe.transform.translation.z - transform_odom2body.transform.translation.z
+    transform_body2basefootprint.transform.rotation.w = 1.0
+
+    return transform_body2basefootprint
 
 def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
                    lease_manager: SpotLeaseManager) -> TFMessage:
@@ -461,6 +473,9 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
         tf2_msgs/TFMessage message
     """
     tf_msg = TFMessage()
+
+    transform_odom2body = None
+    transform_odom2gpe = None
 
     for frame_name in kinematic_state.transforms_snapshot.child_to_parent_edge_map:
         if kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
@@ -481,8 +496,17 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
             # Account for the fact that Spot publishes a body->odom transform but we want odom->body
             if frame_name == "odom":
                 new_tf = invertTransform(new_tf)
+                transform_odom2body = new_tf
+
+            # Record the odom -> gpe transform for later use
+            if frame_name == "gpe":
+                transform_odom2gpe = new_tf
 
             tf_msg.transforms.append(new_tf)
+
+    # Create a base_footprint transform from the gpe transform
+    if transform_odom2body is not None and transform_odom2gpe is not None:
+        tf_msg.transforms.append(createBaseFootprintTransform(transform_odom2body, transform_odom2gpe))
 
     return tf_msg
 
