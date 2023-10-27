@@ -53,6 +53,13 @@ class SpotJoyUtils(Node):
 
         self.get_logger().info("Spot joy node setup complete")
 
+    def verifyClient(self, client) -> bool:
+        if not client.wait_for_service(1):
+            self.get_logger().warn(f"Service for action \"{self.action}\" is not available, cancelling request")
+            self.action = None
+            return False
+        return True
+
     def timerCallback(self):
         if self.action is None:
             return
@@ -76,6 +83,8 @@ class SpotJoyUtils(Node):
                 client = self.power_on_client
 
             if client is not None:
+                if not self.verifyClient(client):
+                    return
                 resp = client.call(Trigger.Request())
                 self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
@@ -123,12 +132,16 @@ class SpotJoyUtils(Node):
         # First try to undock. If this fails, try to dock
         req = Trigger.Request()
         self.get_logger().info("Trying undock")
+        if not self.verifyClient(self.undock_client):
+            return
         resp = self.undock_client.call(req)
 
         if not resp.success:
             self.get_logger().info("Trying dock")
             req = Dock.Request()
             req.dock_id = 520
+            if not self.verifyClient(self.dock_client):
+                return
             resp = self.dock_client.call(req)
             self.get_logger().info(f"Dock result: {resp.message}")
         else:
