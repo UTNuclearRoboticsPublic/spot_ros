@@ -11,19 +11,23 @@ def generate_launch_description():
 
     launch_args = [
         DeclareLaunchArgument('config',
-            description="Filepath for navigation configuration. See navigation2 package documentation."),
+            description="Filepath for navigation configuration. See navigation2 package documentation.",
+            default_value=PathJoinSubstitution([FindPackageShare('spot_navigation'), 'config', 'spot.yaml'])
+        ),
 
         DeclareLaunchArgument('map',
             default_value=os.path.join(
                 FindPackageShare('spot_navigation').find('spot_navigation'),
                 'map',
-                'map.yaml'),
-            description='Full path to map file to load'),
+                'ahg.yaml'),
+            description='Full path to map file to load'
+        ),
 
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use simulation (Gazebo) clock if true')
+            description='Use simulation (Gazebo) clock if true'
+        )
     ]
 
     return LaunchDescription([

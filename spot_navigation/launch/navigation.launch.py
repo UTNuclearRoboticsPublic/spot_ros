@@ -2,7 +2,6 @@ import math
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.actions import IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
@@ -27,7 +26,8 @@ def generate_launch_description():
 
     lifecycle_nodes = ['planner_server',
                        'controller_server',
-                       'recoveries_server']
+                       'recoveries_server',
+                       'bt_navigator']
     
     planner_server = Node(
         package='nav2_planner',
@@ -58,6 +58,15 @@ def generate_launch_description():
         ]
     )
 
+    bt_server = Node(
+        package='nav2_bt_navigator',
+        executable='bt_navigator',
+        name='bt_navigator',
+        output='screen',
+        parameters=[config_file],
+        remappings=[],
+    )
+
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -76,5 +85,6 @@ def generate_launch_description():
         planner_server,
         controller_server, 
         recoveries_server,
+        bt_server,
         lifecycle_manager
     ])
