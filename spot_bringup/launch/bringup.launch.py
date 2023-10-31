@@ -111,6 +111,12 @@ def generate_launch_description():
         ]
     )
 
+    spot_joy_node = Node(
+        package='spot_bringup',
+        executable='spot_joy',
+        name='spot_joy_node',
+    )
+
     ## Launch
     return LaunchDescription([
         *launch_args,
@@ -118,5 +124,6 @@ def generate_launch_description():
         state_publisher_include,
         realsense_include,
         joy_node,
-        teleop_twist_joy_node
+        teleop_twist_joy_node,
+        spot_joy_node
     ])
