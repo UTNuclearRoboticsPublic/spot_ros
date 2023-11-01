@@ -50,7 +50,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from std_srvs.srv import Trigger, SetBool
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
+from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2, docking_state_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
 
@@ -736,8 +736,8 @@ class SpotROS(Node):
         self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
         self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
         self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
-        self.hand_rgb_pub = self.CameraPubs(self, 'rgb/hand_color')
-        self.hand_mono_rgb_pub = self.CameraPubs(self, 'rgb/hand_mono')
+        # self.hand_rgb_pub = self.CameraPubs(self, 'rgb/hand_color')
+        # self.hand_mono_rgb_pub = self.CameraPubs(self, 'rgb/hand_mono')
 
         # Depth Images
         self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
@@ -745,8 +745,8 @@ class SpotROS(Node):
         self.left_depth_pub = self.CameraPubs(self, 'depth/left')
         self.right_depth_pub = self.CameraPubs(self, 'depth/right')
         self.back_depth_pub = self.CameraPubs(self, 'depth/back')
-        self.hand_depth_pub = self.CameraPubs(self, 'depth/hand')
-        self.hand_depth_in_color_pub = self.CameraPubs(self, 'depth/hand/depth_in_color')
+        # self.hand_depth_pub = self.CameraPubs(self, 'depth/hand')
+        # self.hand_depth_in_color_pub = self.CameraPubs(self, 'depth/hand/depth_in_color')
 
         ## Status Publishers
         # QoS to use for latched publishers
@@ -800,12 +800,12 @@ class SpotROS(Node):
         self.create_service(Trigger, '~/undock', self.handle_undock, callback_group=srv_group)
 
         # Arm
-        self.create_service(Trigger, '~/arm/stow', self.handle_arm_stow, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/unstow', self.handle_arm_unstow, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/carry', self.handle_arm_carry, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/gripper_open', self.handle_gripper_open, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/gripper_close', self.handle_gripper_close, callback_group=srv_group)
-        self.create_service(GripperAngleMove, '~/arm/gripper_angle_open', self.handle_gripper_angle_open, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/stow', self.handle_arm_stow, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/unstow', self.handle_arm_unstow, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/carry', self.handle_arm_carry, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/gripper_open', self.handle_gripper_open, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/gripper_close', self.handle_gripper_close, callback_group=srv_group)
+        # self.create_service(GripperAngleMove, '~/arm/gripper_angle_open', self.handle_gripper_angle_open, callback_group=srv_group)
 
         self._navigate_to_server = rclpy.action.ActionServer(
                 self,
@@ -927,16 +927,16 @@ class SpotROS(Node):
         # publish robot feedback state
         feedback_msg = Feedback()
         feedback_msg.standing = self.spot_wrapper.is_standing
-        feedback_msg.sitting = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
-        # id = self.spot_wrapper.id
-        id = None
-        if id:
-            feedback_msg.serial_number = id.serial_number
-            feedback_msg.species = id.species
-            feedback_msg.version = id.version
-            feedback_msg.nickname = id.nickname
-            feedback_msg.computer_serial_number = id.computer_serial_number
+        feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
+        robot_id = self.spot_wrapper.ID
+        # id = None
+        if robot_id:
+            feedback_msg.serial_number = robot_id.serial_number
+            feedback_msg.species = robot_id.species
+            feedback_msg.version = robot_id.version
+            feedback_msg.nickname = robot_id.nickname
+            feedback_msg.computer_serial_number = robot_id.computer_serial_number
         self.feedback_pub.publish(feedback_msg)
 
         # publish mobility state
