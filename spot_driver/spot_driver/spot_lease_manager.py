@@ -41,6 +41,7 @@ from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
 from bosdyn.client.robot_id import RobotIdClient
 import bosdyn.client.util
 from bosdyn.util import seconds_to_duration
+from bosdyn.api import estop_pb2
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
@@ -113,11 +114,12 @@ class SpotLeaseManager():
 
         self.logger.info("Authentification successful, starting time sync...")
         self._robot.start_time_sync()
+        self._robot.time_sync.wait_for_sync()
 
         # Spot service clients
         self.logger.info("Starting robot clients")
         try:
-            self._robot_state_client = self._robot.ensure_client(RobotStateClient.default_service_name)
+            self._robot_state_client: RobotStateClient = self._robot.ensure_client(RobotStateClient.default_service_name)
             self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
             self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
             self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
@@ -136,7 +138,7 @@ class SpotLeaseManager():
         return True
 
     @property
-    def robot(self):
+    def robot(self) -> bosdyn.client.Robot:
         return self._robot
     
     @property
@@ -256,6 +258,9 @@ class SpotLeaseManager():
         self._estop_endpoint.force_simple_setup()  # Set this endpoint as the robot's sole estop.
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
 
+    def eStopStatus(self) -> estop_pb2.EstopSystemStatus:
+        return self._estop_client.get_status()
+
     def assertEStop(self, severe=True) -> bool:
         """Forces the robot into eStop state.
 
@@ -304,6 +309,7 @@ class SpotLeaseManager():
         try:
             self._lease_owners.remove(id)
             if len(self._lease_owners) == 0:
+                self.safe_power_off()
                 self._releaseLease()
                 self._releaseEStop() 
                 self._is_connected = False
