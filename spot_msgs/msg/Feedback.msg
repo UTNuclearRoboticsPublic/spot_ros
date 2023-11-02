@@ -1,4 +1,5 @@
 bool standing
+bool sitting
 bool moving
 bool docked
 

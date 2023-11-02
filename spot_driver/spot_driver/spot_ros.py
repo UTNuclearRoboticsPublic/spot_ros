@@ -927,6 +927,7 @@ class SpotROS(Node):
         # publish robot feedback state
         feedback_msg = Feedback()
         feedback_msg.standing = self.spot_wrapper.is_standing
+        feedback_msg.sitting  = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
         feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
         robot_id = self.spot_wrapper.ID
