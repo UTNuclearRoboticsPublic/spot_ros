@@ -32,7 +32,7 @@ from math import nan
 
 import rclpy.time
 
-from .spot_wrapper import SpotWrapper
+from .spot_lease_manager import SpotLeaseManager
 from scipy import spatial
 
 from builtin_interfaces.msg import Time as ROSTime
@@ -116,12 +116,12 @@ def populateTransformStamped(time: rclpy.time.Time,
 
     return new_tf
 
-def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tuple[Image, CameraInfo, TFMessage]:
+def getImageMsg(data: image_pb2.ImageResponse, lease_manager: SpotLeaseManager) -> Tuple[Image, CameraInfo, TFMessage]:
     """Takes the image, camera, and TF data and populates the necessary ROS messages
 
     Args:
         data: ImageResponse proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         (tuple):
             * Image: message of the image captured
@@ -133,7 +133,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
         if data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
             transform = data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
             new_tf = TransformStamped()
-            local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
+            local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
             new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
             new_tf.header.frame_id = transform.parent_frame_name
             new_tf.child_frame_id = frame_name
@@ -147,7 +147,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
             tf_msg.transforms.append(new_tf)
 
     image_msg = Image()
-    local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
+    local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
     image_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     image_msg.header.frame_id = data.shot.frame_name_image_sensor
     image_msg.height = data.shot.image.rows
@@ -221,7 +221,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
             #     image_msg.data.extend(bytes)
 
     elif data.shot.image.format == image_pb2.Image.PIXEL_FORMAT_UNKNOWN:
-        spot_wrapper.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)
+        lease_manager.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)
         return Image(), CameraInfo(), tf_msg
 
     camera_info_msg = CameraInfo(d=[0]*5,
@@ -230,7 +230,7 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
                                  r=[1,0,0,0,1,0,0,0,1],
                                  p=[0,0,0,0,0,0,0,0,0,0,1,0])
 
-    local_time = spot_wrapper.robotToLocalTime(data.shot.acquisition_time)
+    local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
     camera_info_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     camera_info_msg.header.frame_id = data.shot.frame_name_image_sensor
     camera_info_msg.height = data.shot.image.rows
@@ -249,25 +249,25 @@ def getImageMsg(data: image_pb2.ImageResponse, spot_wrapper: SpotWrapper) -> Tup
     return image_msg, camera_info_msg, tf_msg
 
 def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
-                     spot_wrapper: SpotWrapper) -> JointState:
+                     lease_manager: SpotLeaseManager) -> JointState:
     """Maps joint state data from robot state proto to ROS JointState message
 
     Args:
         kinematic_state: KinematicState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         sensor_msgs/JointState ROS message
     """
     # static attributes of this method
     joint_state_msg = JointState()
-    local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
+    local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
     joint_state_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
     for joint in kinematic_state.joint_states:
         try:
             name = friendly_joint_names[joint.name]
         except KeyError:
-            spot_wrapper.logger.error('Failed to look up friendly name for frame ' + joint.name,
+            lease_manager.logger.error('Failed to look up friendly name for frame ' + joint.name,
                                        once=True)
             continue
         
@@ -279,19 +279,19 @@ def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
     return joint_state_msg
 
 def EStopStatesToMsg(estop_states: robot_state_pb2.EStopState,
-                     spot_wrapper: SpotWrapper) -> EStopStateArray:
+                     lease_manager: SpotLeaseManager) -> EStopStateArray:
     """Maps EStop states data from robot state proto to ROS EStopArray message
 
     Args:
         estop_states: EStopState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         spot_msgs/EStopArray ROS message
     """
     estop_array_msg = EStopStateArray()
     for estop in estop_states:
         estop_msg = EStopState()
-        local_time = spot_wrapper.robotToLocalTime(estop.timestamp)
+        local_time = lease_manager.robotToLocalTime(estop.timestamp)
         estop_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
         estop_msg.name = estop.name
         estop_msg.type = estop.type
@@ -320,17 +320,17 @@ def FeetStateToMsg(foot_states: robot_state_pb2.FootState) -> FootStateArray:
     return foot_array_msg
 
 def GetOdomTwistFromState(kinematic_state: robot_state_pb2.KinematicState,
-                          spot_wrapper: SpotWrapper) -> TwistWithCovarianceStamped:
+                          lease_manager: SpotLeaseManager) -> TwistWithCovarianceStamped:
     """Maps odometry data from robot state proto to ROS TwistWithCovarianceStamped message
 
     Args:
         kinematic_state: KinematicState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         geometry_msgs/TwistWithCovarianceStamped ROS message
     """
     twist_odom_msg = TwistWithCovarianceStamped()
-    local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
+    local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
     twist_odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     twist_odom_msg.twist.twist.linear.x = kinematic_state.velocity_of_body_in_odom.linear.x
     twist_odom_msg.twist.twist.linear.y = kinematic_state.velocity_of_body_in_odom.linear.y
@@ -341,19 +341,19 @@ def GetOdomTwistFromState(kinematic_state: robot_state_pb2.KinematicState,
     return twist_odom_msg
 
 def GetOdomFromState(kinematic_state: robot_state_pb2.KinematicState,
-                     spot_wrapper: SpotWrapper,
+                     lease_manager: SpotLeaseManager,
                      use_vision: bool) -> Odometry:
     """Maps odometry data from robot state proto to ROS Odometry message
 
     Args:
         kinematic_state: KinematicState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
         use_vision: If true, use visual odometry in addition to kinematic odometry
     Returns:
         nav_msgs/Odometry ROS message
     """
     odom_msg = Odometry()
-    local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
+    local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
     odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     if use_vision == True:
         odom_msg.header.frame_id = 'vision'
@@ -372,7 +372,7 @@ def GetOdomFromState(kinematic_state: robot_state_pb2.KinematicState,
     pose_odom_msg.pose.orientation.w = tform_body.rotation.w
 
     odom_msg.pose = pose_odom_msg
-    twist_odom_msg = GetOdomTwistFromState(kinematic_state, spot_wrapper).twist
+    twist_odom_msg = GetOdomTwistFromState(kinematic_state, lease_manager).twist
     odom_msg.twist = twist_odom_msg
     return odom_msg
 
@@ -451,12 +451,12 @@ def invertTransform(transform: TransformStamped) -> TransformStamped:
 
 
 def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
-                   spot_wrapper: SpotWrapper) -> TFMessage:
+                   lease_manager: SpotLeaseManager) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
     Args:
         kinematic_state: KinematicState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         tf2_msgs/TFMessage message
     """
@@ -466,7 +466,7 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
         if kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
             transform = kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
             new_tf = TransformStamped()
-            local_time = spot_wrapper.robotToLocalTime(kinematic_state.acquisition_timestamp)
+            local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
             new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
             new_tf.header.frame_id = transform.parent_frame_name
             new_tf.child_frame_id = frame_name
@@ -487,19 +487,19 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
     return tf_msg
 
 def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
-                       spot_wrapper: SpotWrapper) -> BatteryStateArray:
+                       lease_manager: SpotLeaseManager) -> BatteryStateArray:
     """Maps battery state data from robot state proto to ROS BatteryStateArray message
 
     Args:
         battery_states: BatteryState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         spot_msgs/BatteryStateArray ROS message
     """
     battery_states_array_msg = BatteryStateArray()
     for battery in battery_states:
         battery_msg = BatteryState()
-        local_time = spot_wrapper.robotToLocalTime(battery.timestamp)
+        local_time = lease_manager.robotToLocalTime(battery.timestamp)
         battery_msg.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
         battery_msg.identifier = battery.identifier
@@ -515,17 +515,17 @@ def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
     return battery_states_array_msg
 
 def PowerStatesToMsg(power_state: robot_state_pb2.PowerState,
-                     spot_wrapper: SpotWrapper) -> PowerState:
+                     lease_manager: SpotLeaseManager) -> PowerState:
     """Maps power state data from robot state proto to ROS PowerState message
 
     Args:
         power_state: PowerState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         spot_msgs/PowerState ROS message
     """
     power_state_msg = PowerState()
-    local_time = spot_wrapper.robotToLocalTime(power_state.timestamp)
+    local_time = lease_manager.robotToLocalTime(power_state.timestamp)
     power_state_msg.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     power_state_msg.motor_power_state = power_state.motor_power_state
     power_state_msg.shore_power_state = power_state.shore_power_state
@@ -534,12 +534,12 @@ def PowerStatesToMsg(power_state: robot_state_pb2.PowerState,
     return power_state_msg
 
 def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault,
-                      spot_wrapper: SpotWrapper) -> List[BehaviorFault]:
+                      lease_manager: SpotLeaseManager) -> List[BehaviorFault]:
     """Helper function to strip out behavior faults into a list
 
     Args:
         behavior_faults: List of ServiceFault
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         List of BehaviorFault messages
     """
@@ -548,7 +548,7 @@ def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault,
     for fault in behavior_faults:
         new_fault = BehaviorFault()
         new_fault.behavior_fault_id = fault.behavior_fault_id
-        local_time = spot_wrapper.robotToLocalTime(fault.onset_timestamp)
+        local_time = lease_manager.robotToLocalTime(fault.onset_timestamp)
         new_fault.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
         new_fault.cause = fault.cause
         new_fault.status = fault.status
@@ -557,12 +557,12 @@ def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault,
     return faults
 
 def getSystemFaults(system_faults: service_fault_pb2.ServiceFault,
-                    spot_wrapper: SpotWrapper) -> List[SystemFault]:
+                    lease_manager: SpotLeaseManager) -> List[SystemFault]:
     """Helper function to strip out system faults into a list
 
     Args:
         system_faults: List of SystemFault
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         List of SystemFault messages
     """
@@ -571,7 +571,7 @@ def getSystemFaults(system_faults: service_fault_pb2.ServiceFault,
     for fault in system_faults:
         new_fault = SystemFault()
         new_fault.name = fault.name
-        local_time = spot_wrapper.robotToLocalTime(fault.onset_timestamp)
+        local_time = lease_manager.robotToLocalTime(fault.onset_timestamp)
         new_fault.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
         new_fault.duration = ROSDuration(sec=fault.duration.seconds, nanosec=fault.duration.nanos)
         new_fault.code = fault.code
@@ -587,41 +587,41 @@ def getSystemFaults(system_faults: service_fault_pb2.ServiceFault,
     return faults
 
 def SystemFaultsToMsg(system_fault_state: robot_state_pb2.SystemFaultState,
-                      spot_wrapper: SpotWrapper) -> SystemFaultState:
+                      lease_manager: SpotLeaseManager) -> SystemFaultState:
     """Maps system fault data from robot state proto to ROS SystemFaultState message
 
     Args:
         system_fault_state: SystemFaultState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         slot_msgs/SystemFaultState ROS message
     """
     system_fault_state_msg = SystemFaultState()
-    system_fault_state_msg.faults = getSystemFaults(system_fault_state.faults, spot_wrapper)
-    system_fault_state_msg.historical_faults = getSystemFaults(system_fault_state.historical_faults, spot_wrapper)
+    system_fault_state_msg.faults = getSystemFaults(system_fault_state.faults, lease_manager)
+    system_fault_state_msg.historical_faults = getSystemFaults(system_fault_state.historical_faults, lease_manager)
     return system_fault_state_msg
 
 def BehaviorFaultsToMsg(behavior_fault_state: robot_state_pb2.BehaviorFaultState,
-                        spot_wrapper: SpotWrapper) -> BehaviorFaultState:
+                        lease_manager: SpotLeaseManager) -> BehaviorFaultState:
     """Maps behavior fault data from robot state proto to ROS BehaviorFaultState message
 
     Args:
         behavior_fault_state: BehaviorFaultState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         BehaviorFaultState message
     """
     behavior_fault_state_msg = BehaviorFaultState()
-    behavior_fault_state_msg.faults = getBehaviorFaults(behavior_fault_state.faults, spot_wrapper)
+    behavior_fault_state_msg.faults = getBehaviorFaults(behavior_fault_state.faults, lease_manager)
     return behavior_fault_state_msg
 
 def ManipulatorStatesToMsg(manipulator_state: robot_state_pb2.ManipulatorState,
-                           spot_wrapper: SpotWrapper) -> ManipulatorState:
+                           lease_manager: SpotLeaseManager) -> ManipulatorState:
     """Maps manipulator state data from robot state proto to ROS ManipulatorState message
 
     Args:
         manipulator_state: ManipulatorState proto
-        spot_wrapper: A SpotWrapper object
+        lease_manager: A SpotWrapper object
     Returns:
         spot_msgs/ManipulatorState ROS message
     """
