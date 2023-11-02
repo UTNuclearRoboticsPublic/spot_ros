@@ -66,6 +66,7 @@ class SpotBodyWrapper():
         self._has_cam_payload = has_cam_payload
         self._lease_manager = None
 
+        self._is_sitting = True
         self._is_standing = False
         self._mobility_params = RobotCommandBuilder.mobility_params()
         self._is_moving = False
@@ -182,6 +183,11 @@ class SpotBodyWrapper():
         return self._rear_image_task.proto
 
     @property
+    def is_sitting(self) -> bool:
+        """Return boolean of sitting state"""
+        return self._is_sitting
+
+    @property
     def is_standing(self) -> bool:
         """Return boolean of standing state"""
         return self._is_standing
@@ -231,14 +237,6 @@ class SpotBodyWrapper():
 
         return True, 'Success'
 
-    # def disconnect(self) -> None:
-    #     """Release control of robot as gracefully as posssible."""
-    #     if self._lease_manager.robot is None:
-    #         return
-
-    #     if self._lease_manager.robot.time_sync:
-    #         self._lease_manager.robot.time_sync.stop()
-    #     self.release()
     def power_on(self) -> Tuple[bool, Text]:
         """Power on the robot's motors"""
         success, response = self._lease_manager.power_on()
