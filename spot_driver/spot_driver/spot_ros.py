@@ -50,7 +50,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from std_srvs.srv import Trigger, SetBool
 
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2, docking_state_pb2
+from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
 
@@ -196,7 +196,7 @@ class SpotROS(Node):
         if not self.spot_wrapper.is_connected:
             return
 
-        if not self.spot_wrapper.is_sitting:
+        if self.spot_wrapper.is_standing:
             print('Spot sitting down...')
             is_sitting, message = self.spot_wrapper.sit()
         
@@ -828,9 +828,9 @@ class SpotROS(Node):
             # TODO: Handle the case of no arm (i.e. arm images will never appear)
             while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
                   not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
-                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) or\
-                  not (self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
+                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
                   rclpy.utilities.ok():
+                #   not (self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
                 self.spot_wrapper.updateSensorTasks()
 
             static_tfs = []
@@ -851,12 +851,12 @@ class SpotROS(Node):
             static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
             static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-            if self.spot_wrapper.hand_images is not None:
-                data = self.spot_wrapper.hand_images
-                static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-                static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-                static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-                static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
+            # if self.spot_wrapper.hand_images is not None:
+            #     data = self.spot_wrapper.hand_images
+            #     static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
             self.static_broadcaster.sendTransform(static_tfs)                
         
@@ -929,14 +929,14 @@ class SpotROS(Node):
         feedback_msg.standing = self.spot_wrapper.is_standing
         feedback_msg.moving = self.spot_wrapper.is_moving
         feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
-        robot_id = self.spot_wrapper.ID
-        # id = None
-        if robot_id:
-            feedback_msg.serial_number = robot_id.serial_number
-            feedback_msg.species = robot_id.species
-            feedback_msg.version = robot_id.version
-            feedback_msg.nickname = robot_id.nickname
-            feedback_msg.computer_serial_number = robot_id.computer_serial_number
+        # robot_id = self.spot_wrapper.robot_id
+        id = None
+        if id:
+            feedback_msg.serial_number = id.serial_number
+            feedback_msg.species = id.species
+            feedback_msg.version = id.version
+            feedback_msg.nickname = id.nickname
+            feedback_msg.computer_serial_number = id.computer_serial_number
         self.feedback_pub.publish(feedback_msg)
 
         # publish mobility state
