@@ -66,7 +66,7 @@ class SpotBodyWrapper():
         self._has_cam_payload = has_cam_payload
         self._lease_manager = None
 
-        self.is_standing = False
+        self._is_standing = False
         self._mobility_params = RobotCommandBuilder.mobility_params()
         self._is_moving = False
         self._last_docking_command = None
@@ -130,8 +130,7 @@ class SpotBodyWrapper():
 
         self._async_sensor_tasks = AsyncTasks([self._front_image_task,
                                                self._side_image_task,
-                                               self._rear_image_task,
-                                               ])
+                                               self._rear_image_task])
         
         self._async_idle_task  = AsyncTasks([self._idle_task])
         self._async_state_task = AsyncTasks([self._robot_state_task])
@@ -181,11 +180,6 @@ class SpotBodyWrapper():
     def rear_images(self):
         """Return latest proto from the _rear_image_task"""
         return self._rear_image_task.proto
-
-    @property
-    def hand_images(self):
-        """Return latest proto from the _hand_image_task"""
-        return self._hand_image_task.proto
 
     @property
     def is_standing(self) -> bool:
@@ -253,9 +247,6 @@ class SpotBodyWrapper():
     def power_off(self) -> Tuple[bool, Text]:
         """Safely power off the robot"""
         success, response = self._lease_manager.safe_power_off()
-        if success:
-            self.is_standing = False
-            self.is_moving = False
         return success, response
 
     def stop(self) -> Tuple[bool, Text]:
@@ -273,9 +264,6 @@ class SpotBodyWrapper():
         # self.arm_stow()
         success, msg, cmd_id = self._lease_manager.robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = cmd_id
-        if success:
-            self.is_standing = False
-            self.is_moving = False
         return success, msg
 
     def stand(self, monitor_command=True) -> Tuple[bool, Text]:
@@ -283,9 +271,6 @@ class SpotBodyWrapper():
         success, msg, cmd_id = self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
         if monitor_command:
             self._last_stand_command = cmd_id
-        if success:
-            self.is_standing = True
-            self.is_moving = False
         return success, msg
 
     def dock(self, dock_id) -> Tuple[bool, Text]:
@@ -298,8 +283,6 @@ class SpotBodyWrapper():
             self.last_docking_command = dock_id
             blocking_dock_robot(self._lease_manager.robot, dock_id)
             self.last_docking_command = None
-            self.is_standing = False
-            self.is_moving = False
         except Exception as e:
             return False, Text(e)
         return True, 'Success'
@@ -311,10 +294,7 @@ class SpotBodyWrapper():
             self._lease_manager.robot.power_on()
 
             # Undock the robot
-            self.is_moving = True
             blocking_undock(self._lease_manager.robot, timeout)
-            self.is_standing = True
-            self.is_moving = False
         except Exception as e:
             return False, Text(e)
         return True, 'Success'

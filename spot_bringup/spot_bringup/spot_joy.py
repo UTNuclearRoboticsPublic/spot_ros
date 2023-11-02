@@ -137,7 +137,7 @@ class SpotJoyUtils(Node):
         resp = self.undock_client.call(req)
 
         if not resp.success:
-            self.get_logger().info("Trying dock")
+            self.get_logger().info(f"Cannot undock: {resp.message}. Trying dock")
             req = Dock.Request()
             req.dock_id = 520
             if not self.verifyClient(self.dock_client):
