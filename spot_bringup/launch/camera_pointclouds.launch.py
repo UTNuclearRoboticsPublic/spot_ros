@@ -25,11 +25,11 @@ def generate_launch_description():
                             description='Whether to publish hand mono pointcloud',
                             default_value='False'),
 
-        DeclareLaunchArgument('front_left',
+        DeclareLaunchArgument('frontleft',
                             description='Whether to publish front left camera pointcloud',
                             default_value='False'),
 
-        DeclareLaunchArgument('front_right', 
+        DeclareLaunchArgument('frontright', 
                             description='Whether to publish front right camera pointcloud',
                             default_value='False'),
 
@@ -90,13 +90,14 @@ def generate_launch_description():
                             ('rgb/image_rect_color',        f'/spot_driver/rgb/{camera_ns}/image'),
                             ('depth_registered/image_rect', f'/spot_driver/depth/{depth_ns}/image'),
                         ],
-                        extra_arguments=[{'use_intra_process_comms': True}],            )
+                        extra_arguments=[{'use_intra_process_comms': True}],            
+                    )
                 )
 
         addNodeDescription('hand_mono'  , 'hand')
         addNodeDescription('hand_color' , 'hand/depth_in_color')
         addNodeDescription('frontleft'  , 'frontleft')
-        addNodeDescription('frontright' , 'frontright`')
+        addNodeDescription('frontright' , 'frontright')
         addNodeDescription('left'       , 'left')
         addNodeDescription('right'      , 'right')
         addNodeDescription('back'       , 'back')
