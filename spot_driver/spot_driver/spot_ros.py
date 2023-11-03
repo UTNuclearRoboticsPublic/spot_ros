@@ -70,11 +70,10 @@ from spot_msgs.msg import SystemFaultState
 from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
-from spot_msgs.msg import ManipulatorState
 from spot_msgs.action import NavigateTo, Trajectory
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
-from spot_msgs.srv import ArmJointMovement, GripperAngleMove, ArmForceTrajectory, HandPose
+from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
     
 from .ros_helpers import *
 
@@ -114,16 +113,6 @@ class SpotROS(Node):
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
                               sensor_rate_params=sensor_rate_params))
-        
-        self.declare_parameter('username', 'default_value',
-            ParameterDescriptor(description='Spot computer username.',
-                                type=ParameterType.PARAMETER_STRING,
-                                read_only=True))
-
-        self.declare_parameter('password', 'default_value',
-            ParameterDescriptor(description='Spot computer password.',
-                                type=ParameterType.PARAMETER_STRING,
-                                read_only=True))
         
         self.declare_parameter('hostname', 'default_value',
             ParameterDescriptor(description='Spot computer hostname.',
@@ -261,9 +250,6 @@ class SpotROS(Node):
         # Behavior Faults #
         behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
-
-        manipulator_state_msg = ManipulatorStatesToMsg(state.manipulator_state, self.spot_wrapper)
-        self.manipulator_state_pub.publish(manipulator_state_msg)
 
     def LeaseCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
@@ -769,7 +755,6 @@ class SpotROS(Node):
         self.system_faults_pub = self.create_publisher(SystemFaultState, '~/status/system_faults', 10)
         self.mobility_params_pub = self.create_publisher(MobilityParams, '~/status/mobility_params', 1)
         self.feedback_pub = self.create_publisher(Feedback, '~/status/feedback', qos_profile=latched_qos)
-        self.manipulator_state_pub = self.create_publisher(ManipulatorState, '~/status/manipulator_states', qos_profile=latched_qos)
 
         self.create_subscription(Twist, '~/cmd_vel', self.cmdVelCallback, 10)
         self.create_subscription(Pose, '~/body_pose', self.bodyPoseCallback, 10)
