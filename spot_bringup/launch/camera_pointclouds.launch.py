@@ -95,8 +95,8 @@ def generate_launch_description():
 
         addNodeDescription('hand_mono'  , 'hand')
         addNodeDescription('hand_color' , 'hand/depth_in_color')
-        addNodeDescription('front_left' , 'front_left')
-        addNodeDescription('front_right', 'front_right')
+        addNodeDescription('frontleft'  , 'frontleft')
+        addNodeDescription('frontright' , 'frontright`')
         addNodeDescription('left'       , 'left')
         addNodeDescription('right'      , 'right')
         addNodeDescription('back'       , 'back')
