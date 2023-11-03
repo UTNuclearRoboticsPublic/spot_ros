@@ -236,7 +236,7 @@
     </joint>
 
     <link name="${name}_hand"/>
-    <joint nam="${name}_wrist_to_hand" type="fixed">
+    <joint name="${name}_wrist_to_hand" type="fixed">
         <parent link = "${name}_wrist_roll"/>
         <child  link = "${name}_hand"/>
         <origin xyz = "0.19557 0.0 0.0"/>
