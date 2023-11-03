@@ -278,36 +278,38 @@ class SpotROS(Node):
     def FrontImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new front image data."""
 
-        # [front left image, front right image, front left depth, front right depth]
-        data = self.spot_wrapper.front_images
-
-        if data and len(data) == 4:
-            self.front_left_rgb_pub.process_data(data[0])
-            self.front_right_rgb_pub.process_data(data[1])
-            self.front_left_depth_pub.process_data(data[2])
-            self.front_right_depth_pub.process_data(data[3])
+        for image in self.spot_wrapper.front_images:
+            if image.source.name == "frontleft_fisheye_image":
+                self.front_left_rgb_pub.process_data(image)
+            elif image.source.name == "frontright_fisheye_image":
+                self.front_right_rgb_pub.process_data(image)
+            elif image.source.name == "frontleft_depth":
+                self.front_left_depth_pub.process_data(image)
+            elif image.source.name == "frontright_depth":
+                self.front_right_depth_pub.process_data(image)
 
     def SideImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new side image data."""
 
-        # [left image, right image, left depth, right depth]
-        data = self.spot_wrapper.side_images
-
-        if data and len(data) == 4:
-            self.left_rgb_pub.process_data(data[0])
-            self.right_rgb_pub.process_data(data[1])
-            self.left_depth_pub.process_data(data[2])
-            self.right_depth_pub.process_data(data[3])
+        for image in self.spot_wrapper.side_images:
+            if image.source.name == "left_fisheye_image":
+                self.left_rgb_pub.process_data(image)
+            elif image.source.name == "right_fisheye_image":
+                self.right_rgb_pub.process_data(image)
+            elif image.source.name == "left_depth":
+                self.left_depth_pub.process_data(image)
+            elif image.source.name == "right_depth":
+                self.right_depth_pub.process_data(image)
 
     def RearImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new rear image data."""
 
         # [image, depth]
-        data = self.spot_wrapper.rear_images
-
-        if data and len(data) == 2:
-            self.back_rgb_pub.process_data(data[0])
-            self.back_depth_pub.process_data(data[1])
+        for image in self.spot_wrapper.rear_images:
+            if image.source.name == "back_fisheye_image":
+                self.back_rgb_pub.process_data(image)
+            elif image.source.name == "back_depth":
+                self.back_depth_pub.process_data(image)
 
     def HandImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new hand image data."""
