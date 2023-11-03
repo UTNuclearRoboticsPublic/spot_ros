@@ -309,9 +309,13 @@ class SpotLeaseManager():
         try:
             self._lease_owners.remove(id)
             if len(self._lease_owners) == 0:
-                self.safe_power_off()
-                self._releaseLease()
-                self._releaseEStop() 
+                self.robot.time_sync.stop()
+                powered_off, msg = self.safe_power_off()
+                if powered_off:
+                    self._releaseLease()
+                    self._releaseEStop()
+                else:
+                    self.logger.warn(f"{msg}") 
                 self._is_connected = False
             return True
         except ValueError:
@@ -321,13 +325,14 @@ class SpotLeaseManager():
     def power_on(self) ->  Tuple[bool, Text]:
         """Enable the motor power if e-stop is enabled."""
         try:
-            power.power_on(self._power_client)
+            power.power_on_motors(self._power_client)
             return True, 'Success'
         except Exception as e:
             return False, Text(e)
 
     def safe_power_off(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit if possible.  Once sitting, disable motor power."""
-        self.logger.info("Powering off")
-        response = self.robot_command(RobotCommandBuilder.safe_power_off_command())
-        return response[0], response[1]
+        self.robot.power_off(cut_immediately=False, timeout_sec=20)
+        if self.robot.is_powered_on():
+            return False, "Robot power off failed."
+        return not self.robot.is_powered_on(), "Success"
