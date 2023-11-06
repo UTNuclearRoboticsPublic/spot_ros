@@ -204,7 +204,7 @@ class SpotLeaseManager():
         return True if ID in self._lease_owners else False 
 
     def robot_command(self, command_proto: PB2Message,
-                       end_time_secs: float =None) -> Tuple[bool, Text]:
+                       end_time_secs: float =None) -> Tuple[bool, Text, int]:
         """Generic blocking function for sending commands to robots.
 
         Args:
@@ -217,6 +217,12 @@ class SpotLeaseManager():
             return True, "Success", id
         except Exception as e:
             return False, Text(e), None
+
+    def robot_command_feedback(self, command_id: int):
+        try:
+            return self._robot_command_client.robot_command_feedback(command_id)
+        except RpcError as ex:
+            self.logger.warn(f"{ex}")
 
     def robotToLocalTime(self, timestamp: PB2Timestamp) -> PB2Timestamp:
         """Takes a timestamp and an estimated skew and return seconds and nano seconds
