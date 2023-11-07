@@ -6,6 +6,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup, MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Joy
 from spot_msgs.srv import Dock
+from spot_msgs.msg import Feedback, ManipulatorState
 from std_srvs.srv import Trigger
 
 # Requires the controller switch to be in mode "D"
@@ -35,6 +36,14 @@ class SpotJoyUtils(Node):
     def __init__(self):
         super().__init__("spot_joy_util_node")
 
+        # Robot state
+        self._docked = True
+        self._arm_stowed = True
+        self._sitting = False
+
+        # Subscribe to the feedback topic to monitor dock state
+        self._feedback_sub = self.create_subscription(Feedback, '/spot_driver/status/feedback', self.updateState, 10)
+        self._arm_feedback_sub = self.create_subscription(ManipulatorState, '/follow_joint_trajectory_node/manipulator_state', self.updateArmState, 10)
 
         exclusive_group = MutuallyExclusiveCallbackGroup()
         self.lease_client = self.create_client(Trigger, "/spot_driver/claim", callback_group=exclusive_group)
@@ -43,8 +52,8 @@ class SpotJoyUtils(Node):
         self.power_on_client = self.create_client(Trigger, "/spot_driver/power_on", callback_group=exclusive_group)
         self.stand_client = self.create_client(Trigger, "/spot_driver/stand", callback_group=exclusive_group)
         self.sit_client = self.create_client(Trigger, "/spot_driver/sit", callback_group=exclusive_group)
-        self.unstow_client = self.create_client(Trigger, "/spot_arm_driver/unstow", callback_group=exclusive_group)
-        self.stow_client = self.create_client(Trigger, "/spot_arm_driver/stow", callback_group=exclusive_group)
+        self.unstow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/unstow", callback_group=exclusive_group)
+        self.stow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/stow", callback_group=exclusive_group)
 
         exclusive_group_2 = MutuallyExclusiveCallbackGroup()
         self.loop = self.create_timer(0.2, self.timerCallback, callback_group=exclusive_group_2)
@@ -53,7 +62,14 @@ class SpotJoyUtils(Node):
 
         self.get_logger().info("Spot joy node setup complete")
 
-    def verifyClient(self, client) -> bool:
+    def updateState(self, msg: Feedback):
+        self._docked = msg.docked
+        self._sitting = msg.sitting
+
+    def updateArmState(self, msg: ManipulatorState):
+        self._arm_stowed = (msg.stow_state == ManipulatorState.STOWSTATE_STOWED) 
+        
+    def verifyServer(self, client) -> bool:
         if not client.wait_for_service(1):
             self.get_logger().warn(f"Service for action \"{self.action}\" is not available, cancelling request")
             self.action = None
@@ -67,6 +83,9 @@ class SpotJoyUtils(Node):
         if self.action == "ToggleDock":
             self.get_logger().info("Toggling dock")
             self.toggleDock()
+        elif self.action == "ToggleStand":
+            self.get_logger().info("Toggling stand")
+            self.toggleStand()
 
         else:
             if self.action == "Claim":
@@ -81,9 +100,15 @@ class SpotJoyUtils(Node):
             elif self.action == "PowerOn":
                 self.get_logger().info("Powering on")
                 client = self.power_on_client
+            elif self.action == "ArmStow":
+                self.get_logger().info("Stowing arm")
+                client = self.stow_client
+            elif self.action == "ArmUnstow":
+                self.get_logger().info("Unstowing arm")
+                client = self.unstow_client
 
             if client is not None:
-                if not self.verifyClient(client):
+                if not self.verifyServer(client):
                     return
                 resp = client.call(Trigger.Request())
                 self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
@@ -109,45 +134,56 @@ class SpotJoyUtils(Node):
             self.action = "ToggleDock"
             return
 
-        # If the right trigger is pressed, command the robot to stand
-        if buttons[LogitechButtons.RT.value]:
-            self.action = "Stand"
-            return
-
         # If the left trigger is pressed, command the robot to sit
         if buttons[LogitechButtons.LT.value]:
-            self.action = "Sit"
+            self.action = "ToggleStand"
             return
         
         # If the Y button is pressed, command the robot to power on
         if buttons[LogitechButtons.Y.value]:
             self.action = "PowerOn"
             return
+        
+        # Up on the DPad to unstow the arm
+        if axes[LogitechAxes.DPAD_VERTICAL] == 1.0:
+            self.action = "ArmUnstow"
+            return
+
+        # Down on the DPad to stow the arm
+        if axes[LogitechAxes.DPAD_VERTICAL] == -1.0:
+            self.action = "ArmStow"
+            return
 
         self.action = None
         
-
-    # If docked -> undock. If undocked -> dock
     def toggleDock(self):
+        if not self.verifyServer(self.dock_client) or not self.verifyServer(self.undock_client):
+            self.get_logger.warn("Cannot dock/undock robot, no available server")
+
         # First try to undock. If this fails, try to dock
-        req = Trigger.Request()
-        self.get_logger().info("Trying undock")
-        if not self.verifyClient(self.undock_client):
-            return
-        resp = self.undock_client.call(req)
+        if self._docked:
+            self.get_logger().info("Undocking robot")
+            resp = self.undock_client.call(Trigger.Request())
+            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
-        if not resp.success:
-            self.get_logger().info(f"Cannot undock: {resp.message}. Trying dock")
-            req = Dock.Request()
-            req.dock_id = 520
-            if not self.verifyClient(self.dock_client):
-                return
-            resp = self.dock_client.call(req)
-            self.get_logger().info(f"Dock result: {resp.message}")
         else:
-            self.get_logger().info(f"Successfully undocked: {resp.message}")
+            self.get_logger().info("Docking robot")
+            resp = self.dock_client.call(Trigger.Request())
+            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
-        
+    def toggleStand(self):
+        if not self.verifyServer(self.stand_client) or not self.verifyServer(self.sit_client):
+            self.get_logger.warn("Cannot stand/sit robot, no available server")
+
+        if self._sitting:
+            self.get_logger().info("Standing robot")
+            resp = self.stand_client.call(Trigger.Request())
+            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+
+        else:
+            self.get_logger().info("Standing robot")
+            resp = self.sit_client.call(Trigger.Request())
+            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
 def main():
     rclpy.init()
