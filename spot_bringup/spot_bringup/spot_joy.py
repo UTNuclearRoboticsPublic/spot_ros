@@ -40,6 +40,7 @@ class SpotJoyUtils(Node):
         self._docked = True
         self._arm_stowed = True
         self._sitting = False
+        self._gripper_closed = True
 
         # Subscribe to the feedback topic to monitor dock state
         self._feedback_sub = self.create_subscription(Feedback, '/spot_driver/status/feedback', self.updateState, 10)
@@ -52,8 +53,10 @@ class SpotJoyUtils(Node):
         self.power_on_client = self.create_client(Trigger, "/spot_driver/power_on", callback_group=exclusive_group)
         self.stand_client = self.create_client(Trigger, "/spot_driver/stand", callback_group=exclusive_group)
         self.sit_client = self.create_client(Trigger, "/spot_driver/sit", callback_group=exclusive_group)
-        self.unstow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/unstow", callback_group=exclusive_group)
-        self.stow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/stow", callback_group=exclusive_group)
+        self.unstow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/unstow_arm", callback_group=exclusive_group)
+        self.stow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/stow_arm", callback_group=exclusive_group)
+        self.gripper_open_client = self.create_client(Trigger, "/follow_joint_trajectory_node/open_gripper", callback_group=exclusive_group)
+        self.gripper_close_client = self.create_client(Trigger, "/follow_joint_trajectory_node/close_gripper", callback_group=exclusive_group)
 
         exclusive_group_2 = MutuallyExclusiveCallbackGroup()
         self.loop = self.create_timer(0.2, self.timerCallback, callback_group=exclusive_group_2)
@@ -68,6 +71,7 @@ class SpotJoyUtils(Node):
 
     def updateArmState(self, msg: ManipulatorState):
         self._arm_stowed = (msg.stow_state == ManipulatorState.STOWSTATE_STOWED) 
+        self._gripper_closed = (msg.gripper_open_percentage < 10.0)
         
     def verifyServer(self, client) -> bool:
         if not client.wait_for_service(1):
@@ -86,6 +90,9 @@ class SpotJoyUtils(Node):
         elif self.action == "ToggleStand":
             self.get_logger().info("Toggling stand")
             self.toggleStand()
+        elif self.action == "ToggleGripper":
+            self.get_logger().info("Toggling gripper")
+            self.toggleGripper()
 
         else:
             if self.action == "Claim":
@@ -145,13 +152,18 @@ class SpotJoyUtils(Node):
             return
         
         # Up on the DPad to unstow the arm
-        if axes[LogitechAxes.DPAD_VERTICAL] == 1.0:
+        if axes[LogitechAxes.DPAD_VERTICAL.value] == 1.0:
             self.action = "ArmUnstow"
             return
 
         # Down on the DPad to stow the arm
-        if axes[LogitechAxes.DPAD_VERTICAL] == -1.0:
+        if axes[LogitechAxes.DPAD_VERTICAL.value] == -1.0:
             self.action = "ArmStow"
+            return
+        
+        # X button to toggle the gripper
+        if buttons[LogitechButtons.X.value]:
+            self.action = "ToggleGripper"
             return
 
         self.action = None
@@ -168,7 +180,7 @@ class SpotJoyUtils(Node):
 
         else:
             self.get_logger().info("Docking robot")
-            resp = self.dock_client.call(Trigger.Request())
+            resp = self.dock_client.call(Dock.Request(dock_id=520))
             self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
     def toggleStand(self):
@@ -181,8 +193,22 @@ class SpotJoyUtils(Node):
             self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
         else:
-            self.get_logger().info("Standing robot")
+            self.get_logger().info("Sitting robot")
             resp = self.sit_client.call(Trigger.Request())
+            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+
+    def toggleGripper(self):
+        if not self.verifyServer(self.gripper_open_client) or not self.verifyServer(self.gripper_close_client):
+            self.get_logger.warn("Cannot open/close gripper, no available server")
+
+        if self._gripper_closed:
+            self.get_logger().info("Opening Gripper")
+            resp = self.gripper_open_client.call(Trigger.Request())
+            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+
+        else:
+            self.get_logger().info("Closing Gripper")
+            resp = self.gripper_close_client.call(Trigger.Request())
             self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
 def main():
