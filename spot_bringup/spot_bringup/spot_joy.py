@@ -44,7 +44,7 @@ class SpotJoyUtils(Node):
 
         # Subscribe to the feedback topic to monitor dock state
         self._feedback_sub = self.create_subscription(Feedback, '/spot_driver/status/feedback', self.updateState, 10)
-        self._arm_feedback_sub = self.create_subscription(ManipulatorState, '/follow_joint_trajectory_node/manipulator_state', self.updateArmState, 10)
+        self._arm_feedback_sub = self.create_subscription(ManipulatorState, '/spot_manipulation_driver/manipulator_state', self.updateArmState, 10)
 
         exclusive_group = MutuallyExclusiveCallbackGroup()
         self.lease_client = self.create_client(Trigger, "/spot_driver/claim", callback_group=exclusive_group)
@@ -53,10 +53,10 @@ class SpotJoyUtils(Node):
         self.power_on_client = self.create_client(Trigger, "/spot_driver/power_on", callback_group=exclusive_group)
         self.stand_client = self.create_client(Trigger, "/spot_driver/stand", callback_group=exclusive_group)
         self.sit_client = self.create_client(Trigger, "/spot_driver/sit", callback_group=exclusive_group)
-        self.unstow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/unstow_arm", callback_group=exclusive_group)
-        self.stow_client = self.create_client(Trigger, "/follow_joint_trajectory_node/stow_arm", callback_group=exclusive_group)
-        self.gripper_open_client = self.create_client(Trigger, "/follow_joint_trajectory_node/open_gripper", callback_group=exclusive_group)
-        self.gripper_close_client = self.create_client(Trigger, "/follow_joint_trajectory_node/close_gripper", callback_group=exclusive_group)
+        self.unstow_client = self.create_client(Trigger, "/spot_manipulation_driver/unstow_arm", callback_group=exclusive_group)
+        self.stow_client = self.create_client(Trigger, "/spot_manipulation_driver/stow_arm", callback_group=exclusive_group)
+        self.gripper_open_client = self.create_client(Trigger, "/spot_manipulation_driver/open_gripper", callback_group=exclusive_group)
+        self.gripper_close_client = self.create_client(Trigger, "/spot_manipulation_driver/close_gripper", callback_group=exclusive_group)
 
         exclusive_group_2 = MutuallyExclusiveCallbackGroup()
         self.loop = self.create_timer(0.2, self.timerCallback, callback_group=exclusive_group_2)
