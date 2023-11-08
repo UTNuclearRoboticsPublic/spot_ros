@@ -37,7 +37,7 @@ from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
 from bosdyn.client.power import PowerClient
 from bosdyn.client.robot_state import RobotStateClient
-from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
+from bosdyn.client.robot_command import RobotCommandClient
 from bosdyn.client.robot_id import RobotIdClient
 import bosdyn.client.util
 from bosdyn.util import seconds_to_duration
@@ -120,7 +120,7 @@ class SpotLeaseManager():
         self.logger.info("Starting robot clients")
         try:
             self._robot_state_client: RobotStateClient = self._robot.ensure_client(RobotStateClient.default_service_name)
-            self._robot_command_client = self._robot.ensure_client(RobotCommandClient.default_service_name)
+            self._robot_command_client: RobotCommandClient = self._robot.ensure_client(RobotCommandClient.default_service_name)
             self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
             self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
             self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
@@ -205,7 +205,7 @@ class SpotLeaseManager():
 
     def robot_command(self, command_proto: PB2Message,
                        end_time_secs: float =None) -> Tuple[bool, Text, int]:
-        """Generic blocking function for sending commands to robots.
+        """Generic non blocking function for sending commands to robots.
 
         Args:
             command_proto: robot_command_pb2 protobuf message to send to the robot.
