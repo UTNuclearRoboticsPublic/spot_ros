@@ -1,5 +1,6 @@
 from enum import Enum
 
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -191,11 +192,13 @@ class SpotJoyUtils(Node):
             self.get_logger().info("Standing robot")
             resp = self.stand_client.call(Trigger.Request())
             self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            time.sleep(2.0)
 
         else:
             self.get_logger().info("Sitting robot")
             resp = self.sit_client.call(Trigger.Request())
             self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            time.sleep(2.0)
 
     def toggleGripper(self):
         if not self.verifyServer(self.gripper_open_client) or not self.verifyServer(self.gripper_close_client):
