@@ -210,4 +210,4 @@ class AsyncIdle(AsyncPeriodicQuery):
                     and self._spot_wrapper._last_stand_command is not None
                     and self._spot_wrapper._last_velocity_command_time is not None
                     and self._spot_wrapper._last_docking_command is not None):            
-            self._spot_wrapper.stand(False)
+            self._spot_wrapper.stand(True)
