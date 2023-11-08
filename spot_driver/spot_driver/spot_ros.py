@@ -699,7 +699,7 @@ class SpotROS(Node):
 
         # Verify connection
         if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
-            self.get_logger().info('Connected to Spot ')# + self.spot_wrapper.id.nickname + '...')
+            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.robot_id.nickname + '...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
@@ -917,14 +917,13 @@ class SpotROS(Node):
         feedback_msg.sitting  = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
         feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
-        # robot_id = self.spot_wrapper.robot_id
-        id = None
-        if id:
-            feedback_msg.serial_number = id.serial_number
-            feedback_msg.species = id.species
-            feedback_msg.version = id.version
-            feedback_msg.nickname = id.nickname
-            feedback_msg.computer_serial_number = id.computer_serial_number
+        robot_id = self.spot_wrapper.robot_id
+        if robot_id:
+            feedback_msg.serial_number = robot_id.serial_number
+            feedback_msg.species = robot_id.species
+            feedback_msg.version = robot_id.version
+            feedback_msg.nickname = robot_id.nickname
+            feedback_msg.computer_serial_number = robot_id.computer_serial_number
         self.feedback_pub.publish(feedback_msg)
 
         # publish mobility state
