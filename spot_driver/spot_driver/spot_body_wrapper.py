@@ -28,27 +28,17 @@
 from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import (image_pb2, header_pb2, geometry_pb2, trajectory_pb2, 
-                        arm_command_pb2, gripper_command_pb2, synchronized_command_pb2)
+from bosdyn.api import image_pb2, header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
-from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
-from bosdyn.client.auth import AuthResponseError
 from bosdyn.client.async_tasks import AsyncTasks
-from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.image import ImageClient, build_image_request
-from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
-from bosdyn.client.power import PowerClient
 from bosdyn.client.spot_cam.audio import AudioClient
-from bosdyn.client.robot_state import RobotStateClient
-from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder
-from bosdyn.client.robot_id import RobotIdClient
-import bosdyn.client.util
-from bosdyn.util import seconds_to_duration
+from bosdyn.client.robot_command import RobotCommandBuilder
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
@@ -66,6 +56,7 @@ class SpotBodyWrapper():
         self._has_cam_payload = has_cam_payload
         self._lease_manager = None
 
+        self._robot_id = None
         self._is_sitting = True
         self._is_standing = False
         self._mobility_params = RobotCommandBuilder.mobility_params()
@@ -89,6 +80,7 @@ class SpotBodyWrapper():
             if not self._lease_manager.connect(self._hostname, rates, callbacks):
                 return False
 
+        self._robot_id = self._lease_manager.ID
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
         side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
         rear_image_sources = {'back_fisheye_image', 'back_depth'}
@@ -150,11 +142,8 @@ class SpotBodyWrapper():
 
     @property
     def robot_id(self):
-        """Return robot's ID"""
-        if not self._is_connected:
-            return None
-            
-        return self._lease_manager.robot.get_id()
+        """Return robot's ID"""   
+        return self._robot_id
 
     @property
     def robot_state(self):
@@ -258,7 +247,9 @@ class SpotBodyWrapper():
 
     def sit(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit down if able."""
-        # self.arm_stow()
+        if self._lease_manager.robot.has_arm():
+            self._lease_manager.robot_command(RobotCommandBuilder.arm_stow_command())
+
         success, msg, cmd_id = self._lease_manager.robot_command(RobotCommandBuilder.synchro_sit_command())
         self._last_sit_command = cmd_id
         return success, msg
