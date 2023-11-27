@@ -1,13 +1,19 @@
 /spot_driver:
   ros__parameters:
-  /rates:
-    robot_state: 20.0
-    metrics: 0.04
-    lease: 1.0
-    front_image: 10.0
-    side_image: 10.0
-    rear_image: 10.0
-    hand_image: 10.0
-  auto_claim: false
-  auto_power_on: false
-  auto_stand: false
+    has_eap: true
+    has_arm: true
+    auto_claim: false
+    auto_power_on: false
+    auto_stand: false
+
+    rates:
+      sensors:
+        front_image: 10.0
+        side_image: 10.0
+        rear_image: 10.0
+      status:
+        robot_state: 20.0
+        lease: 1.0
+    
+    estop_timeout: 9.0
+    odom_mode: vision

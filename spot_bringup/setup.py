@@ -1,8 +1,8 @@
 import os
 from glob import glob
-from setuptools import setup
+from setuptools import setup, find_packages
 
-package_name = 'spot_driver'
+package_name = 'spot_bringup'
 
 setup(
     name=package_name,
@@ -13,26 +13,25 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*launch.py')),
-        (os.path.join('share', package_name, 'config'), glob('config/*.yaml'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
     author='Dave Niewinski',
     author_email='dniewinski@clearpathrobotics.com',
-    maintainer='Austin Deric',
-    maintainer_email='Austin.Deric@gmail.com',
-    keywords=['ROS2'],
+    maintainer='Alex Navarro',
+    maintainer_email='alexnavtt@utexas.edu',
     classifiers=[
         'Intended Audience :: Developers',
         'License :: Proprietary',
         'Programming Language :: Python',
     ],
-    description='The spot_driver package',
+    description='The spot_bringup package',
     license='BSD',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'driver = spot_driver.spot_driver:main'
+            'driver_combined = spot_bringup.driver_combined:main',
+            'spot_joy = spot_bringup.spot_joy:main'
         ],
     },
 )

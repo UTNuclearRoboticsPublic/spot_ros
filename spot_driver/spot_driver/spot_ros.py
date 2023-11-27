@@ -54,6 +54,9 @@ from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
 
+from .spot_lease_manager import SpotLeaseManager
+from .spot_body_wrapper import SpotBodyWrapper
+
 import functools
 import tf2_ros
 
@@ -67,11 +70,10 @@ from spot_msgs.msg import SystemFaultState
 from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
-from spot_msgs.msg import ManipulatorState
 from spot_msgs.action import NavigateTo, Trajectory
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
-from spot_msgs.srv import ArmJointMovement, GripperAngleMove, ArmForceTrajectory, HandPose
+from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
     
 from .ros_helpers import *
 
@@ -80,7 +82,7 @@ class SpotROS(Node):
 
     """ Inner class for managing camera publishing """
     class CameraPubs():
-        def __init__(self, parent, namespace: str):
+        def __init__(self, parent: Node, namespace: str):
             self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
             self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
             self.spot_wrapper = parent.spot_wrapper
@@ -111,16 +113,6 @@ class SpotROS(Node):
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
                               sensor_rate_params=sensor_rate_params))
-        
-        self.declare_parameter('username', 'default_value',
-            ParameterDescriptor(description='Spot computer username.',
-                                type=ParameterType.PARAMETER_STRING,
-                                read_only=True))
-
-        self.declare_parameter('password', 'default_value',
-            ParameterDescriptor(description='Spot computer password.',
-                                type=ParameterType.PARAMETER_STRING,
-                                read_only=True))
         
         self.declare_parameter('hostname', 'default_value',
             ParameterDescriptor(description='Spot computer hostname.',
@@ -193,7 +185,7 @@ class SpotROS(Node):
         if not self.spot_wrapper.is_connected:
             return
 
-        if not self.spot_wrapper.is_sitting:
+        if self.spot_wrapper.is_standing:
             print('Spot sitting down...')
             is_sitting, message = self.spot_wrapper.sit()
         
@@ -202,7 +194,7 @@ class SpotROS(Node):
                 return
 
         print('Shutting down ROS driver for Spot')
-        self.spot_wrapper.disconnect()
+        self.spot_wrapper.release()
 
     def RobotStateCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new robot state data."""
@@ -259,9 +251,6 @@ class SpotROS(Node):
         behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
-        manipulator_state_msg = ManipulatorStatesToMsg(state.manipulator_state, self.spot_wrapper)
-        self.manipulator_state_pub.publish(manipulator_state_msg)
-
     def LeaseCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
         lease_array_msg = LeaseArray()
@@ -289,36 +278,38 @@ class SpotROS(Node):
     def FrontImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new front image data."""
 
-        # [front left image, front right image, front left depth, front right depth]
-        data = self.spot_wrapper.front_images
-
-        if data and len(data) == 4:
-            self.front_left_rgb_pub.process_data(data[0])
-            self.front_right_rgb_pub.process_data(data[1])
-            self.front_left_depth_pub.process_data(data[2])
-            self.front_right_depth_pub.process_data(data[3])
+        for image in self.spot_wrapper.front_images:
+            if image.source.name == "frontleft_fisheye_image":
+                self.front_left_rgb_pub.process_data(image)
+            elif image.source.name == "frontright_fisheye_image":
+                self.front_right_rgb_pub.process_data(image)
+            elif image.source.name == "frontleft_depth":
+                self.front_left_depth_pub.process_data(image)
+            elif image.source.name == "frontright_depth":
+                self.front_right_depth_pub.process_data(image)
 
     def SideImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new side image data."""
 
-        # [left image, right image, left depth, right depth]
-        data = self.spot_wrapper.side_images
-
-        if data and len(data) == 4:
-            self.left_rgb_pub.process_data(data[0])
-            self.right_rgb_pub.process_data(data[1])
-            self.left_depth_pub.process_data(data[2])
-            self.right_depth_pub.process_data(data[3])
+        for image in self.spot_wrapper.side_images:
+            if image.source.name == "left_fisheye_image":
+                self.left_rgb_pub.process_data(image)
+            elif image.source.name == "right_fisheye_image":
+                self.right_rgb_pub.process_data(image)
+            elif image.source.name == "left_depth":
+                self.left_depth_pub.process_data(image)
+            elif image.source.name == "right_depth":
+                self.right_depth_pub.process_data(image)
 
     def RearImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new rear image data."""
 
         # [image, depth]
-        data = self.spot_wrapper.rear_images
-
-        if data and len(data) == 2:
-            self.back_rgb_pub.process_data(data[0])
-            self.back_depth_pub.process_data(data[1])
+        for image in self.spot_wrapper.rear_images:
+            if image.source.name == "back_fisheye_image":
+                self.back_rgb_pub.process_data(image)
+            elif image.source.name == "back_depth":
+                self.back_depth_pub.process_data(image)
 
     def HandImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new hand image data."""
@@ -337,8 +328,7 @@ class SpotROS(Node):
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
-        print('Debug 1')
-        res.success, res.message = self.spot_wrapper.claim()
+        res.success = self.spot_wrapper.claim()
         return res
 
     def handle_release(self, _, res: Trigger.Response) -> Trigger.Response:
@@ -387,13 +377,13 @@ class SpotROS(Node):
         """ROS service handler for the power-on service"""
         res.success, res.message = self.spot_wrapper.power_on()
         if res.success:
-            res.message = 'Powered on Spot robot ' + self.spot_wrapper.id.nickname
+            res.message = 'Powered on Spot robot ' + self.spot_wrapper.robot_id.nickname
         return res
 
-    def handle_safe_power_off(self, _) -> Trigger.Response:
+    def handle_safe_power_off(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler for the safe-power-off service"""
-        resp = self.spot_wrapper.safe_power_off()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.power_off()
+        return res
 
     def handle_estop_hard(self, _) -> Trigger.Response:
         """ROS service handler to hard-eStop the robot.  The robot will immediately cut power to the motors"""
@@ -680,7 +670,7 @@ class SpotROS(Node):
 
 ######
 
-    def connect(self) -> bool:
+    def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
             Main function for the SpotROS class.
             Gets config from ROS and initializes the wrapper.
@@ -700,20 +690,16 @@ class SpotROS(Node):
         has_cam_payload = self.get_parameter('has_cam_payload').value
 
         # Connect to the robot
-        self.spot_wrapper = SpotWrapper(has_cam_payload)
+        # self.spot_wrapper = SpotWrapper(has_cam_payload)
+        self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_cam_payload)
 
         # Dictionary of all param values in the 'rates' namespace
         rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
         self.get_logger().info(f"Rates: {rates_dict}")
 
         # Verify connection
-        if self.spot_wrapper.connect(self.get_logger(),
-                                     #self.get_parameter('username').value, 
-                                     #self.get_parameter('password').value,
-                                     self.get_parameter('hostname').value,
-                                     rates_dict,
-                                     callbacks):
-            self.get_logger().info('Connected to Spot ')# + self.spot_wrapper.id.nickname + '...')
+        if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
+            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.robot_id.nickname + '...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
@@ -738,8 +724,8 @@ class SpotROS(Node):
         self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
         self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
         self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
-        self.hand_rgb_pub = self.CameraPubs(self, 'rgb/hand_color')
-        self.hand_mono_rgb_pub = self.CameraPubs(self, 'rgb/hand_mono')
+        # self.hand_rgb_pub = self.CameraPubs(self, 'rgb/hand_color')
+        # self.hand_mono_rgb_pub = self.CameraPubs(self, 'rgb/hand_mono')
 
         # Depth Images
         self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
@@ -747,8 +733,8 @@ class SpotROS(Node):
         self.left_depth_pub = self.CameraPubs(self, 'depth/left')
         self.right_depth_pub = self.CameraPubs(self, 'depth/right')
         self.back_depth_pub = self.CameraPubs(self, 'depth/back')
-        self.hand_depth_pub = self.CameraPubs(self, 'depth/hand')
-        self.hand_depth_in_color_pub = self.CameraPubs(self, 'depth/hand/depth_in_color')
+        # self.hand_depth_pub = self.CameraPubs(self, 'depth/hand')
+        # self.hand_depth_in_color_pub = self.CameraPubs(self, 'depth/hand/depth_in_color')
 
         ## Status Publishers
         # QoS to use for latched publishers
@@ -757,7 +743,7 @@ class SpotROS(Node):
                                  depth=1,
                                  reliability=QoSReliabilityPolicy.RELIABLE)
 
-        self.joint_state_pub = self.create_publisher(JointState, 'joint_states', 1)
+        self.joint_state_pub = self.create_publisher(JointState, '~/joint_states', 1)
         self.dock_state_pub = self.create_publisher(DockState, '~/status/dock_state', qos_profile=latched_qos)
         self.lease_pub = self.create_publisher(LeaseArray, '~/status/leases', 1)
         self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist', 1)
@@ -771,7 +757,6 @@ class SpotROS(Node):
         self.system_faults_pub = self.create_publisher(SystemFaultState, '~/status/system_faults', 10)
         self.mobility_params_pub = self.create_publisher(MobilityParams, '~/status/mobility_params', 1)
         self.feedback_pub = self.create_publisher(Feedback, '~/status/feedback', qos_profile=latched_qos)
-        self.manipulator_state_pub = self.create_publisher(ManipulatorState, '~/status/manipulator_states', qos_profile=latched_qos)
 
         self.create_subscription(Twist, '~/cmd_vel', self.cmdVelCallback, 10)
         self.create_subscription(Pose, '~/body_pose', self.bodyPoseCallback, 10)
@@ -802,12 +787,12 @@ class SpotROS(Node):
         self.create_service(Trigger, '~/undock', self.handle_undock, callback_group=srv_group)
 
         # Arm
-        self.create_service(Trigger, '~/arm/stow', self.handle_arm_stow, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/unstow', self.handle_arm_unstow, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/carry', self.handle_arm_carry, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/gripper_open', self.handle_gripper_open, callback_group=srv_group)
-        self.create_service(Trigger, '~/arm/gripper_close', self.handle_gripper_close, callback_group=srv_group)
-        self.create_service(GripperAngleMove, '~/arm/gripper_angle_open', self.handle_gripper_angle_open, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/stow', self.handle_arm_stow, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/unstow', self.handle_arm_unstow, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/carry', self.handle_arm_carry, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/gripper_open', self.handle_gripper_open, callback_group=srv_group)
+        # self.create_service(Trigger, '~/arm/gripper_close', self.handle_gripper_close, callback_group=srv_group)
+        # self.create_service(GripperAngleMove, '~/arm/gripper_angle_open', self.handle_gripper_angle_open, callback_group=srv_group)
 
         self._navigate_to_server = rclpy.action.ActionServer(
                 self,
@@ -830,9 +815,9 @@ class SpotROS(Node):
             # TODO: Handle the case of no arm (i.e. arm images will never appear)
             while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
                   not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
-                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) or\
-                  not (self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
+                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
                   rclpy.utilities.ok():
+                #   not (self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
                 self.spot_wrapper.updateSensorTasks()
 
             static_tfs = []
@@ -853,12 +838,12 @@ class SpotROS(Node):
             static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
             static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-            if self.spot_wrapper.hand_images is not None:
-                data = self.spot_wrapper.hand_images
-                static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-                static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-                static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-                static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
+            # if self.spot_wrapper.hand_images is not None:
+            #     data = self.spot_wrapper.hand_images
+            #     static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+            #     static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
             self.static_broadcaster.sendTransform(static_tfs)                
         
@@ -923,21 +908,22 @@ class SpotROS(Node):
             return
 
         # call state periodic tasks
-        self.spot_wrapper.updateStatusTasks()
+        self.spot_wrapper.updateIdleTasks()
+        self.spot_wrapper.updateStateTasks()
 
         # publish robot feedback state
         feedback_msg = Feedback()
         feedback_msg.standing = self.spot_wrapper.is_standing
-        feedback_msg.sitting = self.spot_wrapper.is_sitting
+        feedback_msg.sitting  = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
-        # id = self.spot_wrapper.id
-        id = None
-        if id:
-            feedback_msg.serial_number = id.serial_number
-            feedback_msg.species = id.species
-            feedback_msg.version = id.version
-            feedback_msg.nickname = id.nickname
-            feedback_msg.computer_serial_number = id.computer_serial_number
+        feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
+        robot_id = self.spot_wrapper.robot_id
+        if robot_id:
+            feedback_msg.serial_number = robot_id.serial_number
+            feedback_msg.species = robot_id.species
+            feedback_msg.version = robot_id.version
+            feedback_msg.nickname = robot_id.nickname
+            feedback_msg.computer_serial_number = robot_id.computer_serial_number
         self.feedback_pub.publish(feedback_msg)
 
         # publish mobility state

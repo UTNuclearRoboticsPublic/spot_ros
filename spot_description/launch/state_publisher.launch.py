@@ -47,6 +47,9 @@ def generate_launch_description():
                parameters=[{
                     'robot_description': urdf_param,
                     'use_sim_time': use_sim_time
-               }]
+               }],
+               remappings=[
+                   ('joint_states', '/spot_driver/joint_states')
+               ]
             )
     ])

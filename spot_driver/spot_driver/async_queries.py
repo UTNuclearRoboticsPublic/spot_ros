@@ -155,7 +155,7 @@ class AsyncIdle(AsyncPeriodicQuery):
                 else:
                     self._spot_wrapper._is_standing = False
             except (ResponseError, RpcError) as e:
-                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._logger.error(f"Error when getting robot command feedback: {e}")
                 self._spot_wrapper._last_stand_command = None
 
         if self._spot_wrapper._last_sit_command != None:
@@ -169,7 +169,7 @@ class AsyncIdle(AsyncPeriodicQuery):
                 else:
                     self._spot_wrapper._is_sitting = False
             except (ResponseError, RpcError) as e:
-                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._logger.error(f"Error when getting robot command feedback: {e}")
                 self._spot_wrapper._last_sit_command = None
 
         is_moving = False
@@ -200,7 +200,7 @@ class AsyncIdle(AsyncPeriodicQuery):
                 else:
                     self._spot_wrapper._last_trajectory_command = None
             except (ResponseError, RpcError) as e:
-                self._logger.error("Error when getting robot command feedback: %s", e)
+                self._logger.error(f"Error when getting robot command feedback: {e}")
                 self._spot_wrapper._last_trajectory_command = None
 
         self._spot_wrapper._is_moving = is_moving
@@ -210,4 +210,4 @@ class AsyncIdle(AsyncPeriodicQuery):
                     and self._spot_wrapper._last_stand_command is not None
                     and self._spot_wrapper._last_velocity_command_time is not None
                     and self._spot_wrapper._last_docking_command is not None):            
-            self._spot_wrapper.stand(False)
+            self._spot_wrapper.stand(True)

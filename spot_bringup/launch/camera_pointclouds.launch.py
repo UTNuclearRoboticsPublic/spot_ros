@@ -17,19 +17,19 @@ def generate_launch_description():
                             description='Whether to include color in pointclouds',
                             default_value='True'),
 
-        DeclareLaunchArgument('hand_color', 
+        DeclareLaunchArgument('hand_4k', 
                             description='Whether to publish hand color pointcloud',
                             default_value='False'),
 
-        DeclareLaunchArgument('hand_mono', 
+        DeclareLaunchArgument('hand', 
                             description='Whether to publish hand mono pointcloud',
                             default_value='False'),
 
-        DeclareLaunchArgument('front_left',
+        DeclareLaunchArgument('frontleft',
                             description='Whether to publish front left camera pointcloud',
                             default_value='False'),
 
-        DeclareLaunchArgument('front_right', 
+        DeclareLaunchArgument('frontright', 
                             description='Whether to publish front right camera pointcloud',
                             default_value='False'),
 
@@ -51,7 +51,10 @@ def generate_launch_description():
 
         DeclareLaunchArgument('container',
                             description='Composition container in which to launch depth_image_proc nodes. If not set a new container will be created',
-                            default_value='__new_container__')
+                            default_value='__new_container__'),
+
+        DeclareLaunchArgument('use_sim_time',
+                            default_value='False')
     ]
 
     container = LaunchConfiguration('container')
@@ -69,31 +72,35 @@ def generate_launch_description():
 
         # Factory function for adding nodes to launched based on the Launch Configuration
         node_descriptions = []
-        def addNodeDescription(camera_ns: str, depth_ns: str) -> None:
-            if IfCondition(LaunchConfiguration(camera_ns)).evaluate(context) or IfCondition(LaunchConfiguration('all')).evaluate(context):
+        def addNodeDescription(base_ns: str, topic_ns: str, depth_ns: str) -> None:
+            if IfCondition(LaunchConfiguration(topic_ns)).evaluate(context) or IfCondition(LaunchConfiguration('all')).evaluate(context):
                 node_descriptions.append(
                     ComposableNode(
                         package='depth_image_proc',
                         plugin=plugin_name,
-                        name=f'{camera_ns}_cloud',
-                        remappings=[
-                            ('points',                      f'{camera_ns}_points{output_suffix}'),
-                            ('image_rect',                  f'/spot_driver/depth/{depth_ns}/image'),
-                            ('camera_info',                 f'/spot_driver/depth/{depth_ns}/camera_info'),
-                            ('rgb/camera_info',             f'/spot_driver/rgb/{camera_ns}/camera_info'),
-                            ('rgb/image_rect_color',        f'/spot_driver/rgb/{camera_ns}/image'),
-                            ('depth_registered/image_rect', f'/spot_driver/depth/{depth_ns}/image'),
+                        name=f'{topic_ns}_cloud',
+                        parameters=[
+                            {'use_sim_time': LaunchConfiguration('use_sim_time')}
                         ],
-                        extra_arguments=[{'use_intra_process_comms': True}],            )
+                        remappings=[
+                            ('points',                      f'{topic_ns}_points{output_suffix}'),
+                            ('image_rect',                  f'/{base_ns}/depth/{depth_ns}/image'),
+                            ('camera_info',                 f'/{base_ns}/depth/{depth_ns}/camera_info'),
+                            ('rgb/camera_info',             f'/{base_ns}/rgb/{depth_ns}/camera_info'),
+                            ('rgb/image_rect_color',        f'/{base_ns}/rgb/{depth_ns}/image'),
+                            ('depth_registered/image_rect', f'/{base_ns}/depth/{depth_ns}/image'),
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}],            
+                    )
                 )
 
-        addNodeDescription('hand_mono'  , 'hand')
-        addNodeDescription('hand_color' , 'hand/depth_in_color')
-        addNodeDescription('front_left' , 'front_left')
-        addNodeDescription('front_right', 'front_right')
-        addNodeDescription('left'       , 'left')
-        addNodeDescription('right'      , 'right')
-        addNodeDescription('back'       , 'back')
+        addNodeDescription('spot_driver', 'frontleft'  , 'frontleft')
+        addNodeDescription('spot_driver', 'frontright' , 'frontright')
+        addNodeDescription('spot_driver', 'left'       , 'left')
+        addNodeDescription('spot_driver', 'right'      , 'right')
+        addNodeDescription('spot_driver', 'back'       , 'back')
+        addNodeDescription('spot_manipulation_driver', 'hand'   , 'tof')
+        addNodeDescription('spot_manipulation_driver', 'hand_4k', 'camera')
 
         # If we need to create a new container, do so
         new_container = ComposableNodeContainer(

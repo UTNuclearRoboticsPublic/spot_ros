@@ -1,4 +1,6 @@
 from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.conditions import IfCondition
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
@@ -9,10 +11,6 @@ def generate_launch_description():
     launch_args = [
 
         # Robot-specific configuration
-        DeclareLaunchArgument('username',
-                            default_value='no_value'),
-        DeclareLaunchArgument('password',
-                            default_value='no_value'),
         DeclareLaunchArgument('hostname',
                             default_value='no_value'),
         DeclareLaunchArgument('has_eap',
@@ -34,27 +32,39 @@ def generate_launch_description():
                             default_value='False')
     ]
 
-    has_eap = LaunchConfiguration('has_eap')
-    has_arm = LaunchConfiguration('has_arm')
+    has_eap       = LaunchConfiguration('has_eap')
+    has_arm       = LaunchConfiguration('has_arm')
+    auto_claim    = LaunchConfiguration('auto_claim')
+    auto_power_on = LaunchConfiguration('auto_power_on')
+    auto_stand    = LaunchConfiguration('auto_stand')
 
-    camera_fps = 10.0
+    body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
+    arm_params  = PathJoinSubstitution([FindPackageShare('spot_manipulation_driver'), 'config', 'spot_arm.yaml'])
 
     ## Robot bringup
     driver_include = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 PathJoinSubstitution([FindPackageShare('spot_driver'), 'launch', 'driver.launch.py'])),
             launch_arguments=
-                {'username':      LaunchConfiguration('username'),
-                 'password':      LaunchConfiguration('password'),
-                 'hostname':      LaunchConfiguration('hostname'),
+                {'hostname':      LaunchConfiguration('hostname'),
                  'has_eap':       has_eap,
                  'has_arm':       has_arm,
-                 'auto_claim':    LaunchConfiguration('auto_claim'),
-                 'auto_power_on': LaunchConfiguration('auto_power_on'),
-                 'auto_stand':    LaunchConfiguration('auto_stand'),
-                 'camera_fps':    TextSubstitution(text=str(camera_fps))
+                 'auto_claim':    auto_claim,
+                 'auto_power_on': auto_power_on,
+                 'auto_stand':    auto_stand,
                 }.items()
             )
+
+    combined_driver = Node(
+        condition=IfCondition(has_arm),
+        package='spot_manipulation_driver',
+        executable='combined_driver_node',
+        parameters=[
+            {'hostname': LaunchConfiguration('hostname')},
+            body_params,
+            arm_params
+        ]
+    )
 
     # State publisher
     state_publisher_include = IncludeLaunchDescription(
@@ -69,6 +79,7 @@ def generate_launch_description():
                         'has_eap': has_eap}.items()
     )
 
+    # Realsense
     realsense_include = IncludeLaunchDescription(
         launch_description_source = PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -83,10 +94,39 @@ def generate_launch_description():
         }.items()
     )
 
+    # Teleop 
+    teleop_twist_joy_node = Node(
+        package='teleop_twist_joy',
+        executable='teleop_node',
+        name='spot_teleop_node',
+        parameters=[
+            {'require_enable_button': True},
+            {'enable_button': 4},
+            {'axis_linear.x': 1},
+            {'axis_linear.y': 0},
+            {'scale_linear.x': 0.5},
+            {'scale_linear.y': 0.5},
+            {'axis_angular.yaw': 2},
+            {'scale_angular.yaw': 0.5}
+        ],
+        remappings=[
+            ('cmd_vel', '/spot_driver/cmd_vel')
+        ]
+    )
+
+    spot_joy_node = Node(
+        package='spot_bringup',
+        executable='spot_joy',
+        name='spot_joy_node',
+    )
+
     ## Launch
     return LaunchDescription([
         *launch_args,
         driver_include,
+        combined_driver,
         state_publisher_include,
-        realsense_include
+        realsense_include,
+        teleop_twist_joy_node,
+        spot_joy_node
     ])
