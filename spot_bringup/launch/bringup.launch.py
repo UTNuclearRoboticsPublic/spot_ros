@@ -95,6 +95,12 @@ def generate_launch_description():
     )
 
     # Teleop 
+    joy_node = Node(
+        package='joy_linux',
+        executable='joy_linux_node',
+        name='joy_node'
+    )
+
     teleop_twist_joy_node = Node(
         package='teleop_twist_joy',
         executable='teleop_node',
@@ -127,6 +133,7 @@ def generate_launch_description():
         combined_driver,
         state_publisher_include,
         realsense_include,
+        joy_node,
         teleop_twist_joy_node,
         spot_joy_node
     ])
