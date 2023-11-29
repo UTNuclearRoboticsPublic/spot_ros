@@ -32,6 +32,7 @@ from bosdyn.api import image_pb2, header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
+from bosdyn.api import mobility_command_pb2
 
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
@@ -293,20 +294,20 @@ class SpotBodyWrapper():
         return state
 
     def set_mobility_params(self,
-                            body_height: float = 0.0,
+                            body_height_offset: float = 0.0,
                             footprint_R_body: EulerZXY = EulerZXY(),
-                            locomotion_hint: int = 1,
+                            locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
                             external_force_params: robot_command_pb2.BodyExternalForceParams = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
-            body_height: Body height in meters
-            footprint_R_body: (EulerZXY) – The orientation of the body frame with respect to the footprint frame (gravity aligned framed with yaw computed from the stance feet)
+            body_height: Body height offset from nominal position in meters
+            footprint_R_body: (EulerZXY) - The orientation of the body frame with respect to the footprint frame (gravity aligned framed with yaw computed from the stance feet)
             locomotion_hint: Locomotion hint
             stair_hint: Boolean to define stair motion
         """
-        self._mobility_params = RobotCommandBuilder.mobility_params(body_height, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
+        self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
     def get_mobility_params(self) -> robot_command_pb2.MobilityParams:
         """Get mobility params

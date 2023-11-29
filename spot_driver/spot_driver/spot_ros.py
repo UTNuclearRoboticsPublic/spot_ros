@@ -49,10 +49,12 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo
 from std_srvs.srv import Trigger, SetBool
 
+from google.protobuf import duration_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
+from bosdyn.geometry import to_euler_zxy
 
 from .spot_lease_manager import SpotLeaseManager
 from .spot_body_wrapper import SpotBodyWrapper
@@ -509,22 +511,19 @@ class SpotROS(Node):
         # We timed out
         self.trajectory_server.set_aborted(Trajectory.Result(False, "Failed to reach goal"))
 
-    def cmdVelCallback(self, data) -> None:
+    def cmdVelCallback(self, data: Twist) -> None:
         """Callback for cmd_vel command"""
         self.spot_wrapper.velocity_cmd(data.linear.x, data.linear.y, data.angular.z)
 
-    def bodyPoseCallback(self, data) -> None:
+    def bodyPoseCallback(self, data: Pose) -> None:
         """Callback for cmd_vel command"""
-        q = data.orientation
-        position = geometry_pb2.Vec3(z=data.position.z)
-        pose = geometry_pb2.SE3Pose(position=position, rotation=q)
-        point = trajectory_pb2.SE3TrajectoryPoint(pose=pose)
-        traj = trajectory_pb2.SE3Trajectory(points=[point])
-        body_control = spot_command_pb2.BodyControlParams(base_offset_rt_footprint=traj)
-
-        mobility_params = self.spot_wrapper.get_mobility_params()
-        mobility_params.body_control.CopyFrom(body_control)
-        self.spot_wrapper.set_mobility_params(mobility_params)
+        try:
+            q = data.orientation
+            rotation = geometry_pb2.Quaternion(w=q.w, x=q.x, y=q.y, z=q.z)
+            self.spot_wrapper.set_mobility_params(body_height_offset=data.position.z, footprint_R_body=to_euler_zxy(rotation))
+            self.spot_wrapper.stand()
+        except Exception as e:
+            self._logger.error(f"Error setting body pose: {e}")
 
     def handle_list_graph(self, upload_path) -> ListGraph.Response:
         """ROS service handler for listing graph_nav waypoint_ids"""
