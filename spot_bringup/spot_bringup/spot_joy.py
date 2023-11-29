@@ -9,6 +9,8 @@ from sensor_msgs.msg import Joy
 from spot_msgs.srv import Dock
 from spot_msgs.msg import Feedback, ManipulatorState
 from std_srvs.srv import Trigger
+from geometry_msgs.msg import Pose, Quaternion
+from scipy.spatial.transform import Rotation
 
 # Requires the controller switch to be in mode "D"
 class LogitechButtons(Enum):
@@ -32,6 +34,9 @@ class LogitechAxes(Enum):
     RIGHT_VERTICAL   = 3
     DPAD_HORIZONTAL  = 4
     DPAD_VERTICAL    = 5
+
+def interpolate(val: float, input_range: list, output_range: list):
+    return output_range[0] + (val - input_range[0])/(input_range[1] - input_range[0]) * (output_range[1] - output_range[0])
 
 class SpotJoyUtils(Node):
     def __init__(self):
@@ -59,10 +64,16 @@ class SpotJoyUtils(Node):
         self.gripper_open_client = self.create_client(Trigger, "/spot_manipulation_driver/open_gripper", callback_group=exclusive_group)
         self.gripper_close_client = self.create_client(Trigger, "/spot_manipulation_driver/close_gripper", callback_group=exclusive_group)
 
+        self.body_pose_pub = self.create_publisher(Pose, "/spot_driver/body_pose", 10, callback_group=exclusive_group)
+
         exclusive_group_2 = MutuallyExclusiveCallbackGroup()
-        self.loop = self.create_timer(0.2, self.timerCallback, callback_group=exclusive_group_2)
+        self.loop = self.create_timer(0.1, self.timerCallback, callback_group=exclusive_group_2)
         self.joy_sub = self.create_subscription(Joy, "/joy", self.joyCallback, 10, callback_group=exclusive_group_2)
         self.action = None
+
+        self._body_offset = 0.0
+        self._body_yaw    = 0.0
+        self._body_pitch  = 0.0
 
         self.get_logger().info("Spot joy node setup complete")
 
@@ -94,7 +105,13 @@ class SpotJoyUtils(Node):
         elif self.action == "ToggleGripper":
             self.get_logger().info("Toggling gripper")
             self.toggleGripper()
-
+        elif self.action == "BodyPoseControl":
+            pose_command = Pose()
+            q = Rotation.from_euler(seq="ZYX", angles=[self._body_yaw, self._body_pitch, 0.0], degrees=True).as_quat()
+            pose_command.position.z = self._body_offset
+            pose_command.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
+            self.get_logger().info(f"Commanding body pose: {pose_command.position.z} | {pose_command.orientation}")
+            self.body_pose_pub.publish(pose_command)
         else:
             if self.action == "Claim":
                 self.get_logger().info("Claiming lease")
@@ -130,7 +147,7 @@ class SpotJoyUtils(Node):
 
         # We need the controller in "D" mode, not "X" mode
         if len(axes) != 6:
-            self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back")
+            self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=1.0)
 
         # If both the start and back buttons are pressed, try to claim a lease
         if buttons[LogitechButtons.START.value] and buttons[LogitechButtons.BACK.value]:
@@ -143,7 +160,7 @@ class SpotJoyUtils(Node):
             return
 
         # If the left trigger is pressed, command the robot to sit
-        if buttons[LogitechButtons.LT.value]:
+        if buttons[LogitechButtons.A.value]:
             self.action = "ToggleStand"
             return
         
@@ -165,6 +182,14 @@ class SpotJoyUtils(Node):
         # X button to toggle the gripper
         if buttons[LogitechButtons.X.value]:
             self.action = "ToggleGripper"
+            return
+        
+        # LT button activates body pose control
+        if buttons[LogitechButtons.LT.value]:
+            self.action = "BodyPoseControl"
+            self._body_offset = interpolate(axes[LogitechAxes.LEFT_VERTICAL.value]   , [-1.0, 1.0], [-0.15, 0.15])
+            self._body_pitch  = interpolate(axes[LogitechAxes.RIGHT_VERTICAL.value]  , [-1.0, 1.0], [-20.0, 20.0])
+            self._body_yaw    = interpolate(axes[LogitechAxes.RIGHT_HORIZONTAL.value], [-1.0, 1.0], [-30.0, 30.0])
             return
 
         self.action = None
