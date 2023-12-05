@@ -1,0 +1,3 @@
+float64 point
+float64 velocity
+builtin_interfaces/Duration time_since_reference

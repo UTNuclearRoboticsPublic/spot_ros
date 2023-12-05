@@ -1,0 +1,12 @@
+ClawGripperRequest request
+---
+bool success
+string message
+---
+# Status
+uint8 STATUS_UNKNOWN = 0
+uint8 STATUS_IN_PROGRESS = 1
+uint8 STATUS_AT_GOAL = 2
+uint8 STATUS_APPLYING_FORCE = 3
+
+uint8 status
