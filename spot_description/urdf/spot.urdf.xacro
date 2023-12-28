@@ -8,6 +8,32 @@
     <xacro:arg name="has_arm" default="False" />
     <xacro:arg name="has_eap" default="False" />
 
+    <!-- Virtual links -->
+    <link name="base_footprint"/>
+    <link name="body_height"/>
+    <link name="body_with_yaw"/>
+
+    <!-- Virtual Joints -->
+    <joint name="body_height_joint" type="prismatic">
+        <parent link = "base_footprint"/>
+        <child  link = "body_height"/>
+        <limit lower = "0.4" upper = "0.6"/>    <!-- TODO: Test what the real values are -->
+    </joint>
+
+    <joint name="body_yaw_joint" type="revolute">
+        <parent link = "body_height"/>
+        <child  link = "body_with_yaw"/>
+        <limit lower = "${-pi/6}" upper = "${pi/6}"/>
+        <axis    xyz = "0 0 1"/>
+    </joint>
+
+    <joint name="body_pitch_joint" type="revolute">
+        <parent link = "body_with_yaw"/>
+        <child  link = "body"/>
+        <limit lower = "${-pi/9}" upper = "${pi/9}"/>
+        <axis    xyz = "0 1 0"/>
+    </joint>
+
     <!-- Fixed links -->
     <link name="body">
         <visual>
