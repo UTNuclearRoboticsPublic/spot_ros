@@ -27,13 +27,12 @@
 
 from typing import List, Text, Tuple
 import struct
-from numpy import float32
+from numpy import float32, linalg
 from math import nan
 
 import rclpy.time
 
 from .spot_lease_manager import SpotLeaseManager
-from scipy import spatial
 
 from builtin_interfaces.msg import Time as ROSTime
 from builtin_interfaces.msg import Duration as ROSDuration
@@ -53,10 +52,12 @@ from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 from spot_msgs.msg import ManipulatorState
 
+from google.protobuf import timestamp_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
+from bosdyn.api.geometry_pb2 import FrameTreeSnapshot
 from bosdyn.api.docking import docking_pb2
-from bosdyn.client.math_helpers import SE3Pose
-from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
+from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
+from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot
 
 """Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {
@@ -407,60 +408,21 @@ def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
 
     return wifi_msg
 
-def invertTransform(transform: TransformStamped) -> TransformStamped:
-    """Calculates and return the inverse of a geometry_msgs/TransformStamped
-    The new transform will have the same time stamp, but the parent and
-    child frame ID's will be swapped and the transformtation inverted
-    
-    Args:
-        transform: TransformStamped
-    Returns:
-        TransformStamped
-    """
-    
-    # Extract the components of the transformation
-    rotation = spatial.transform.Rotation.from_quat([
-        transform.transform.rotation.x, 
-        transform.transform.rotation.y, 
-        transform.transform.rotation.z, 
-        transform.transform.rotation.w
-    ])
-    translation = [transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z]
+def TransformToMsg(child_frame: str, parent_frame: str, transform: SE3Pose, timestamp: rclpy.time.Time):
+    new_tf = TransformStamped()
+    new_tf.header.stamp = ROSTime(sec=timestamp.seconds, nanosec=timestamp.nanos)
+    new_tf.header.frame_id = parent_frame
+    new_tf.child_frame_id = child_frame
 
-    # Invert the individual components
-    inv_rotation = rotation.inv()
-    inv_translation = -1.0*inv_rotation.apply(translation)
+    new_tf.transform.translation.x = transform.x
+    new_tf.transform.translation.y = transform.y
+    new_tf.transform.translation.z = transform.z
+    new_tf.transform.rotation.x = transform.rot.x
+    new_tf.transform.rotation.y = transform.rot.y
+    new_tf.transform.rotation.z = transform.rot.z
+    new_tf.transform.rotation.w = transform.rot.w
 
-    # Create the inverse transform
-    inverse = TransformStamped()
-    inverse.header.stamp    = transform.header.stamp
-    inverse.header.frame_id = transform.child_frame_id
-    inverse.child_frame_id  = transform.header.frame_id
-
-    inverse.transform.translation.x = inv_translation[0]
-    inverse.transform.translation.y = inv_translation[1]
-    inverse.transform.translation.z = inv_translation[2]
-
-    q_inv = inv_rotation.as_quat()
-    inverse.transform.rotation.x = q_inv[0]
-    inverse.transform.rotation.y = q_inv[1]
-    inverse.transform.rotation.z = q_inv[2]
-    inverse.transform.rotation.w = q_inv[3]
-
-    return inverse
-
-def createBaseFootprintTransform(transform_odom2body: TransformStamped, transform_odom2gpe: TransformStamped):
-    transform_body2basefootprint = TransformStamped()
-    transform_body2basefootprint.header.frame_id = "base_link"
-    transform_body2basefootprint.child_frame_id  = "base_footprint"
-    transform_body2basefootprint.header.stamp = transform_odom2body.header.stamp
-
-    transform_body2basefootprint.transform.translation.x = transform_odom2gpe.transform.translation.x - transform_odom2body.transform.translation.x
-    transform_body2basefootprint.transform.translation.y = transform_odom2gpe.transform.translation.y - transform_odom2body.transform.translation.y
-    transform_body2basefootprint.transform.translation.z = transform_odom2gpe.transform.translation.z - transform_odom2body.transform.translation.z
-    transform_body2basefootprint.transform.rotation.w = 1.0
-
-    return transform_body2basefootprint
+    return new_tf
 
 def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
                    lease_manager: SpotLeaseManager) -> TFMessage:
@@ -472,43 +434,70 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
     Returns:
         tf2_msgs/TFMessage message
     """
+    timestamp = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
+
     tf_msg = TFMessage()
+    for child_frame in kinematic_state.transforms_snapshot.child_to_parent_edge_map:
+        # Make sure the frames are valid (empty frames are possible)
+        parent = kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(child_frame)
+        parent_frame = parent.parent_frame_name
+        # We also skip the body -> odom transform because we create that manually with virtual joints
+        if parent_frame == "" or child_frame == "odom": continue
 
-    transform_odom2body = None
-    transform_odom2gpe = None
+        # Convert to SE3Pose and convert that to ROS TF message
+        transform = SE3Pose.from_proto(parent.parent_tform_child)
+        new_tf = TransformToMsg(child_frame, parent_frame, transform, timestamp)
+        tf_msg.transforms.append(new_tf)
 
-    for frame_name in kinematic_state.transforms_snapshot.child_to_parent_edge_map:
-        if kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
-            transform = kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
-            new_tf = TransformStamped()
-            local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
-            new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-            new_tf.header.frame_id = transform.parent_frame_name
-            new_tf.child_frame_id = frame_name
-            new_tf.transform.translation.x = transform.parent_tform_child.position.x
-            new_tf.transform.translation.y = transform.parent_tform_child.position.y
-            new_tf.transform.translation.z = transform.parent_tform_child.position.z
-            new_tf.transform.rotation.x = transform.parent_tform_child.rotation.x
-            new_tf.transform.rotation.y = transform.parent_tform_child.rotation.y
-            new_tf.transform.rotation.z = transform.parent_tform_child.rotation.z
-            new_tf.transform.rotation.w = transform.parent_tform_child.rotation.w
+    ## === TODO: Fix orientation when on slopes === ##
 
-            # Account for the fact that Spot publishes a body->odom transform but we want odom->body
-            if frame_name == "odom":
-                new_tf = invertTransform(new_tf)
-                transform_odom2body = new_tf
-
-            # Record the odom -> gpe transform for later use
-            if frame_name == "gpe":
-                transform_odom2gpe = new_tf
-
-            tf_msg.transforms.append(new_tf)
-
-    # Create a base_footprint transform from the gpe transform
-    if transform_odom2body is not None and transform_odom2gpe is not None:
-        tf_msg.transforms.append(createBaseFootprintTransform(transform_odom2body, transform_odom2gpe))
+    # Add the base footprint transform 
+    tform_odom_to_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("odom").parent_tform_child).inverse()
+    tform_body_to_flat_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("flat_body").parent_tform_child)
+    tform_gpe_to_base_footprint = tform_odom_to_body * tform_body_to_flat_body
+    tform_gpe_to_base_footprint.x = 0.0
+    tform_gpe_to_base_footprint.y = 0.0
+    tform_gpe_to_base_footprint.z = 0.0
+    tf_msg.transforms.append(TransformToMsg("base_footprint", "gpe", tform_gpe_to_base_footprint, timestamp))
 
     return tf_msg
+
+def GetVirtualJointValues(kinematic_state: robot_state_pb2.KinematicState) -> JointState:
+    transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map 
+    tform_body_to_odom = SE3Pose.from_proto(transform_map.get("odom").parent_tform_child)
+    tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
+    tform_flat_body_to_body = SE3Pose.from_proto(transform_map.get("flat_body").parent_tform_child).inverse()
+    tform_gpe_to_body  = (tform_body_to_odom * tform_odom_to_gpe).inverse()
+
+    joint_state = JointState()
+
+    #TODO: Velocities
+
+    # base_footprint -> body_with_height
+    joint_state.name.append("body_height_joint")
+    joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
+    joint_state.name.append("body_yaw_joint")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    # body_with_yaw -> body_with_pitch_and_yaw
+    joint_state.name.append("body_pitch_joint")
+    joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    # body_with_pitch_and_yaw -> body
+    joint_state.name.append("body_roll_joint")
+    joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    return joint_state
 
 def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
                        lease_manager: SpotLeaseManager) -> BatteryStateArray:
