@@ -208,11 +208,31 @@ class SpotROS(Node):
         
         ## joint states ##
         joint_state = JointStatesToMsg(state.kinematic_state, self.spot_wrapper)
-        self.joint_state_pub.publish(joint_state)
         
         ## TF ##
         tf_msg = GetTFFromState(state.kinematic_state, self.spot_wrapper)
+
+        # Debugging
+        self.get_logger().info("Debug robot state:")
+        for js in joint_state:
+            self.get_logger().info(f"Joint: {js.name}")
+        for msg in tf_msg:
+            self.get_logger().info(f"Transform {msg.header.frame_id} to {msg.child_frame_id}")
+        self.get_logger().info("\n")
         
+        ## === Handle Virtual Joints === #
+        # TODO: - Remove odom -> body and/or odom -> base_link
+        #       - Create an odom -> base_footprint transform
+        #       - Add joint states for each of the three/four virtual joints, which provides
+        #           + base_footprint -> body_com (body_com should be aligned with base_footprint)
+        #           + body_com -> body_with_yaw (should always report as zero - this joint is only used for planning)
+        #           + body_with_yaw -> body_with_pitch
+        #           + body_with_pitch -> base_link/body (add in roll)
+        base_footprint = next((tf for tf in tf_msg.transforms if tf.header.frame_id == "base_footprint"), None)
+        base_link      = next((tf for tf in tf_msg.transforms if tf.header.frame_id == "body"), None)
+        # ------------------------------ #
+
+        self.joint_state_pub.publish(joint_state)
         if len(tf_msg.transforms) > 0:
             self.tf_broadcaster.sendTransform(tf_msg.transforms)
         
