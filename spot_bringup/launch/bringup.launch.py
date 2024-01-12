@@ -95,7 +95,8 @@ def generate_launch_description():
         ),
         launch_arguments={
             'pointcloud.enable': 'True',
-            'clip_distance': '2.0'
+            'clip_distance': '2.0',
+            'align_depth.enable': 'True'
         }.items()
     )
 
