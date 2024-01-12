@@ -183,9 +183,7 @@ class SpotLeaseManager():
             self.logger.warn(f"Lease already owned for object with id {owner_id}")
             return True, 'You already own this lease'
 
-        success = True
-        if self._lease is None:
-            success, msg = self.claim()
+        (success, msg) = self.claim() if self._lease is None else (True, "Success")
         
         if success:
             self._lease_owners.append(owner_id)
