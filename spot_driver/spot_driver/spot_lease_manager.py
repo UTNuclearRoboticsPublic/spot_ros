@@ -1,7 +1,7 @@
 ############################################################################################
-#      Title     : spot_wrapper.py
+#      Title     : spot_lease_manager.py
 #      Project   : spot_ros
-#      Copyright : Copyright© The University of Texas at Austin, 2022. All rights reserved.
+#      Copyright : Copyright© The University of Texas at Austin, 2024. All rights reserved.
 #                
 #          All files within this directory are subject to the following, unless an alternative
 #          license is explicitly included within the text of each file.
@@ -48,7 +48,7 @@ from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
 class DefaultLogger():
-    """Generic print logger to act as default logger for the base wrapper"""
+    """Generic print logger to act as default logger for the lease manager"""
     def info(self, msg):
         print(msg)
 
@@ -62,7 +62,7 @@ class DefaultLogger():
         self.error(msg)
 
 class SpotLeaseManager():
-    """Generic wrapper class to encompass release 1.1.4 API features as well as maintaining leases automatically"""
+    """Generic manager class to maintain leases automatically"""
     def __init__(self):        
         # State
         self._is_connected = False
@@ -81,6 +81,7 @@ class SpotLeaseManager():
         # Keep track of who is using the lease
         self._lease_owners = []
 
+        # Register the safe power off function for emergency shutdown
         atexit.register(self.safe_power_off)
 
     def setLogger(self, logger):
@@ -88,6 +89,24 @@ class SpotLeaseManager():
         self._logger = logger
 
     def connect(self, hostname, rates = {}, callbacks = {}) -> bool:
+        """
+        Connect the lease manager to a Spot robot at address 'hostname'. Additionally creates
+        a time-sync between the host computer and the robot and registers clients for robot
+        lease, estop, state, command, and power.
+
+        Args:
+            hostname : IP address of the robot
+            callbacks: A dict of callable functions of signature 'def func(FutureWrapper)'. 
+                       In most cases, the FutureWrapper argument is not used and can be '_'
+            rates    : The rates at which to call each of the callbacks
+
+        Note:
+            Valid keys for rates are ['status.lease'] and valid keys for callbacks are ['lease']
+
+        Returns:
+            Bool describing whether connection was successful
+        """
+
         if self._is_connected:
             self.logger.info("Already connected to robot, no need to connect again")
             return True
@@ -147,12 +166,12 @@ class SpotLeaseManager():
 
     @property
     def logger(self):
-        """Return this wrapper's logger"""
+        """Return the logger"""
         return self._logger if self._logger is not None else DefaultLogger()
 
     @property
     def is_connected(self) -> bool:
-        """Return boolean indicating if the wrapper initialized successfully"""
+        """Return boolean indicating if the lease manager is registered with a robot"""
         return self._is_connected
 
     @property
@@ -178,8 +197,13 @@ class SpotLeaseManager():
         """Return the time skew between local and spot time"""
         return self._robot.time_sync.endpoint.clock_skew
     
+    @property
+    def robot_time(self) -> PB2Timestamp:
+        """Return the current time as a robot time protobuf timestamp"""
+        return self._robot.time_sync.robot_timestamp_from_local_secs(time.time())
+    
     def registerLeaseOwner(self, owner_id) -> Tuple[bool, Text]:
-        if owner_id in self._lease_owners:
+        if self.isRegisteredLeaseOwner(owner_id):
             self.logger.warn(f"Lease already owned for object with id {owner_id}")
             return True, 'You already own this lease'
 
@@ -217,6 +241,14 @@ class SpotLeaseManager():
             return False, Text(e), None
 
     def robot_command_feedback(self, command_id: int):
+        """Get feedback proto from the given command
+
+        Args:
+            command_id: ID of a previously issued command, return from a call to 'robot_command'
+        
+        Returns:
+            The appropriate feedback message type for the given command, or None if no command was found
+        """
         try:
             return self._robot_command_client.robot_command_feedback(command_id)
         except RpcError as ex:
@@ -263,6 +295,7 @@ class SpotLeaseManager():
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
 
     def eStopStatus(self) -> estop_pb2.EstopSystemStatus:
+        """Get the status for the EStop client"""
         return self._estop_client.get_status()
 
     def assertEStop(self, severe=True) -> bool:
@@ -307,6 +340,8 @@ class SpotLeaseManager():
         """Return the lease on the body."""
         if self._lease:
             self._lease_client.return_lease(self._lease)
+            self._lease_task = None
+            self._lease_client = None
             self._lease = None
 
     def disconnect(self, id) -> bool:
@@ -323,7 +358,7 @@ class SpotLeaseManager():
                 self._is_connected = False
             return True
         except ValueError:
-            self.logger.warn("A non-owner just attempted to disconnect. Make sure to call registerLeaseOwner when first connecting to the BaseWrapper")
+            self.logger.warn("A non-owner just attempted to disconnect. Make sure to call registerLeaseOwner when first connecting to the LeaseManager")
             return False
 
     def power_on(self) ->  Tuple[bool, Text]:
