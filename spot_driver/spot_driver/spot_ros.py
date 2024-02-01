@@ -648,7 +648,6 @@ class SpotROS(Node):
         callbacks["front_image"] = self.FrontImageCB
         callbacks["side_image"]  = self.SideImageCB
         callbacks["rear_image"]  = self.RearImageCB
-        callbacks["hand_image"]  = self.HandImageCB
 
         has_cam_payload = self.get_parameter('has_cam_payload').value
 
