@@ -200,6 +200,15 @@
         <limit effort="1000" velocity="1000.00" lower="-2.87979326579064354163" upper="2.87979326579064354163"/>
     </joint>
 
+    <link name="${name}_tool0"/>
+
+    <joint name="${name}_ee_virtual_joint" type="fixed">
+        <origin xyz="0.19557 0 0" rpy="0 0 0"/>
+        <axis xyz="0.0 0.0 0.0"/>
+        <parent link="${name}_wrist_roll"/>
+        <child link="${name}_tool0"/>
+    </joint>
+
     <link name="${name}_fingers">
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
