@@ -1,5 +1,10 @@
-float64 distance
-float64 force
+float64 distance_x 0.0
+float64 distance_y 0.0
+float64 distance_z 0.0
+float64 force_x 0.0
+float64 force_y 0.0
+float64 force_z 0.0
+float64 time 5.0
 ---
 bool success
 string message
