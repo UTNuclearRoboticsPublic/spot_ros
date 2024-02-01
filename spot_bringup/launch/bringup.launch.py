@@ -43,17 +43,22 @@ def generate_launch_description():
 
     ## Robot bringup
     driver_include = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                PathJoinSubstitution([FindPackageShare('spot_driver'), 'launch', 'driver.launch.py'])),
-            launch_arguments=
-                {'hostname':      LaunchConfiguration('hostname'),
-                 'has_eap':       has_eap,
-                 'has_arm':       has_arm,
-                 'auto_claim':    auto_claim,
-                 'auto_power_on': auto_power_on,
-                 'auto_stand':    auto_stand,
-                }.items()
-            )
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('spot_driver'), 
+                'launch', 
+                'driver.launch.py'
+            ])
+        ),
+        launch_arguments=
+            {'hostname':      LaunchConfiguration('hostname'),
+                'has_eap':       has_eap,
+                'has_arm':       has_arm,
+                'auto_claim':    auto_claim,
+                'auto_power_on': auto_power_on,
+                'auto_stand':    auto_stand,
+            }.items()
+    )
 
     combined_driver = Node(
         condition=IfCondition(has_arm),
@@ -90,11 +95,18 @@ def generate_launch_description():
         ),
         launch_arguments={
             'pointcloud.enable': 'True',
-            'clip_distance': '2.0'
+            'clip_distance': '2.0',
+            'align_depth.enable': 'True'
         }.items()
     )
 
     # Teleop 
+    joy_node = Node(
+        package='joy_linux',
+        executable='joy_linux_node',
+        name='joy_node'
+    )
+
     teleop_twist_joy_node = Node(
         package='teleop_twist_joy',
         executable='teleop_node',
@@ -114,10 +126,23 @@ def generate_launch_description():
         ]
     )
 
+    # Body Teleop Commands
     spot_joy_node = Node(
         package='spot_bringup',
         executable='spot_joy',
         name='spot_joy_node',
+    )
+
+    # Arm Teleop Commands
+    spot_arm_joy_include = IncludeLaunchDescription(
+        launch_description_source = PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('spot_manipulation_driver'), 
+                'launch', 
+                'arm_teleop_joy.launch.py'
+            ])
+        ),
+        condition=IfCondition(has_arm)
     )
 
     ## Launch
@@ -127,6 +152,8 @@ def generate_launch_description():
         combined_driver,
         state_publisher_include,
         realsense_include,
+        joy_node,
         teleop_twist_joy_node,
-        spot_joy_node
+        spot_joy_node,
+        spot_arm_joy_include
     ])

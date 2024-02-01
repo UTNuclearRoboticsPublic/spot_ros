@@ -1,7 +1,6 @@
-# Spot ROS Driver
+# Launching the Spot Driver
 
-![CP Spot](cp_spot.jpg)
+To launch the driver for Spot, execute the following command in a terminal:
 
-## Documentation
-
-Check-out the usage and user documentation [HERE](http://www.clearpathrobotics.com/assets/guides/melodic/spot-ros/)
+```bash
+ros2 launch spot_bringup bringup.launch.py hostname:=192.168.50.3

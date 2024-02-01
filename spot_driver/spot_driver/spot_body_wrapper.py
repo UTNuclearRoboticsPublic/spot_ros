@@ -1,7 +1,7 @@
 ############################################################################################
-#      Title     : spot_wrapper.py
+#      Title     : spot_body_wrapper.py
 #      Project   : spot_ros
-#      Copyright : Copyright© The University of Texas at Austin, 2022. All rights reserved.
+#      Copyright : Copyright© The University of Texas at Austin, 2024. All rights reserved.
 #                
 #          All files within this directory are subject to the following, unless an alternative
 #          license is explicitly included within the text of each file.
@@ -32,6 +32,7 @@ from bosdyn.api import image_pb2, header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
+from bosdyn.api import mobility_command_pb2
 
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
@@ -69,11 +70,30 @@ class SpotBodyWrapper():
         self._last_velocity_command_time = None
 
     def connect(self, lease_manager: SpotLeaseManager, rates = {}, callbacks = {}) -> bool:
+        """
+        Connect the lease manager to a Spot robot at address 'hostname' if it is not already connected. 
+        Additionally registers self as a lease owner with this lease manager registers clients for robot
+        lease, estop, state, command, and power.
+
+        Args:
+            hostname : IP address of the robot
+            callbacks: A dict of callable functions of signature 'def func(FutureWrapper)'. 
+                       In most cases, the FutureWrapper argument is not used and can be '_'
+            rates    : The rates at which to call each of the callbacks
+
+        Note:
+            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'status.robot_state'] 
+            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'robot_state']
+
+        Returns:
+            Bool describing whether connection was successful
+        """
+        
         if lease_manager is None:
             self.logger.fatal("Cannot connect to robot without a valid lease manager object")
             return False
         
-        # Have the base wrapper connect to the robot
+        # Have the lease manager connect to the robot
         self._lease_manager = lease_manager
         if not self._lease_manager.is_connected:
             self._lease_manager.setLogger(self._logger)
@@ -191,8 +211,8 @@ class SpotBodyWrapper():
         return self._lease_manager.time_skew
     
     def robotToLocalTime(self, timestamp: PB2Timestamp) -> PB2Timestamp:
-        if self._lease_manager is not None:
-            return self._lease_manager.robotToLocalTime(timestamp)
+        """Return the robot time in local time as a proto timestamp"""
+        return self._lease_manager.robotToLocalTime(timestamp)
 
     def updateStateTasks(self) -> None:
         """Update the robot state"""
@@ -207,7 +227,7 @@ class SpotBodyWrapper():
         self._async_sensor_tasks.update()
 
     def claim(self) -> bool:
-        """Add this driver as an EStop and Lease owner of the base wrapper"""
+        """Add this driver as an EStop and Lease owner of the lease manager"""
         if self._lease_manager is None:
             self.logger.warn("Cannot claim a lease without first connecting to a LeaseManager!")
             return False
@@ -255,7 +275,7 @@ class SpotBodyWrapper():
         return success, msg
 
     def stand(self, monitor_command=True) -> Tuple[bool, Text]:
-        """If the e-stop is enabled, and the motor power is enabled, stand the robot up."""
+        """If the e-stop is enabled, and the motor power is enabled, stand the robot up. This command is NON-BLOCKING!"""
         success, msg, cmd_id = self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
         if monitor_command:
             self._last_stand_command = cmd_id
@@ -293,20 +313,20 @@ class SpotBodyWrapper():
         return state
 
     def set_mobility_params(self,
-                            body_height: float = 0.0,
+                            body_height_offset: float = 0.0,
                             footprint_R_body: EulerZXY = EulerZXY(),
-                            locomotion_hint: int = 1,
+                            locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
                             external_force_params: robot_command_pb2.BodyExternalForceParams = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
-            body_height: Body height in meters
-            footprint_R_body: (EulerZXY) – The orientation of the body frame with respect to the footprint frame (gravity aligned framed with yaw computed from the stance feet)
+            body_height: Body height offset from nominal position in meters
+            footprint_R_body: (EulerZXY) - The orientation of the body frame with respect to the footprint frame (gravity aligned framed with yaw computed from the stance feet)
             locomotion_hint: Locomotion hint
             stair_hint: Boolean to define stair motion
         """
-        self._mobility_params = RobotCommandBuilder.mobility_params(body_height, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
+        self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
     def get_mobility_params(self) -> robot_command_pb2.MobilityParams:
         """Get mobility params

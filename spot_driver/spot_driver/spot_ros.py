@@ -49,10 +49,12 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo
 from std_srvs.srv import Trigger, SetBool
 
+from google.protobuf import duration_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
+from bosdyn.geometry import to_euler_zxy
 
 from .spot_lease_manager import SpotLeaseManager
 from .spot_body_wrapper import SpotBodyWrapper
@@ -91,7 +93,6 @@ class SpotROS(Node):
             if self.image_pub.get_subscription_count() > 0:
                 image_msg, camera_info_msg, _ = getImageMsg(data, self.spot_wrapper)
                 self.image_pub.publish(image_msg)
-                # TODO: use latching for the camera info publisher so we don't have to constantly republish it
                 self.info_pub.publish(camera_info_msg)
 
     def __init__(self):
@@ -107,8 +108,8 @@ class SpotROS(Node):
         self.sensors_timer = self.create_timer(pub_period, self.publishSensors)
 
         """ ROS Parameters """
-        status_rate_params = {'rates.status.'  + param for param in {'robot_state', 'lease'}}
-        sensor_rate_params = {'rates.sensors.' + param for param in {'front_image', 'side_image', 'rear_image', 'hand_image'}}
+        status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease'}}
+        sensor_rate_params = {f'rates.sensors.{param}' for param in {'front_image', 'side_image', 'rear_image', 'hand_image'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -310,21 +311,6 @@ class SpotROS(Node):
                 self.back_rgb_pub.process_data(image)
             elif image.source.name == "back_depth":
                 self.back_depth_pub.process_data(image)
-
-    def HandImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new hand image data."""
-
-        # Data order is non-deterministic, so we check the names before processing
-        for image in self.spot_wrapper.hand_images:
-            if image.source.name == "hand_image":
-                self.hand_mono_rgb_pub.process_data(image)
-            elif image.source.name == "hand_depth":
-                self.hand_depth_pub.process_data(image)
-            elif image.source.name == "hand_color_image":
-                self.hand_rgb_pub.process_data(image)
-            elif image.source.name == "hand_depth_in_hand_color_frame":
-                self.hand_depth_in_color_pub.process_data(image)
-
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
@@ -465,17 +451,17 @@ class SpotROS(Node):
 
         cmd_duration = rclpy.time.Duration(req.duration.data.secs, req.duration.data.nsecs)
         resp = self.spot_wrapper.trajectory_cmd(
-                        goal_x=req.target_pose.pose.position.x,
-                        goal_y=req.target_pose.pose.position.y,
-                        goal_heading=math_helpers.Quat(
-                            w=req.target_pose.pose.orientation.w,
-                            x=req.target_pose.pose.orientation.x,
-                            y=req.target_pose.pose.orientation.y,
-                            z=req.target_pose.pose.orientation.z
-                            ).to_yaw(),
-                        cmd_duration=cmd_duration.to_sec(),
-                        precise_position=req.precise_positioning,
-                        )
+            goal_x=req.target_pose.pose.position.x,
+            goal_y=req.target_pose.pose.position.y,
+            goal_heading=math_helpers.Quat(
+                w=req.target_pose.pose.orientation.w,
+                x=req.target_pose.pose.orientation.x,
+                y=req.target_pose.pose.orientation.y,
+                z=req.target_pose.pose.orientation.z
+                ).to_yaw(),
+            cmd_duration=cmd_duration.to_sec(),
+            precise_position=req.precise_positioning,
+        )
 
         # Wait while robot performs the trajectory
         rate = self.create_rate(10)
@@ -509,22 +495,19 @@ class SpotROS(Node):
         # We timed out
         self.trajectory_server.set_aborted(Trajectory.Result(False, "Failed to reach goal"))
 
-    def cmdVelCallback(self, data) -> None:
+    def cmdVelCallback(self, data: Twist) -> None:
         """Callback for cmd_vel command"""
         self.spot_wrapper.velocity_cmd(data.linear.x, data.linear.y, data.angular.z)
 
-    def bodyPoseCallback(self, data) -> None:
+    def bodyPoseCallback(self, data: Pose) -> None:
         """Callback for cmd_vel command"""
-        q = data.orientation
-        position = geometry_pb2.Vec3(z=data.position.z)
-        pose = geometry_pb2.SE3Pose(position=position, rotation=q)
-        point = trajectory_pb2.SE3TrajectoryPoint(pose=pose)
-        traj = trajectory_pb2.SE3Trajectory(points=[point])
-        body_control = spot_command_pb2.BodyControlParams(base_offset_rt_footprint=traj)
-
-        mobility_params = self.spot_wrapper.get_mobility_params()
-        mobility_params.body_control.CopyFrom(body_control)
-        self.spot_wrapper.set_mobility_params(mobility_params)
+        try:
+            q = data.orientation
+            rotation = geometry_pb2.Quaternion(w=q.w, x=q.x, y=q.y, z=q.z)
+            self.spot_wrapper.set_mobility_params(body_height_offset=data.position.z, footprint_R_body=to_euler_zxy(rotation))
+            self.spot_wrapper.stand()
+        except Exception as e:
+            self._logger.error(f"Error setting body pose: {e}")
 
     def handle_list_graph(self, upload_path) -> ListGraph.Response:
         """ROS service handler for listing graph_nav waypoint_ids"""
@@ -622,53 +605,33 @@ class SpotROS(Node):
         
         return SetParametersResult(successful=True)
 
-    # Arm ######
-    def handle_arm_stow(self, _, res: Trigger.Response) -> Trigger.Response:
-        """ROS service handler to command the arm to stow, home position"""
-        res.success, res.message = self.spot_wrapper.arm_stow()
-        return res
+    def populate_static_transforms(self) -> None:
+        self.get_logger().info("Populating camera static transforms")
+        while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
+                not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
+                not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
+                rclpy.utilities.ok():
+            self.spot_wrapper.updateSensorTasks()
 
-    def handle_arm_unstow(self, _, res: Trigger.Response) -> Trigger.Response:
-        """ROS service handler to command the arm to unstow, joints are all zeros"""
-        res.success, res.message = self.spot_wrapper.arm_unstow()
-        return res
+        static_tfs = []
 
-    def handle_gripper_open(self, _, res: Trigger.Response) -> Trigger.Response:
-        """ROS service handler to open the gripper"""
-        res.success, res.message = self.spot_wrapper.gripper_open()
-        return res
+        data = self.spot_wrapper.front_images
+        static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
-    def handle_gripper_angle_open(self, req: GripperAngleMove.Request, res: GripperAngleMove.Response) -> GripperAngleMove.Response:
-        """ROS service handler to open the gripper at an angle"""
-        res.success, res.message = self.spot_wrapper.gripper_angle_open(gripper_ang=req.gripper_angle)
-        return res
+        data = self.spot_wrapper.side_images
+        static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
 
-    def handle_gripper_close(self, _, res: Trigger.Response) -> Trigger.Response:
-        """ROS service handler to close the gripper"""
-        res.success, res.message = self.spot_wrapper.gripper_close()
-        return res
+        data = self.spot_wrapper.rear_images
+        static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
+        static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-    def handle_arm_carry(self, _, res: Trigger.Response) -> Trigger.Response:
-        """ROS service handler to put arm in carry mode"""
-        res.success, res.message = self.spot_wrapper.arm_carry()
-        return res
-
-    # def handle_arm_joint_move(self, _, req: ArmJointMovement.Request, res: ArmJointMovement.Response) -> ArmJointMovement.Response:
-    #     """ROS service handler to send joint movement to the arm to execute"""
-    #     resp = self.spot_wrapper.arm_joint_move(joint_targets=req.joint_target)
-    #     return ArmJointMovement.Response(resp[0], resp[1])
-
-    def handle_force_trajectory(self, _, req: ArmForceTrajectory.Request, res: ArmForceTrajectory.Response) -> ArmForceTrajectory.Response:
-        """ROS service handler to send a force trajectory up or down a vertical force"""
-        resp = self.spot_wrapper.force_trajectory(data=req)
-        return ArmForceTrajectory.Response(resp[0], resp[1])
-
-    # def handle_hand_pose(self, _, req: HandPose.Request, res: HandPose.Response) -> HandPose.Response:
-    #     """ROS service to give a position to the gripper"""
-    #     resp = self.spot_wrapper.hand_pose(pose_points=req.pose_point)
-    #     return HandPose.Response(resp[0], resp[1])
-
-######
+        self.static_broadcaster.sendTransform(static_tfs) 
 
     def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
@@ -690,7 +653,6 @@ class SpotROS(Node):
         has_cam_payload = self.get_parameter('has_cam_payload').value
 
         # Connect to the robot
-        # self.spot_wrapper = SpotWrapper(has_cam_payload)
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_cam_payload)
 
         # Dictionary of all param values in the 'rates' namespace
@@ -699,7 +661,7 @@ class SpotROS(Node):
 
         # Verify connection
         if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
-            self.get_logger().info('Connected to Spot ' + self.spot_wrapper.robot_id.nickname + '...')
+            self.get_logger().info(f'Connected to Spot {self.spot_wrapper.robot_id.nickname}...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
             return False
@@ -707,7 +669,7 @@ class SpotROS(Node):
         # Startup routine per parameter configuration
         if self.get_parameter('auto_claim').value:
             if self.spot_wrapper.claim():
-                self.get_logger().info('Claimed lease on Spot robot ' + self.spot_wrapper.id.nickname + '...')
+                self.get_logger().info(f'Claimed lease on Spot robot {self.spot_wrapper.id.nickname}...')
                 if self.get_parameter('auto_power_on').value:
                     self.get_logger().info('Spot powered on...')
                     if self.spot_wrapper.power_on():
@@ -716,16 +678,16 @@ class SpotROS(Node):
                             pyTime.sleep(1.0)
                             self.spot_wrapper.stand()
 
-        ### Set up ROS interfaces
-        ## Camera publishers
+        ### ====== Set up ROS interfaces ====== ###
+                            
+        ## --- Camera publishers --- ##
+                            
         # RGB Images
         self.front_left_rgb_pub = self.CameraPubs(self, 'rgb/frontleft')
         self.front_right_rgb_pub = self.CameraPubs(self, 'rgb/frontright')
         self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
         self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
         self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
-        # self.hand_rgb_pub = self.CameraPubs(self, 'rgb/hand_color')
-        # self.hand_mono_rgb_pub = self.CameraPubs(self, 'rgb/hand_mono')
 
         # Depth Images
         self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
@@ -733,66 +695,73 @@ class SpotROS(Node):
         self.left_depth_pub = self.CameraPubs(self, 'depth/left')
         self.right_depth_pub = self.CameraPubs(self, 'depth/right')
         self.back_depth_pub = self.CameraPubs(self, 'depth/back')
-        # self.hand_depth_pub = self.CameraPubs(self, 'depth/hand')
-        # self.hand_depth_in_color_pub = self.CameraPubs(self, 'depth/hand/depth_in_color')
 
-        ## Status Publishers
+
+        ## --- Status Publishers --- ##
+        
         # QoS to use for latched publishers
         latched_qos = QoSProfile(durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
                                  history=QoSHistoryPolicy.KEEP_LAST,
                                  depth=1,
                                  reliability=QoSReliabilityPolicy.RELIABLE)
 
-        self.joint_state_pub = self.create_publisher(JointState, '~/joint_states', 1)
-        self.dock_state_pub = self.create_publisher(DockState, '~/status/dock_state', qos_profile=latched_qos)
-        self.lease_pub = self.create_publisher(LeaseArray, '~/status/leases', 1)
-        self.odom_twist_pub = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist', 1)
-        self.odom_pub = self.create_publisher(Odometry, '~/odometry', 10)
-        self.feet_pub = self.create_publisher(FootStateArray, '~/status/feet', 10)
-        self.estop_pub = self.create_publisher(EStopStateArray, '~/status/estop', 1)
-        self.wifi_pub = self.create_publisher(WiFiState, '~/status/wifi', qos_profile=latched_qos)
-        self.power_pub = self.create_publisher(PowerState, '~/status/power_state', 1)
-        self.battery_pub = self.create_publisher(BatteryStateArray, '~/status/battery_states', 1)
-        self.behavior_faults_pub = self.create_publisher(BehaviorFaultState, '~/status/behavior_faults', 10)
-        self.system_faults_pub = self.create_publisher(SystemFaultState, '~/status/system_faults', 10)
-        self.mobility_params_pub = self.create_publisher(MobilityParams, '~/status/mobility_params', 1)
-        self.feedback_pub = self.create_publisher(Feedback, '~/status/feedback', qos_profile=latched_qos)
+        self.odom_pub            = self.create_publisher(Odometry                  , '~/odometry'              , 10)
+        self.feet_pub            = self.create_publisher(FootStateArray            , '~/status/feet'           , 10)
+        self.wifi_pub            = self.create_publisher(WiFiState                 , '~/status/wifi'           , qos_profile=latched_qos)
+        self.lease_pub           = self.create_publisher(LeaseArray                , '~/status/leases'         , 1)
+        self.power_pub           = self.create_publisher(PowerState                , '~/status/power_state'    , 1)
+        self.estop_pub           = self.create_publisher(EStopStateArray           , '~/status/estop'          , 1)
+        self.battery_pub         = self.create_publisher(BatteryStateArray         , '~/status/battery_states' , 1)
+        self.dock_state_pub      = self.create_publisher(DockState                 , '~/status/dock_state'     , qos_profile=latched_qos)
+        self.odom_twist_pub      = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist'        , 1)
+        self.joint_state_pub     = self.create_publisher(JointState                , '~/joint_states'          , 1)
+        self.system_faults_pub   = self.create_publisher(SystemFaultState          , '~/status/system_faults'  , 10)
+        self.behavior_faults_pub = self.create_publisher(BehaviorFaultState        , '~/status/behavior_faults', 10)
+        self.mobility_params_pub = self.create_publisher(MobilityParams            , '~/status/mobility_params', 1)
+        self.feedback_pub        = self.create_publisher(Feedback                  , '~/status/feedback'       , qos_profile=latched_qos)
 
-        self.create_subscription(Twist, '~/cmd_vel', self.cmdVelCallback, 10)
-        self.create_subscription(Pose, '~/body_pose', self.bodyPoseCallback, 10)
 
+        ## --- Controller Subscriptions --- ##
+
+        self.create_subscription(Twist, '~/cmd_vel'  , self.cmdVelCallback  , 10)
+        self.create_subscription(Pose , '~/body_pose', self.bodyPoseCallback, 10)
+
+ 
+        ## --- Services --- ##
+
+        # Use callback group to prevent any services from attempting to execute simultaneously
         srv_group = rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
-        self.create_service(Trigger, "~/claim", self.handle_claim, callback_group=srv_group)
-        self.create_service(Trigger, "~/release", self.handle_release, callback_group=srv_group)
-        self.create_service(Trigger, "~/stop", self.handle_stop, callback_group=srv_group)
-        self.create_service(Trigger, "~/self_right", self.handle_self_right, callback_group=srv_group)
-        self.create_service(Trigger, "~/sit", self.handle_sit, callback_group=srv_group)
-        self.create_service(Trigger, "~/stand", self.handle_stand, callback_group=srv_group)
-        self.create_service(Trigger, "~/power_on", self.handle_power_on, callback_group=srv_group)
-        self.create_service(Trigger, "~/power_off", self.handle_safe_power_off, callback_group=srv_group)
 
-        self.create_service(Trigger, "~/estop/hard", self.handle_estop_hard, callback_group=srv_group)
-        self.create_service(Trigger, "~/estop/gentle", self.handle_estop_soft, callback_group=srv_group)
+        # Status change services
+        self.create_service(Trigger, "~/claim"     , self.handle_claim,          callback_group=srv_group)
+        self.create_service(Trigger, "~/release"   , self.handle_release,        callback_group=srv_group)
+        self.create_service(Trigger, "~/stop"      , self.handle_stop,           callback_group=srv_group)
+        self.create_service(Trigger, "~/self_right", self.handle_self_right,     callback_group=srv_group)
+        self.create_service(Trigger, "~/sit"       , self.handle_sit,            callback_group=srv_group)
+        self.create_service(Trigger, "~/stand"     , self.handle_stand,          callback_group=srv_group)
+        self.create_service(Trigger, "~/power_on"  , self.handle_power_on,       callback_group=srv_group)
+        self.create_service(Trigger, "~/power_off" , self.handle_safe_power_off, callback_group=srv_group)
+
+        # EStop services
+        self.create_service(Trigger, "~/estop/hard"   , self.handle_estop_hard,      callback_group=srv_group)
+        self.create_service(Trigger, "~/estop/gentle" , self.handle_estop_soft,      callback_group=srv_group)
         self.create_service(Trigger, "~/estop/release", self.handle_estop_disengage, callback_group=srv_group)
 
-        self.create_service(SetBool, "~/stair_mode", self.handle_stair_mode, callback_group=srv_group)
-        self.create_service(SetLocomotion, "~/locomotion_mode", self.handle_locomotion_mode, callback_group=srv_group)
-        self.create_service(SetVelocity, "~/max_velocity", self.handle_max_vel, callback_group=srv_group)
+        # Configuration services
+        self.create_service(SetBool           , "~/stair_mode"          , self.handle_stair_mode,           callback_group=srv_group)
+        self.create_service(SetLocomotion     , "~/locomotion_mode"     , self.handle_locomotion_mode,      callback_group=srv_group)
+        self.create_service(SetVelocity       , "~/max_velocity"        , self.handle_max_vel,              callback_group=srv_group)
         self.create_service(ClearBehaviorFault, "~/clear_behavior_fault", self.handle_clear_behavior_fault, callback_group=srv_group)
 
+        # Status request services
         self.create_service(ListGraph, "~/list_graph", self.handle_list_graph, callback_group=srv_group)
 
-        # Docking
+        # Docking services
         self.create_service(Dock, '~/dock', self.handle_dock, callback_group=srv_group)
         self.create_service(Trigger, '~/undock', self.handle_undock, callback_group=srv_group)
 
-        # Arm
-        # self.create_service(Trigger, '~/arm/stow', self.handle_arm_stow, callback_group=srv_group)
-        # self.create_service(Trigger, '~/arm/unstow', self.handle_arm_unstow, callback_group=srv_group)
-        # self.create_service(Trigger, '~/arm/carry', self.handle_arm_carry, callback_group=srv_group)
-        # self.create_service(Trigger, '~/arm/gripper_open', self.handle_gripper_open, callback_group=srv_group)
-        # self.create_service(Trigger, '~/arm/gripper_close', self.handle_gripper_close, callback_group=srv_group)
-        # self.create_service(GripperAngleMove, '~/arm/gripper_angle_open', self.handle_gripper_angle_open, callback_group=srv_group)
+
+        ## --- Action Servers --- ##
 
         self._navigate_to_server = rclpy.action.ActionServer(
                 self,
@@ -808,54 +777,15 @@ class SpotROS(Node):
                 execute_callback=self.handle_trajectory,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
 
-        # populate the static transforms for the various robot cameras
-        
-        def populate_static_transforms() -> None:
-
-            # TODO: Handle the case of no arm (i.e. arm images will never appear)
-            while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 4) or\
-                  not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 4) or\
-                  not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 2) and\
-                  rclpy.utilities.ok():
-                #   not (self.spot_wrapper.hand_images and len(self.spot_wrapper.hand_images) == 4) and\
-                self.spot_wrapper.updateSensorTasks()
-
-            static_tfs = []
-
-            data = self.spot_wrapper.front_images
-            static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
-
-            data = self.spot_wrapper.side_images
-            static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
-
-            data = self.spot_wrapper.rear_images
-            static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-            static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-
-            # if self.spot_wrapper.hand_images is not None:
-            #     data = self.spot_wrapper.hand_images
-            #     static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
-            #     static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
-            #     static_tfs = self.populate_camera_static_transforms(data[2], static_tfs)
-            #     static_tfs = self.populate_camera_static_transforms(data[3], static_tfs)
-
-            self.static_broadcaster.sendTransform(static_tfs)                
-        
-        populate_static_transforms()
-
-        self.get_logger().info('Spot driver startup complete.')
+        # Populate the static transforms for the various robot cameras               
+        self.populate_static_transforms()
 
         # Publish initial dock state. Wait for first response
         while self.spot_wrapper.get_docking_state().status == DockState.DOCK_STATUS_UNKNOWN:
             pass
         self.update_dock_state()
 
+        self.get_logger().info('Spot driver startup complete.')
         return True
 
     def loadSounds(self):
