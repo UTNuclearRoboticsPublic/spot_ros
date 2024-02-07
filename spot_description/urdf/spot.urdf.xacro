@@ -25,7 +25,7 @@
     <joint name="body_yaw_joint" type="revolute">
         <parent link = "body_height"/>
         <child  link = "body_with_yaw"/>
-        <limit lower = "${-pi/6}" upper = "${pi/6}" velocity="0.1" effort="1e9"/>
+        <limit lower = "${-pi/9}" upper = "${pi/9}" velocity="0.1" effort="1e9"/>
         <axis    xyz = "0 0 1"/>
     </joint>
 
@@ -39,7 +39,7 @@
     <joint name="body_roll_joint" type="revolute">
         <parent link = "body_with_pitch_and_yaw"/>
         <child  link = "body"/>
-        <limit lower = "${-pi/9}" upper = "${pi/9}"  velocity="0.1" effort="1e9"/>
+        <limit lower = "${-pi/18}" upper = "${pi/18}"  velocity="0.1" effort="1e9"/>
         <axis    xyz = "1 0 0"/>
     </joint>
 
