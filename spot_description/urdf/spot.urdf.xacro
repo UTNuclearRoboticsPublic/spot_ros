@@ -32,7 +32,7 @@
     <joint name="body_pitch_joint" type="revolute">
         <parent link = "body_with_yaw"/>
         <child  link = "body_with_pitch_and_yaw"/>
-        <limit lower = "${-pi/9}" upper = "${pi/9}"  velocity="0.1" effort="1e9"/>
+        <limit lower = "${-pi/12}" upper = "${pi/12}"  velocity="0.1" effort="1e9"/>
         <axis    xyz = "0 1 0"/>
     </joint>
 
