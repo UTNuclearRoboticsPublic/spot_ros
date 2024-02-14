@@ -1,0 +1,25 @@
+string root_frame_name
+geometry_msgs/Pose root_tform_task
+geometry_msgs/Pose wrist_tform_tool
+SE3Trajectory task_tform_desired_tool
+geometry_msgs/Wrench feed_forward_wrench_at_tool_in_desired_tool
+geometry_msgs/Vector3 diagonal_stiffness_matrix
+geometry_msgs/Vector3 diagonal_damping_matrix
+float64 max_force_mag
+float64 max_torque_mag
+---
+bool success
+string message
+---
+# Status
+uint8 STATUS_UNKNOWN = 0
+uint8 STATUS_TRAJECTORY_COMPLETE = 1
+uint8 STATUS_IN_PROGRESS = 2
+uint8 STATUS_TRAJECTORY_STALLED = 3
+
+uint8 status
+geometry_msgs/Wrench commanded_wrench_from_stiffness_at_tool_in_desired_tool
+geometry_msgs/Wrench commanded_wrench_from_damping_at_tool_in_desired_tool
+geometry_msgs/Wrench commanded_wrench_from_feed_forward_at_tool_in_desired_tool
+geometry_msgs/Wrench total_commanded_wrench_at_tool_in_desired_tool
+geometry_msgs/Wrench total_measured_wrench_at_tool_in_desired_tool

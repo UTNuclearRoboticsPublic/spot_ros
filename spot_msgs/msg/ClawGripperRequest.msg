@@ -1,0 +1,5 @@
+ScalarTrajectory trajectory
+float64 maximum_open_close_velocity
+float64 maximum_opem_close_acceleration
+float64 maximum_torque
+bool disable_force_on_contact

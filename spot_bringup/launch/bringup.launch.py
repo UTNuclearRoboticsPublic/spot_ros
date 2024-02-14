@@ -95,7 +95,9 @@ def generate_launch_description():
         ),
         launch_arguments={
             'pointcloud.enable': 'True',
-            'clip_distance': '2.0'
+            'clip_distance': '2.0',
+            'rgb_camera.profile': '424x240x15',
+            'depth_module.profile': '424x240x15'
         }.items()
     )
 
