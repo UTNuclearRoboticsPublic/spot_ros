@@ -37,7 +37,7 @@ from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
 from bosdyn.client.power import PowerClient
 from bosdyn.client.robot_state import RobotStateClient
-from bosdyn.client.robot_command import RobotCommandClient
+from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder, block_until_arm_arrives
 from bosdyn.client.robot_id import RobotIdClient
 import bosdyn.client.util
 from bosdyn.util import seconds_to_duration
@@ -82,7 +82,7 @@ class SpotLeaseManager():
         self._lease_owners = []
 
         # Register the safe power off function for emergency shutdown
-        atexit.register(self.safe_power_off)
+        atexit.register(lambda: [self.disconnect(owner_id) for owner_id in self._lease_owners])
 
     def setLogger(self, logger):
         """Set the logger"""
@@ -344,18 +344,30 @@ class SpotLeaseManager():
             self._lease_client = None
             self._lease = None
 
-    def disconnect(self, id) -> bool:
+    def safe_shut_down(self):
+        if self.robot.has_arm():
+            _, _, cmd_id = self.robot_command(RobotCommandBuilder.arm_stow_command())
+            try:
+                block_until_arm_arrives(self._robot_command_client, cmd_id, timeout_sec=5.0)
+            except:
+                pass
+        powered_off, msg = self.safe_power_off()
+        if powered_off:
+            self._releaseLease()
+            self._releaseEStop()
+        else:
+            self.logger.warn(f"{msg}") 
+        self.robot.time_sync.stop()
+        self._is_connected = False
+
+    def disconnect(self, owner_id) -> bool:
         try:
-            self._lease_owners.remove(id)
+            self._lease_owners.remove(owner_id)
+            self.logger.info(f"Released lease for owner {owner_id}")
             if len(self._lease_owners) == 0:
-                self.robot.time_sync.stop()
-                powered_off, msg = self.safe_power_off()
-                if powered_off:
-                    self._releaseLease()
-                    self._releaseEStop()
-                else:
-                    self.logger.warn(f"{msg}") 
-                self._is_connected = False
+                self.logger.info("No more lease owners, powering off robot and releasing lease")
+                self.safe_shut_down()
+            self.logger.info("Successfully disconnected from lease owner")
             return True
         except ValueError:
             self.logger.warn("A non-owner just attempted to disconnect. Make sure to call registerLeaseOwner when first connecting to the LeaseManager")
