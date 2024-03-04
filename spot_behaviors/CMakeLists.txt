@@ -20,6 +20,7 @@ include_directories(
 add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
+  src/trigger_service.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
