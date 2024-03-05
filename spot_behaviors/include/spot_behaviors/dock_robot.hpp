@@ -38,7 +38,7 @@ public:
     DockRobot(const std::string& name, const BT::NodeConfiguration& config);
 
     /** We accept 1 input port - dock_id */
-    BT::PortsList providedPorts();
+    static BT::PortsList providedPorts();
 
     /** 
      * Make the the dock request. 

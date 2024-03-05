@@ -40,7 +40,7 @@ public:
     /** 
      * We accept 1 input port: service name 
      */
-    BT::PortsList providedPorts();
+    static BT::PortsList providedPorts();
 
     /** 
      * Make the the trigger request. 
