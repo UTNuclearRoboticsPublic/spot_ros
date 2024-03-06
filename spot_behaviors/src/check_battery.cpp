@@ -34,7 +34,7 @@ CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration&
     node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++)))
     {
         battery_sub_ = node_->create_subscription<spot_msgs::msg::BatteryState>(
-            "/spot_driver/status/battery_state",
+            "/spot_driver/status/battery_states",
             rclcpp::ParametersQoS{},
             std::bind(&CheckBattery::batteryCallback, this, std::placeholders::_1)
         );
