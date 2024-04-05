@@ -29,7 +29,7 @@
 #include <optional>
 #include <rclcpp/rclcpp.hpp>
 #include <std_srvs/srv/trigger.hpp>
-#include "behaviortree_cpp_v3/action_node.h"
+#include "behaviortree_cpp/action_node.h"
 
 namespace spot_behaviors {
 

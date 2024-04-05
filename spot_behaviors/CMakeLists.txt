@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(spot_msgs REQUIRED)
-find_package(behaviortree_cpp_v3 REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
 
 include_directories(
   include
@@ -25,10 +25,10 @@ add_library(${PROJECT_NAME} SHARED
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   spot_msgs
-  behaviortree_cpp_v3
+  behaviortree_cpp
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_export_dependencies(spot_msgs behaviortree_cpp_v3)
+ament_export_dependencies(spot_msgs behaviortree_cpp)
 
 # Install include files
 install(

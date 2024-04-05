@@ -57,7 +57,7 @@ BT::NodeStatus CheckBattery::tick() {
         return BT::NodeStatus::FAILURE;
     }
 
-    BT::Optional<float> battery_threshold = getInput<float>("battery_threshold");
+    BT::Expected<float> battery_threshold = getInput<float>("battery_threshold");
     if (!battery_threshold.has_value()){
         RCLCPP_WARN(node_->get_logger(), "No battery threshold provided for BT Node %s", this->name().c_str());
         return BT::NodeStatus::FAILURE;

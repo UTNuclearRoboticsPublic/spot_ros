@@ -41,7 +41,7 @@ BT::PortsList TriggerService::providedPorts() {
 }
 
 BT::NodeStatus TriggerService::onStart() {
-    BT::Optional<std::string> service_name = getInput<std::string>("service_name");
+    BT::Expected<std::string> service_name = getInput<std::string>("service_name");
     trigger_client_ = node_->create_client<std_srvs::srv::Trigger>(service_name.value());
 
     // Make sure the server is available to us
