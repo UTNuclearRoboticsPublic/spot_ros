@@ -31,7 +31,7 @@ namespace spot_behaviors {
 
 CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration& config) :
     BT::SyncActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++)))
+    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors"))
     {
         battery_sub_ = node_->create_subscription<spot_msgs::msg::BatteryState>(
             "/spot_driver/status/battery_states",

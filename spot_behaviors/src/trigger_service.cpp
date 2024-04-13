@@ -31,7 +31,7 @@ namespace spot_behaviors {
 
 TriggerService::TriggerService(const std::string& name, const BT::NodeConfiguration& config):
     BT::StatefulActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++)))
+    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors"))
 {}
 
 BT::PortsList TriggerService::providedPorts() {
