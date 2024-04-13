@@ -12,6 +12,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(spot_msgs REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
+find_package(moveit_msgs REQUIRED)
+find_package(moveit_kinematics REQUIRED)
 
 include_directories(
   include
@@ -21,11 +23,14 @@ add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
   src/trigger_service.cpp
+  src/move_hand_to_pose.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   spot_msgs
+  moveit_msgs
   behaviortree_cpp
+  moveit_kinematics
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_export_dependencies(spot_msgs behaviortree_cpp)
