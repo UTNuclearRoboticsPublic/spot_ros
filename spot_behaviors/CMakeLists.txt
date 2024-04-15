@@ -14,6 +14,7 @@ find_package(spot_msgs REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(moveit_kinematics REQUIRED)
+find_package(nav2_msgs REQUIRED)
 
 include_directories(
   include
@@ -23,11 +24,13 @@ add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
   src/trigger_service.cpp
+  src/navigate_to_pose.cpp
   src/move_hand_to_pose.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   spot_msgs
+  nav2_msgs
   moveit_msgs
   behaviortree_cpp
   moveit_kinematics

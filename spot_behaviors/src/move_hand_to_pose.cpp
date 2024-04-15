@@ -104,6 +104,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
                 const double elapsed_seconds = (node_->now() - request_timestamp_).seconds();
                 if (elapsed_seconds > 2.0){
                     RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
+                    move_group_action_client_->async_cancel_all_goals();
                     return BT::NodeStatus::FAILURE;
                 }
                 else return BT::NodeStatus::RUNNING;
