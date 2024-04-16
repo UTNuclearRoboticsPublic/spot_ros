@@ -1,26 +1,20 @@
 <?xml version="1.0"?>
-<?xml-model href="http://download.ros.org/schema/package_format3.xsd"
-            schematypens="http://www.w3.org/2001/XMLSchema"?>
-<package format="3">
+<package format="2">
   <name>spot_description</name>
-  <version>2.0.0</version>
-  <description>Robot hardware description for the Boston Dynamics Spot quadruped.</description>
+  <version>1.0.0</version>
+  <description>The spot_description package</description>
 
-  <maintainer email="blakeanderson@utexas.edu">Blake Anderson</maintainer>
-  <author email="blakeanderson@utexas.edu">Blake Anderson</author>
-  <author email="dniewinski@clearpathrobotics.com">Dave Niewinski</author>
+  <maintainer email="michal@robots.ox.ac.uk">Michal Staniaszek</maintainer>
 
-  <license>Proprietary</license>
+  <license>BSD</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>catkin</buildtool_depend>
 
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>urdf</exec_depend>
-  <exec_depend>xacro</exec_depend>
   <exec_depend>velodyne_description</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <export>
-    <build_type>ament_cmake</build_type>
   </export>
-
 </package>

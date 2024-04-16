@@ -1,5 +1,5 @@
-std_msgs/Header header
+Header header
 float32 distance
 int32 gait_cycles
-builtin_interfaces/Duration time_moving
-builtin_interfaces/Duration electric_power
+duration time_moving
+duration electric_power

@@ -1,0 +1,5 @@
+*.pyc
+*.pyo
+*.orig
+build
+spot_wrapper.egg-info

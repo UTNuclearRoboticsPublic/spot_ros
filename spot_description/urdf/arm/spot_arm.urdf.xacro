@@ -85,7 +85,7 @@
         <axis xyz="1 0 0"/>
         <parent link="${name}_shoulder_pitch"/>
         <child link="${name}_shoulder_roll"/>
-	<limit effort="0" velocity="0" lower="0" upper="0"/>
+        <!--limit effort="1000" velocity="1000.00" lower="-1e6" upper="1e6"/-->
     </joint>
 
     <link name="${name}_elbow_pitch">
@@ -200,13 +200,14 @@
         <limit effort="1000" velocity="1000.00" lower="-2.87979326579064354163" upper="2.87979326579064354163"/>
     </joint>
 
-    <link name="${name}_tool0"/>
-
+    <link name="${name}_tool0">
+        
+    </link>
     <joint name="${name}_ee_virtual_joint" type="fixed">
         <origin xyz="0.19557 0 0" rpy="0 0 0"/>
         <axis xyz="0.0 0.0 0.0"/>
         <parent link="${name}_wrist_roll"/>
-        <child link="${name}_tool0"/>
+        <child link="${name}_tool0"/>        
     </joint>
 
     <link name="${name}_fingers">
@@ -235,34 +236,6 @@
         <parent link="${name}_wrist_roll"/>
         <child link="${name}_fingers"/>
         <limit effort="1000" velocity="1000.00" lower="-1.57" upper="0.0"/>
-    </joint>
-
-    <link name="${name}.link_wr1"/>
-    <joint name="${name}_link_wr1_to_wrist" type = "fixed">
-        <parent link = "${name}_wrist_roll"/>
-        <child  link = "${name}.link_wr1"/>
-        <origin xyz = "0 0 0"/>
-    </joint>
-
-    <link name="${name}_hand"/>
-    <joint name="${name}_wrist_to_hand" type="fixed">
-        <parent link = "${name}_wrist_roll"/>
-        <child  link = "${name}_hand"/>
-        <origin xyz = "0.19557 0.0 0.0"/>
-    </joint>
-
-    <link name="hand_color_image_sensor"/>
-    <joint name="color_image_joint" type="fixed">
-        <parent link = "${name}_wrist_roll"/>
-        <child  link = "hand_color_image_sensor"/>
-        <origin xyz  = "0.14 0.02 0.022" rpy="-1.42 0 -1.57"/>
-    </joint>
-
-    <link name="hand_depth_sensor"/>
-    <joint name="depth_sensor_joint" type="fixed">
-        <parent link = "${name}_wrist_roll"/>
-        <child  link = "hand_depth_sensor"/>
-        <origin xyz  = "0.14 0.0 0.01" rpy="0 1.42 0"/>
     </joint>
     </xacro:macro>
 <!-- Transmissions -->
