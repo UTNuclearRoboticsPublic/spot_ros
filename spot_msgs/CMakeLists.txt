@@ -1,65 +1,82 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.0.2)
 project(spot_msgs)
 
-find_package(ament_cmake REQUIRED)
-find_package(builtin_interfaces REQUIRED)
-find_package(nav_msgs REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-find_package(std_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "action/ArmImpedanceCommand.action"
-  "action/ArmSurfaceContact.action"
-  "action/ClawGripperCommand.action"
-  "action/NavigateTo.action"
-  "action/Trajectory.action"
-
-  "srv/ArmForceTrajectory.srv"
-  "srv/ArmJointMovement.srv"
-  "srv/ClearBehaviorFault.srv"
-  "srv/ConstrainedArmJointMovement.srv"
-  "srv/Dock.srv"
-  "srv/ForceTrajectory.srv"
-  "srv/GripperAngleMove.srv"
-  "srv/HandPose.srv"
-  "srv/ListGraph.srv"
-  "srv/NonContactTrajectory.srv"
-  "srv/SetLocomotion.srv"
-  "srv/SetVelocity.srv"
-
-  "msg/ArmJointPosition.msg"
-  "msg/BatteryState.msg"
-  "msg/BatteryStateArray.msg"
-  "msg/BehaviorFault.msg"
-  "msg/BehaviorFaultState.msg"
-  "msg/ClawGripperRequest.msg"
-  "msg/DockState.msg"
-  "msg/EStopState.msg"
-  "msg/EStopStateArray.msg"
-  "msg/Feedback.msg"
-  "msg/FootState.msg"
-  "msg/FootStateArray.msg"
-  "msg/Lease.msg"
-  "msg/LeaseArray.msg"
-  "msg/LeaseOwner.msg"
-  "msg/LeaseResource.msg"
-  "msg/ManipulatorState.msg"
-  "msg/Metrics.msg"
-  "msg/MobilityParams.msg"
-  "msg/PowerState.msg"
-  "msg/ScalarTrajectory.msg"
-  "msg/ScalarTrajectoryPoint.msg"
-  "msg/SE3Trajectory.msg"
-  "msg/SE3TrajectoryPoint.msg"
-  "msg/SystemFault.msg"
-  "msg/SystemFaultState.msg"
-  "msg/WiFiState.msg"
-  
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs sensor_msgs
+find_package(catkin REQUIRED COMPONENTS
+  geometry_msgs
+  nav_msgs
+  sensor_msgs
+  std_msgs
+  actionlib
+  actionlib_msgs
+  message_generation
 )
 
-ament_export_dependencies(rosidl_default_runtime)
+add_message_files(
+  FILES
+  BatteryStateArray.msg
+  BehaviorFault.msg
+  EStopStateArray.msg
+  FootStateArray.msg
+  LeaseArray.msg
+  LeaseOwner.msg
+  Metrics.msg
+  MobilityParams.msg
+  SystemFault.msg
+  WiFiState.msg
+  BatteryState.msg
+  BehaviorFaultState.msg
+  EStopState.msg
+  Feedback.msg
+  FootState.msg
+  Lease.msg
+  LeaseResource.msg
+  PowerState.msg
+  SystemFaultState.msg
+  DockState.msg
+  ObstacleParams.msg
+  TerrainParams.msg
+  TerrainState.msg
+)
 
-ament_package()
+add_service_files(
+  FILES
+  ListGraph.srv
+  SetLocomotion.srv
+  SetSwingHeight.srv
+  SetVelocity.srv
+  ClearBehaviorFault.srv
+  ArmJointMovement.srv
+  ConstrainedArmJointMovement.srv
+  GripperAngleMove.srv
+  ArmForceTrajectory.srv
+  HandPose.srv
+  SetObstacleParams.srv
+  SetTerrainParams.srv
+  PosedStand.srv
+  Dock.srv
+  GetDockState.srv
+  Grasp3d.srv
+)
+
+add_action_files(
+  FILES
+  Dock.action
+  NavigateTo.action
+  PoseBody.action
+  Trajectory.action
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+  actionlib_msgs
+)
+
+catkin_package(
+  CATKIN_DEPENDS message_runtime actionlib
+)
+
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+)

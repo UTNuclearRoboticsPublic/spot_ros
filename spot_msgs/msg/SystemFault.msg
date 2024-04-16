@@ -4,9 +4,9 @@ uint8 SEVERITY_INFO = 1
 uint8 SEVERITY_WARN = 2
 uint8 SEVERITY_CRITICAL = 3
 
-std_msgs/Header header
+Header header
 string name
-builtin_interfaces/Duration duration
+duration duration
 int32 code
 uint64 uid
 string error_message
