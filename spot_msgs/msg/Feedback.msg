@@ -1,6 +1,7 @@
 bool standing
 bool sitting
 bool moving
+bool docked
 
 string serial_number
 string species

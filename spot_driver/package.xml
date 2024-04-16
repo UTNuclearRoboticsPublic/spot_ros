@@ -1,29 +1,25 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>spot_driver</name>
-  <version>1.0.0</version>
-  <description>The spot_driver package</description>
+  <version>2.0.0</version>
+  <description>ROS driver for the Boston Dynamics Spot quadruped.</description>
 
-  <maintainer email="michal@robots.ox.ac.uk">Michal Staniaszek</maintainer>
+  <maintainer email="blakeanderson@utexas.edu">Blake Anderson</maintainer>
+  <author email="blakeanderson@utexas.edu">Blake Anderson</author>
+  <author email="dniewinski@clearpathrobotics.com">Dave Niewinski</author>
 
-  <license>BSD</license>
+  <license>Proprietary</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <exec_depend>rclpy</exec_depend>
   <exec_depend>spot_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
-  <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>rospy</exec_depend>
-  <exec_depend>python3-rospkg-modules</exec_depend>
-  <exec_depend>twist_mux</exec_depend>
-  <exec_depend>interactive_marker_twist_server</exec_depend>
-  <exec_depend>teleop_twist_joy</exec_depend>
-  <exec_depend>velodyne_pointcloud</exec_depend>
-  <exec_depend>python-transforms3d-pip</exec_depend>
 
   <export>
+    <build_type>ament_python</build_type>
     <rosdoc config="rosdoc.yaml" />
   </export>
 </package>

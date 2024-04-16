@@ -1,0 +1,89 @@
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <!-- Original STLs at https://utexas.app.box.com/folder/226702516436 -->
+
+    <xacro:macro name = "realsense_mount" params = "*origin parent:=arm0_wrist_roll">
+
+    <link name = "realsense_mount_chin">
+        <visual name = "realsense_mount_chin_visual">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/chin.dae"/>
+            </geometry>
+        </visual>
+        <collision name = "realsense_mount_chin_collision">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/chin.dae"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name = "joint_chin_to_arm" type = "fixed">
+        <parent link = "${parent}"/>
+        <child  link = "realsense_mount_chin"/>
+        <xacro:insert_block name="origin" /> 
+    </joint>
+
+    <link name = "realsense_mount_chin_top">
+        <visual name = "realsense_mount_chin_top_visual">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/chin_top.dae"/>
+            </geometry>
+        </visual>
+        <collision name = "realsense_mount_chin_collision">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/chin_top.dae"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name = "joint_chin_to_chip_top" type = "fixed">
+        <parent link = "realsense_mount_chin"/>
+        <child  link = "realsense_mount_chin_top"/>
+        <origin xyz = "0 -0.008 -0.025" rpy = "1.57 3.14 0"/>
+    </joint>
+
+    <link name = "realsense_mount_slider">
+        <visual name = "realsense_mount_slider_visual">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/slider_reg.dae"/>
+            </geometry>
+        </visual>
+        <collision name = "realsense_mount_slider_collision">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/slider_reg.dae"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name = "joint_slider_to_mount" type = "fixed">
+        <parent link = "realsense_mount_chin"/>
+        <child  link = "realsense_mount_slider"/>
+        <origin xyz = "0 0.01 0.03" rpy = "0 -1.57 0"/>
+    </joint>
+
+    <link name = "realsense_camera_mount">
+        <visual name = "realsense_camera_mount_visual">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/camera_interface.dae"/>
+            </geometry>
+        </visual>
+        <collision name = "realsense_camera_mount_collision">
+            <geometry>
+                <mesh filename = "package://spot_description/meshes/realsense/camera_interface.dae"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name = "joint_interface_to_slider" type = "fixed">
+        <parent link = "realsense_mount_slider"/>
+        <child  link = "realsense_camera_mount"/>
+        <origin xyz = "0.0225 -0.0325 0" rpy = "0 -1.57 1.57"/>
+    </joint>
+
+    <xacro:include filename = "$(find realsense2_description)/urdf/_d435.urdf.xacro"/>
+    <xacro:sensor_d435 parent="realsense_camera_mount" use_nominal_extrinsics="true">
+        <origin xyz="0 0.0125 0.01" rpy = "0 -1.57 1.57"/>
+    </xacro:sensor_d435>
+
+    </xacro:macro>
+</robot>

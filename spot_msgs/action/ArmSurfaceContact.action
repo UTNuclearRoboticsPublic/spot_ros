@@ -1,0 +1,37 @@
+# Admittance Setting
+uint8 ADMITTANCE_SETTING_UNKNOWN = 0
+uint8 ADMITTANCE_SETTING_OFF = 1
+uint8 ADMITTANCE_SETTING_NORMAL = 2
+uint8 ADMITTANCE_SETTING_LOOSE = 3
+uint8 ADMITTANCE_SETTING_STIFF = 4
+uint8 ADMITTANCE_SETTING_VERY_STIFF = 5
+
+# Axis Mode
+uint8 AXIS_MODE_POSITION = 0
+uint8 AXIS_MODE_FORCE = 1
+
+string root_frame_name
+geometry_msgs/Pose wrist_tform_tool
+geometry_msgs/Pose root_tform_task
+SE3Trajectory pose_trajectory_in_task
+float64 maximum_acceleration
+float64 max_linear_velocity
+float64 max_angular_velocity
+float64 max_pos_tracking_error
+float64 max_rot_tracking_error
+bool force_remain_near_current_joint_configuration
+ArmJointPosition preferred_joint_configuration
+uint8 x_axis
+uint8 y_axis
+uint8 z_axis
+geometry_msgs/Vector3 press_force_percentage
+uint8 xy_admittance
+uint8 z_admittance
+uint8 xy_to_z_cross_term_admittance
+geometry_msgs/Vector3 bias_force_ewrt_body
+ClawGripperRequest gripper_command
+bool is_robot_following_hand
+---
+bool success
+string message
+---

@@ -5,4 +5,3 @@ uint8 CONTACT_LOST = 2
 
 geometry_msgs/Point foot_position_rt_body
 uint8 contact
-spot_msgs/TerrainState terrain

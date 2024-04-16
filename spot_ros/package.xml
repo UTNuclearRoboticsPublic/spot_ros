@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>spot_ros</name>
+  <version>2.0.0</version>
+  <description>
+    ROS metapackage for the Boston Dynamics Spot quadruped
+  </description>
+
+  <maintainer email="blakeanderson@utexas.edu">Blake Anderson</maintainer>
+  <author email="blakeanderson@utexas.edu">Blake Anderson</author>
+  <author email="dniewinski@clearpathrobotics.com">Dave Niewinski</author>
+  <author email="austin.deric@gmail.com">Austin Deric</author>
+
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>spot_control</exec_depend>
+  <exec_depend>spot_description</exec_depend>
+  <exec_depend>spot_driver</exec_depend>
+  <exec_depend>spot_msgs</exec_depend>
+  <exec_depend>spot_navigation</exec_depend>
+  <exec_depend>spot_viz</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+
+</package>

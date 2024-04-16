@@ -1,29 +1,26 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd"
+            schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>spot_viz</name>
-  <version>1.0.0</version>
-  <description>The spot_viz package</description>
+  <version>2.0.0</version>
+  <description>RViz visualization for the Boston Dynamics Spot quadruped.</description>
 
-  <maintainer email="michal@robots.ox.ac.uk">Michal Staniaszek</maintainer>
+  <maintainer email="blakeanderson@utexas.edu">Blake Anderson</maintainer>
+  <author email="blakeanderson@utexas.edu">Blake Anderson</author>
+  <author email="dniewinski@clearpathrobotics.com">Dave Niewinski</author>
 
-  <license>BSD</license>
+  <license>Proprietary</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>qtbase5-dev</build_depend>
-  <build_depend>rviz</build_depend>
-  <build_depend>spot_msgs</build_depend>
-  <build_depend>spot_cam</build_depend>
-
-  <exec_depend>libqt5-core</exec_depend>
-  <exec_depend>libqt5-gui</exec_depend>
-  <exec_depend>libqt5-widgets</exec_depend>
-  <exec_depend>spot_msgs</exec_depend>
   <exec_depend>joint_state_publisher</exec_depend>
   <exec_depend>joint_state_publisher_gui</exec_depend>
-  <exec_depend>rviz</exec_depend>
+  <exec_depend>spot_description</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <export>
-      <rviz plugin="${prefix}/plugin_description.xml"/>
+    <build_type>ament_cmake</build_type>
   </export>
+
 </package>

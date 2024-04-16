@@ -1,5 +1,3 @@
-float64 duration
-string frame
 geometry_msgs/Pose pose_point
 ---
 bool success

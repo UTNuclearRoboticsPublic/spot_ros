@@ -7,16 +7,4 @@ topics:
   topic   : twist_marker_server/cmd_vel
   timeout : 0.5
   priority: 8
-- name    : temoto
-  topic   : temoto/cmd_vel
-  timeout : 0.5
-  priority: 7
-- name    : hololens
-  topic   : spot/hololens/cmd_vel
-  timeout : 0.5
-  priority: 5
-- name    : external
-  topic   : cmd_vel
-  timeout : 0.5
-  priority: 1
 locks: []

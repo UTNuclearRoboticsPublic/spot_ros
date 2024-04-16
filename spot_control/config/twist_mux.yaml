@@ -1,0 +1,24 @@
+/twist_mux:
+  ros__parameters:
+    topics:
+      keyboard:
+        topic   : keyboard/cmd_vel
+        timeout : 0.1
+        priority: 10
+      joy:
+        topic   : joy/cmd_vel
+        timeout : 0.1
+        priority: 9
+      interactive_marker:
+        topic   : twist_marker_server/cmd_vel
+        timeout : 0.1
+        priority: 8
+      external:
+        topic   : cmd_vel
+        timeout : 0.1
+        priority: 1
+    locks:
+      e_stop:
+        topic   : e_stop
+        timeout : 0.0
+        priority: 255
