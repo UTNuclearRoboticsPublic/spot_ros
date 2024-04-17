@@ -26,7 +26,6 @@ def generate_launch_description():
 
     lifecycle_nodes = ['planner_server',
                        'controller_server',
-                       'recoveries_server',
                        'bt_navigator']
     
     planner_server = Node(
@@ -40,17 +39,6 @@ def generate_launch_description():
     controller_server = Node(
         package='nav2_controller',
         executable='controller_server',
-        output='screen',
-        parameters=[config_file],
-        remappings=[
-            ('cmd_vel', '/spot_driver/cmd_vel')
-        ]
-    )
-
-    recoveries_server = Node(
-        package='nav2_recoveries',
-        executable='recoveries_server',
-        name='recoveries_server',
         output='screen',
         parameters=[config_file],
         remappings=[
@@ -84,7 +72,6 @@ def generate_launch_description():
         *launch_args,
         planner_server,
         controller_server, 
-        recoveries_server,
         bt_server,
         lifecycle_manager
     ])
