@@ -2,7 +2,7 @@
 #      Title     : ros_helpers.py
 #      Project   : spot_ros
 #      Copyright : Copyright© The University of Texas at Austin, 2022. All rights reserved.
-#                
+#
 #          All files within this directory are subject to the following, unless an alternative
 #          license is explicitly included within the text of each file.
 #
@@ -217,7 +217,7 @@ def getImageMsg(data: image_pb2.ImageResponse, lease_manager: SpotLeaseManager) 
 
             #     if pixel != 0:
             #         value_in_meters = float32(pixel / data.source.depth_scale)
-                
+
             #     bytes = list(struct.pack('<f', value_in_meters))
             #     image_msg.data.extend(bytes)
 
@@ -271,7 +271,7 @@ def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
             lease_manager.logger.error('Failed to look up friendly name for frame ' + joint.name,
                                        once=True)
             continue
-        
+
         joint_state_msg.name.append(name)
         joint_state_msg.position.append(joint.position.value)
         joint_state_msg.velocity.append(joint.velocity.value)
@@ -451,7 +451,7 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
 
     ## === TODO: Fix orientation when on slopes === ##
 
-    # Add the base footprint transform 
+    # Add the base footprint transform
     tform_odom_to_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("odom").parent_tform_child).inverse()
     tform_body_to_flat_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("flat_body").parent_tform_child)
     tform_gpe_to_base_footprint = tform_odom_to_body * tform_body_to_flat_body
@@ -463,9 +463,9 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
     return tf_msg
 
 def GetVirtualJointValues(kinematic_state: robot_state_pb2.KinematicState) -> JointState:
-    transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map 
+    transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map
     tform_body_to_odom = SE3Pose.from_proto(transform_map.get("odom").parent_tform_child)
-    tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
+    tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)
     tform_flat_body_to_body = SE3Pose.from_proto(transform_map.get("flat_body").parent_tform_child).inverse()
     tform_gpe_to_body  = (tform_body_to_odom * tform_odom_to_gpe).inverse()
 
@@ -474,26 +474,20 @@ def GetVirtualJointValues(kinematic_state: robot_state_pb2.KinematicState) -> Jo
     #TODO: Velocities
 
     # base_footprint -> body_with_height
-    joint_state.name.append("body_height_joint")
-    joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
+    joint_state.name.append("body_x")
+    joint_state.position.append(0)
     joint_state.velocity.append(0)
     joint_state.effort.append(0)
 
     # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
-    joint_state.name.append("body_yaw_joint")
+    joint_state.name.append("body_y")
     joint_state.position.append(0)
     joint_state.velocity.append(0)
     joint_state.effort.append(0)
 
     # body_with_yaw -> body_with_pitch_and_yaw
-    joint_state.name.append("body_pitch_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
-
-    # body_with_pitch_and_yaw -> body
-    joint_state.name.append("body_roll_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
+    joint_state.name.append("body_or")
+    joint_state.position.append(0)
     joint_state.velocity.append(0)
     joint_state.effort.append(0)
 
