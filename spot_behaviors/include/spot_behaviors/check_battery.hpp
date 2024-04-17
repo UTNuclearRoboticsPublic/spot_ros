@@ -26,11 +26,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
+#include <thread>
 #include <optional>
 #include <rclcpp/rclcpp.hpp>
 #include <behaviortree_cpp/action_node.h>
 
-#include "spot_msgs/msg/battery_state.hpp"
+#include "spot_msgs/msg/battery_state_array.hpp"
 
 namespace spot_behaviors {
 
@@ -48,16 +49,19 @@ private:
     rclcpp::Node::SharedPtr node_;
 
     // Subscriber to data
-    rclcpp::Subscription<spot_msgs::msg::BatteryState>::SharedPtr battery_sub_;
+    rclcpp::Subscription<spot_msgs::msg::BatteryStateArray>::SharedPtr battery_sub_;
 
     // How much battery percentage is left
     std::optional<float> battery_percentage_;
+
+    // A thread to spin the node and look for messages
+    std::thread spin_thread_;
 
     // How many instances of such BT nodes have been created (used to avoid namespace conflicts)
     static inline int node_count_ = 0;
 
     // Record the battery state obtained from the message
-    void batteryCallback(spot_msgs::msg::BatteryState::UniquePtr msg);
+    void batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg);
 };
 
 } // namespace spot_behaviors

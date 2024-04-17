@@ -33,11 +33,12 @@ CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration&
     BT::SyncActionNode(name, config),
     node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors"))
     {
-        battery_sub_ = node_->create_subscription<spot_msgs::msg::BatteryState>(
+        battery_sub_ = node_->create_subscription<spot_msgs::msg::BatteryStateArray>(
             "/spot_driver/status/battery_states",
             rclcpp::ParametersQoS{},
             std::bind(&CheckBattery::batteryCallback, this, std::placeholders::_1)
         );
+        spin_thread_ = std::thread([this](){rclcpp::spin(node_);});
     }
 
 BT::PortsList CheckBattery::providedPorts() {
@@ -47,27 +48,27 @@ BT::PortsList CheckBattery::providedPorts() {
 }
 
 BT::NodeStatus CheckBattery::tick() {
-    if(!battery_percentage_.has_value()){
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    rclcpp::spin_some(node_);
+    // Wait a little for messages to come through
+    rclcpp::sleep_for(std::chrono::milliseconds(1000));
 
     if (!battery_percentage_.has_value()){
-        RCLCPP_WARN(node_->get_logger(), "No messages received on topic %s", battery_sub_->get_topic_name());
+        RCLCPP_ERROR(node_->get_logger(), "No messages received on topic %s", battery_sub_->get_topic_name());
         return BT::NodeStatus::FAILURE;
     }
 
     BT::Expected<float> battery_threshold = getInput<float>("battery_threshold");
     if (!battery_threshold.has_value()){
-        RCLCPP_WARN(node_->get_logger(), "No battery threshold provided for BT Node %s", this->name().c_str());
+        RCLCPP_ERROR(node_->get_logger(), "No battery threshold provided for BT Node %s", this->name().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
-    return battery_percentage_.value() >= battery_threshold.value() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    const float battery_percentage = battery_percentage_.value();
+    battery_percentage_ = std::nullopt;
+    return battery_percentage >= battery_threshold.value() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
-void CheckBattery::batteryCallback(spot_msgs::msg::BatteryState::UniquePtr msg){
-    battery_percentage_ = msg->charge_percentage;
+void CheckBattery::batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg){
+    battery_percentage_ = msg->battery_states.at(0).charge_percentage;
 }
 
 } // namespace spot_behaviors
