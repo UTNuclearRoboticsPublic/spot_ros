@@ -67,6 +67,12 @@ private:
     // Used to prevent node namespace clashes
     static inline int node_count_ = 0;
 
+    // The start time of the service call to check for timeout
+    rclcpp::Time service_call_time_{};
+
+    // Timeout for the service call
+    std::chrono::milliseconds timeout_{2000};
+
     // Service client
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr trigger_client_;
 
