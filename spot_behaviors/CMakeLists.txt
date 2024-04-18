@@ -15,6 +15,7 @@ find_package(behaviortree_cpp REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(moveit_kinematics REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(tf2_kdl REQUIRED)
 
 include_directories(
   include
@@ -29,6 +30,7 @@ add_library(${PROJECT_NAME} SHARED
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
+  tf2_kdl
   spot_msgs
   nav2_msgs
   moveit_msgs
@@ -36,7 +38,7 @@ ament_target_dependencies(${PROJECT_NAME}
   moveit_kinematics
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs)
+ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl)
 
 # Install include files
 install(
