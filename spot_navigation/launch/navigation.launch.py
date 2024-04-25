@@ -55,6 +55,14 @@ def generate_launch_description():
         remappings=[],
     )
 
+    nav2_behaviors = Node(
+        package='nav2_behaviors',
+        executable='behavior_server',
+        name='behavior_server',
+        output='screen',
+        parameters=[config_file]
+    )
+
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
@@ -73,5 +81,6 @@ def generate_launch_description():
         planner_server,
         controller_server, 
         bt_server,
+        nav2_behaviors,
         lifecycle_manager
     ])

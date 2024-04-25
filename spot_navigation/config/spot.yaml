@@ -31,7 +31,7 @@ amcl:
     recovery_alpha_fast: 0.0
     recovery_alpha_slow: 0.0
     resample_interval: 1
-    robot_model_type: "omnidirectional"
+    robot_model_type: "nav2_amcl::OmniMotionModel"
     save_pose_rate: 0.5
     sigma_hit: 0.2
     tf_broadcast: true
@@ -56,9 +56,9 @@ bt_navigator:
   ros__parameters:
     use_sim_time: False
     global_frame: map
-    robot_base_frame: body
+    robot_base_frame: base_footprint
     odom_topic: /odom
-    default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
+    default_bt_xml_filename: "nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml"
     bt_loop_duration: 10
     default_server_timeout: 20
     enable_groot_monitoring: True
@@ -67,28 +67,36 @@ bt_navigator:
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
     - nav2_compute_path_through_poses_action_bt_node
+    - nav2_smooth_path_action_bt_node
     - nav2_follow_path_action_bt_node
-    - nav2_back_up_action_bt_node
     - nav2_spin_action_bt_node
     - nav2_wait_action_bt_node
+    - nav2_assisted_teleop_action_bt_node
+    - nav2_back_up_action_bt_node
+    - nav2_drive_on_heading_bt_node
     - nav2_clear_costmap_service_bt_node
     - nav2_is_stuck_condition_bt_node
     - nav2_goal_reached_condition_bt_node
     - nav2_goal_updated_condition_bt_node
+    - nav2_globally_updated_goal_condition_bt_node
+    - nav2_is_path_valid_condition_bt_node
     - nav2_initial_pose_received_condition_bt_node
     - nav2_reinitialize_global_localization_service_bt_node
     - nav2_rate_controller_bt_node
     - nav2_distance_controller_bt_node
     - nav2_speed_controller_bt_node
     - nav2_truncate_path_action_bt_node
+    - nav2_truncate_path_local_action_bt_node
     - nav2_goal_updater_node_bt_node
     - nav2_recovery_node_bt_node
     - nav2_pipeline_sequence_bt_node
     - nav2_round_robin_node_bt_node
     - nav2_transform_available_condition_bt_node
     - nav2_time_expired_condition_bt_node
+    - nav2_path_expiring_timer_condition
     - nav2_distance_traveled_condition_bt_node
     - nav2_single_trigger_bt_node
+    - nav2_goal_updated_controller_bt_node
     - nav2_is_battery_low_condition_bt_node
     - nav2_navigate_through_poses_action_bt_node
     - nav2_navigate_to_pose_action_bt_node
@@ -96,6 +104,14 @@ bt_navigator:
     - nav2_planner_selector_bt_node
     - nav2_controller_selector_bt_node
     - nav2_goal_checker_selector_bt_node
+    - nav2_controller_cancel_bt_node
+    - nav2_path_longer_on_approach_bt_node
+    - nav2_wait_cancel_bt_node
+    - nav2_spin_cancel_bt_node
+    - nav2_back_up_cancel_bt_node
+    - nav2_assisted_teleop_cancel_bt_node
+    - nav2_drive_on_heading_cancel_bt_node
+    - nav2_is_battery_charging_condition_bt_node
 
 # bt_navigator_rclcpp_node:
 #   ros__parameters:
@@ -361,3 +377,28 @@ waypoint_follower:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: True
       waypoint_pause_duration: 200
+
+behavior_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+    global_frame: odom
+    robot_base_frame: base_footprint
+    transform_tolerance: 0.3
+    use_sim_time: False
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 3.2
