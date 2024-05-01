@@ -36,6 +36,7 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
     BT::StatefulActionNode(name, config),
     node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
 {
+    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/move_action");
     max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 5.0);
     planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
 }
@@ -48,9 +49,12 @@ BT::PortsList MoveHandToPose::providedPorts(){
 
 BT::NodeStatus MoveHandToPose::onStart() {
     // Make sure the action client is up and running
-    if (!move_group_action_client_->wait_for_action_server(std::chrono::milliseconds(500))){
+    RCLCPP_INFO(node_->get_logger(), "Waiting for action server");
+    if (!move_group_action_client_->wait_for_action_server(std::chrono::seconds(10))){
         RCLCPP_ERROR(node_->get_logger(), "Move Group action client did not respond, aborting MoveHandToPose behavior");
         return BT::NodeStatus::FAILURE;
+    }else{
+        RCLCPP_INFO(node_->get_logger(), "Move Group action client found");
     }
 
     // Retrieve the target pose from blackboard
@@ -70,10 +74,12 @@ BT::NodeStatus MoveHandToPose::onStart() {
     move_group_goal.planning_options.plan_only = false;
     move_group_goal.planning_options.replan = false;
     move_group_goal.request.allowed_planning_time = max_planning_time_;
+    move_group_goal.request.max_velocity_scaling_factor = 0.1;
     move_group_goal.request.goal_constraints.push_back(
-        kinematic_constraints::constructGoalConstraints("hand", target_pose)
+        kinematic_constraints::constructGoalConstraints("arm0_hand", target_pose)
     );
-    move_group_goal.request.group_name = planning_group_;
+    // move_group_goal.request.group_name = planning_group_;
+    move_group_goal.request.group_name = "arm";
     move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
     move_group_goal.request.workspace_parameters.header.stamp = node_->now();
     move_group_goal.request.workspace_parameters.min_corner.x = -1e9;
@@ -91,6 +97,8 @@ BT::NodeStatus MoveHandToPose::onStart() {
 }
 
 BT::NodeStatus MoveHandToPose::onRunning() {
+    if (!rclcpp::ok()){return BT::NodeStatus::FAILURE;}
+
     // Check to see if we're still waiting on a response from the action server
     if (move_group_response_future_.valid()){
         const auto result = rclcpp::spin_until_future_complete(node_, move_group_response_future_, std::chrono::milliseconds(5));
@@ -120,6 +128,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
     }
 
     // Check if the action is ongoing, or if it has concluded
+    rclcpp::spin_some(node_);
     const int8_t goal_status = move_group_goal_handle_->get_status();
     switch (goal_status){
         case action_msgs::msg::GoalStatus::STATUS_CANCELING:
