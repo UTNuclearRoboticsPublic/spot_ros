@@ -17,7 +17,7 @@ BT::PortsList NavigateToPose::providedPorts() {
 
 BT::NodeStatus NavigateToPose::onStart() {
     // Check to see that the server and input are in place
-    if (!navigation_action_client_->wait_for_action_server(std::chrono::milliseconds(500))){
+    if (!navigation_action_client_->wait_for_action_server(std::chrono::seconds(10))){
         RCLCPP_ERROR(node_->get_logger(), "/navigate_to_pose action server not available, aborting call for Spot navigation");
         return BT::NodeStatus::FAILURE;
     }
@@ -63,6 +63,11 @@ BT::NodeStatus NavigateToPose::onRunning() {
             case rclcpp::FutureReturnCode::SUCCESS:
                 RCLCPP_INFO(node_->get_logger(), "Navigation goal was acknowledged");
                 goal_handle_ = goal_handle_future_.get();
+                if (goal_handle_ == nullptr){
+                    RCLCPP_INFO(node_->get_logger(), "Navigation goal was rejected");
+                }else{
+                    RCLCPP_INFO(node_->get_logger(), "Navigation goal was accepted");
+                }
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return (goal_handle_ == nullptr) ? BT::NodeStatus::FAILURE : BT::NodeStatus::RUNNING;
         }
@@ -70,6 +75,7 @@ BT::NodeStatus NavigateToPose::onRunning() {
 
     // If we have a goal, check its status
     if (goal_handle_ != nullptr){
+        rclcpp::spin_some(node_);
         auto goal_status = goal_handle_->get_status();
         switch (goal_status){
             case action_msgs::msg::GoalStatus::STATUS_CANCELING:
