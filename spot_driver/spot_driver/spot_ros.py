@@ -2,7 +2,7 @@
 #      Title     : spot_ros.py
 #      Project   : spot_ros
 #      Copyright : Copyright© The University of Texas at Austin, 2022. All rights reserved.
-#                
+#
 #          All files within this directory are subject to the following, unless an alternative
 #          license is explicitly included within the text of each file.
 #
@@ -76,7 +76,7 @@ from spot_msgs.action import NavigateTo, Trajectory
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
 from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
-    
+
 from .ros_helpers import *
 
 class SpotROS(Node):
@@ -114,7 +114,7 @@ class SpotROS(Node):
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
                               sensor_rate_params=sensor_rate_params))
-        
+
         self.declare_parameter('hostname', 'default_value',
             ParameterDescriptor(description='Spot computer hostname.',
                                 type=ParameterType.PARAMETER_STRING,
@@ -134,7 +134,7 @@ class SpotROS(Node):
                                     floating_point_range=[FloatingPointRange(
                                         from_value=0.0, to_value=1.0e9, step=0.0)],
                                     read_only=True))
-        
+
         for name in sensor_rate_params:
             self.declare_parameter(name, 1.5,
                 ParameterDescriptor(description='Publish rate for sensor topics.',
@@ -189,7 +189,7 @@ class SpotROS(Node):
         if self.spot_wrapper.is_standing:
             print('Spot sitting down...')
             is_sitting, message = self.spot_wrapper.sit()
-        
+
             if not is_sitting:
                 print('Not shutting down because Spot cannot sit here! ' + message)
                 return
@@ -205,17 +205,20 @@ class SpotROS(Node):
             return
 
         odom_mode = self.get_parameter('odom_mode').value
-        
+
+        ## DetGPT images ##
+        self.DetGptImageCB()
+
         ## joint states ##
         joint_state = JointStatesToMsg(state.kinematic_state, self.spot_wrapper)
         self.joint_state_pub.publish(joint_state)
-        
+
         ## TF ##
         tf_msg = GetTFFromState(state.kinematic_state, self.spot_wrapper)
-        
+
         if len(tf_msg.transforms) > 0:
             self.tf_broadcaster.sendTransform(tf_msg.transforms)
-        
+
         # Odom Twist #
         twist_odom_msg = GetOdomTwistFromState(state.kinematic_state, self.spot_wrapper)
         self.odom_twist_pub.publish(twist_odom_msg)
@@ -223,7 +226,7 @@ class SpotROS(Node):
         # Odom #
         odom_msg = GetOdomFromState(state.kinematic_state, self.spot_wrapper, odom_mode == 'vision')
         self.odom_pub.publish(odom_msg)
-        
+
         # Feet #
         foot_array_msg = FeetStateToMsg(state.foot_state)
         self.feet_pub.publish(foot_array_msg)
@@ -239,7 +242,7 @@ class SpotROS(Node):
         # Battery States #
         battery_states_array_msg = BatteryStatesToMsg(state.battery_states, self.spot_wrapper)
         self.battery_pub.publish(battery_states_array_msg)
-        
+
         # Power State #
         power_state_msg = PowerStatesToMsg(state.power_state, self.spot_wrapper)
         self.power_pub.publish(power_state_msg)
@@ -259,7 +262,7 @@ class SpotROS(Node):
 
         if not lease_list:
             return
-        
+
         for resource in lease_list:
             new_resource = LeaseResource()
             new_resource.resource = resource.resource
@@ -311,7 +314,15 @@ class SpotROS(Node):
                 self.back_rgb_pub.process_data(image)
             elif image.source.name == "back_depth":
                 self.back_depth_pub.process_data(image)
-        
+
+    def DetGptImageCB(self) -> None:
+        """Callback to publish DetGPT images."""
+        # Publish images if there is a subscriber
+        if self.detgpt_image_pub.get_subscription_count() > 0:
+            image_msg = Image()
+            _, _, image_msg = self.spot_wrapper.capture_image("left_fisheye_image")
+            self.detgpt_image_pub.publish(image_msg)
+
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
         res.success = self.spot_wrapper.claim()
@@ -602,7 +613,7 @@ class SpotROS(Node):
                     return SetParametersResult(
                         successful=False,
                         reason="Parameter rates." + p.name + " must be positive.")
-        
+
         return SetParametersResult(successful=True)
 
     def populate_static_transforms(self) -> None:
@@ -631,7 +642,7 @@ class SpotROS(Node):
         static_tfs = self.populate_camera_static_transforms(data[0], static_tfs)
         static_tfs = self.populate_camera_static_transforms(data[1], static_tfs)
 
-        self.static_broadcaster.sendTransform(static_tfs) 
+        self.static_broadcaster.sendTransform(static_tfs)
 
     def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
@@ -678,15 +689,16 @@ class SpotROS(Node):
                             self.spot_wrapper.stand()
 
         ### ====== Set up ROS interfaces ====== ###
-                            
+
         ## --- Camera publishers --- ##
-                            
+
         # RGB Images
         self.front_left_rgb_pub = self.CameraPubs(self, 'rgb/frontleft')
         self.front_right_rgb_pub = self.CameraPubs(self, 'rgb/frontright')
         self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
         self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
         self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
+        self.detgpt_image_pub = self.create_publisher(Image, '/detgpt_image', 1)
 
         # Depth Images
         self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
@@ -697,7 +709,7 @@ class SpotROS(Node):
 
 
         ## --- Status Publishers --- ##
-        
+
         # QoS to use for latched publishers
         latched_qos = QoSProfile(durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
                                  history=QoSHistoryPolicy.KEEP_LAST,
@@ -725,7 +737,7 @@ class SpotROS(Node):
         self.create_subscription(Twist, '~/cmd_vel'  , self.cmdVelCallback  , 10)
         self.create_subscription(Pose , '~/body_pose', self.bodyPoseCallback, 10)
 
- 
+
         ## --- Services --- ##
 
         # Use callback group to prevent any services from attempting to execute simultaneously
@@ -768,7 +780,7 @@ class SpotROS(Node):
                 '~/navigate_to',
                 execute_callback=self.handle_navigate_to,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
-        
+
         self._trajectory_server = rclpy.action.ActionServer(
                 self,
                 Trajectory,
@@ -776,7 +788,7 @@ class SpotROS(Node):
                 execute_callback=self.handle_trajectory,
                 callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
 
-        # Populate the static transforms for the various robot cameras               
+        # Populate the static transforms for the various robot cameras
         self.populate_static_transforms()
 
         # Publish initial dock state. Wait for first response
@@ -799,7 +811,7 @@ class SpotROS(Node):
 
                 try:
                     sound_names = yaml.safe_load(file)
-                    
+
                     if not sound_names:
                         self.get_logger().warn('Opened sounds manifest file {}, but no contents found.'.format(manifest))
 

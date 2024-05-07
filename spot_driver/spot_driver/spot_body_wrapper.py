@@ -2,7 +2,7 @@
 #      Title     : spot_body_wrapper.py
 #      Project   : spot_ros
 #      Copyright : Copyright© The University of Texas at Austin, 2024. All rights reserved.
-#                
+#
 #          All files within this directory are subject to the following, unless an alternative
 #          license is explicitly included within the text of each file.
 #
@@ -46,6 +46,10 @@ from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
 from .spot_lease_manager import SpotLeaseManager
+from cv_bridge import CvBridge
+import numpy as np
+import cv2
+from sensor_msgs.msg import Image
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 1.1.4 API features"""
@@ -71,28 +75,28 @@ class SpotBodyWrapper():
 
     def connect(self, lease_manager: SpotLeaseManager, rates = {}, callbacks = {}) -> bool:
         """
-        Connect the lease manager to a Spot robot at address 'hostname' if it is not already connected. 
+        Connect the lease manager to a Spot robot at address 'hostname' if it is not already connected.
         Additionally registers self as a lease owner with this lease manager registers clients for robot
         lease, estop, state, command, and power.
 
         Args:
             hostname : IP address of the robot
-            callbacks: A dict of callable functions of signature 'def func(FutureWrapper)'. 
+            callbacks: A dict of callable functions of signature 'def func(FutureWrapper)'.
                        In most cases, the FutureWrapper argument is not used and can be '_'
             rates    : The rates at which to call each of the callbacks
 
         Note:
-            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'status.robot_state'] 
+            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'status.robot_state']
             and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'robot_state']
 
         Returns:
             Bool describing whether connection was successful
         """
-        
+
         if lease_manager is None:
             self.logger.fatal("Cannot connect to robot without a valid lease manager object")
             return False
-        
+
         # Have the lease manager connect to the robot
         self._lease_manager = lease_manager
         if not self._lease_manager.is_connected:
@@ -121,7 +125,7 @@ class SpotBodyWrapper():
         # Spot service clients
         try:
             self._image_client = self._lease_manager.robot.ensure_client(ImageClient.default_service_name)
-            self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
+            self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name)
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
@@ -143,7 +147,7 @@ class SpotBodyWrapper():
         self._async_sensor_tasks = AsyncTasks([self._front_image_task,
                                                self._side_image_task,
                                                self._rear_image_task])
-        
+
         self._async_idle_task  = AsyncTasks([self._idle_task])
         self._async_state_task = AsyncTasks([self._robot_state_task])
 
@@ -162,7 +166,7 @@ class SpotBodyWrapper():
 
     @property
     def robot_id(self):
-        """Return robot's ID"""   
+        """Return robot's ID"""
         return self._robot_id
 
     @property
@@ -209,7 +213,7 @@ class SpotBodyWrapper():
     def time_skew(self) -> PB2Duration:
         """Return the time skew between local and spot time"""
         return self._lease_manager.time_skew
-    
+
     def robotToLocalTime(self, timestamp: PB2Timestamp) -> PB2Timestamp:
         """Return the robot time in local time as a proto timestamp"""
         return self._lease_manager.robotToLocalTime(timestamp)
@@ -231,10 +235,10 @@ class SpotBodyWrapper():
         if self._lease_manager is None:
             self.logger.warn("Cannot claim a lease without first connecting to a LeaseManager!")
             return False
-        
+
         self._lease_manager.registerLeaseOwner(id(self))
-        return True        
-    
+        return True
+
     def release(self) -> None:
         """Return the lease on the body"""
         try:
@@ -381,7 +385,7 @@ class SpotBodyWrapper():
     def set_volume(self, percentage: float) -> Tuple[bool, Text]:
         if not self._has_cam_payload:
             return False, 'This Spot has no audio capability.'
-        
+
         if percentage > 100.0 or percentage < 0.0:
             return False, Text('Could not set audio volume to invalid percentage ' + percentage)
 
@@ -389,4 +393,69 @@ class SpotBodyWrapper():
         success = response.error.code == header_pb2.CommonError.Code.CODE_OK
         return success, Text(response.error.message)
 
+    #####################################################################
+    ##DetGPT-related Stuff##
+    #####################################################################
+    def capture_image(self, camera_name):
 
+     source = camera_name
+
+     # Optionally capture one or more images.
+     # Capture and save images to disk
+     pixel_format = self.pixel_format_string_to_enum("PIXEL_FORMAT_RGB_U8")
+     image_request = [build_image_request(source, pixel_format=pixel_format)]
+     image_responses = self._image_client.get_image(image_request)
+
+     for image in image_responses:
+         num_bytes = 1  # Assume a default of 1 byte encodings.
+         if image.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_DEPTH_U16:
+             dtype = np.uint16
+             extension = ".png"
+         else:
+             if image.shot.image.pixel_format == image_pb2.Image.PIXEL_FORMAT_RGB_U8:
+                 num_bytes = 3
+             elif (
+                 image.shot.image.pixel_format
+                 == image_pb2.Image.PIXEL_FORMAT_RGBA_U8
+             ):
+                 num_bytes = 4
+             elif (
+                 image.shot.image.pixel_format
+                 == image_pb2.Image.PIXEL_FORMAT_GREYSCALE_U8
+             ):
+                 num_bytes = 1
+             elif (
+                 image.shot.image.pixel_format
+                 == image_pb2.Image.PIXEL_FORMAT_GREYSCALE_U16
+             ):
+                 num_bytes = 2
+             dtype = np.uint8
+             extension = ".jpg"
+
+         img = np.frombuffer(image.shot.image.data, dtype=dtype)
+         if image.shot.image.format == image_pb2.Image.FORMAT_RAW:
+             try:
+                 # Attempt to reshape array into a RGB rows X cols shape.
+                 img = img.reshape(
+                     (image.shot.image.rows, image.shot.image.cols, num_bytes)
+                 )
+             except ValueError:
+                 # Unable to reshape the image data, trying a regular decode.
+                 img = cv2.imdecode(img, -1)
+         else:
+             img = cv2.imdecode(img, -1)
+     # cv2.imwrite('/home/spot/trashcan/', img)
+     # Convert to ROS type
+     # CVBridge Instance
+     bridge = CvBridge()
+     image_msg = Image()
+     image_msg = bridge.cv2_to_imgmsg(img, encoding="passthrough")
+     # image_msg.encoding = "rgb8"
+     # image_msg.is_bigendian = True
+     # image_msg.step = 3 * image_responses[0].shot.image.cols
+     # image_msg.data = image_responses[0].shot.image.data
+
+     return img, image_responses[0], image_msg
+
+    def pixel_format_string_to_enum(self, enum_string):
+        return dict(image_pb2.Image.PixelFormat.items()).get(enum_string)
