@@ -43,7 +43,9 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
 
 BT::PortsList MoveHandToPose::providedPorts(){
     return {
-        BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose")
+        BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose"),
+        BT::InputPort<std::string>("target_frame"),
+        BT::InputPort<std::string>("planning_group")
     };
 }
 
@@ -69,6 +71,10 @@ BT::NodeStatus MoveHandToPose::onStart() {
     }
     const geometry_msgs::msg::PoseStamped& target_pose = target_pose_expected.value();
 
+    // Check to see what frame we want to define the pose for
+    const std::string target_frame = getInput<std::string>("target_frame").value_or("arm0_hand");
+    RCLCPP_INFO(node_->get_logger(), "Target frame: %s", target_frame.c_str());
+
     // Generate the action server goal
     moveit_msgs::action::MoveGroup::Goal move_group_goal;
     move_group_goal.planning_options.plan_only = false;
@@ -76,10 +82,9 @@ BT::NodeStatus MoveHandToPose::onStart() {
     move_group_goal.request.allowed_planning_time = max_planning_time_;
     move_group_goal.request.max_velocity_scaling_factor = 0.1;
     move_group_goal.request.goal_constraints.push_back(
-        kinematic_constraints::constructGoalConstraints("arm0_hand", target_pose)
+        kinematic_constraints::constructGoalConstraints(target_frame, target_pose)
     );
-    // move_group_goal.request.group_name = planning_group_;
-    move_group_goal.request.group_name = "arm";
+    move_group_goal.request.group_name = getInput<std::string>("planning_group").value_or("arm");
     move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
     move_group_goal.request.workspace_parameters.header.stamp = node_->now();
     move_group_goal.request.workspace_parameters.min_corner.x = -1e9;
