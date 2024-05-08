@@ -53,7 +53,7 @@ BT::NodeStatus TriggerService::onStart() {
 
     // Make sure there aren't any existing requests - should not be possible
     if (service_future_.has_value()){
-        RCLCPP_ERROR(node_->get_logger(), "Service called with an existing request. This should never happen");
+        RCLCPP_ERROR(node_->get_logger(), "Service \"%s\" called with an existing request. This should never happen", trigger_client_->get_service_name());
         return BT::NodeStatus::FAILURE;
     }
 
@@ -86,16 +86,19 @@ BT::NodeStatus TriggerService::onRunning() {
             if (time_elapsed > timeout_){
                 RCLCPP_ERROR(node_->get_logger(), "Service timeout. Failed to trigger service %s", trigger_client_->get_service_name());
                 trigger_client_->remove_pending_request(service_future_.value());
+                service_future_ = std::nullopt;
                 return BT::NodeStatus::FAILURE;
             }
             return BT::NodeStatus::RUNNING;
 
         case rclcpp::FutureReturnCode::INTERRUPTED:
             RCLCPP_ERROR(node_->get_logger(), "Service interrupted. Failed to trigger service %s", trigger_client_->get_service_name());
+            service_future_ = std::nullopt;
             return BT::NodeStatus::FAILURE;
 
         case rclcpp::FutureReturnCode::SUCCESS:
             const std_srvs::srv::Trigger::Response::SharedPtr resp = service_future_->get();
+            service_future_ = std::nullopt;
             if (!resp->success){
                 RCLCPP_ERROR(node_->get_logger(), "Error in service call to %s: %s", trigger_client_->get_service_name(), resp->message.c_str());
                 return BT::NodeStatus::FAILURE;
