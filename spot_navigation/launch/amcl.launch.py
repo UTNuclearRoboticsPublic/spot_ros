@@ -48,7 +48,7 @@ def generate_launch_description():
         executable='map_server',
         name='map_server',
         parameters=[
-            {'yaml_filename': PathJoinSubstitution([FindPackageShare('spot_navigation'), 'map', 'daniel_ahg.yaml'])}
+            {'yaml_filename': PathJoinSubstitution([FindPackageShare('spot_navigation'), 'map', 'new_map.yaml'])}
         ]
     )
 
