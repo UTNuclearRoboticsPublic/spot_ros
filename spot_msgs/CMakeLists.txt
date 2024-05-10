@@ -25,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GripperAngleMove.srv"
   "srv/HandPose.srv"
   "srv/ListGraph.srv"
+  "srv/NonContactTrajectory.srv"
   "srv/SetLocomotion.srv"
   "srv/SetVelocity.srv"
 
