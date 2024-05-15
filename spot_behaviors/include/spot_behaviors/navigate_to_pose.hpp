@@ -29,7 +29,7 @@
  * Note: This files is necessary because spot_behaviors uses behavior_tree.CPP V4 while
  *       the ros nav2 package uses behavior_tree.CPP V3. If this ever changes in the 
  *       future it is recommended that this file be deleted or archived in favor of the
- *       official release (- April 15th, 2024)
+ *       official release (May 15th, 2024)
  */
 
 #pragma once
