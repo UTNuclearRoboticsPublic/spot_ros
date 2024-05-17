@@ -58,18 +58,40 @@ BT::NodeStatus DockRobot::onStart() {
     RCLCPP_INFO(node_->get_logger(), "Calling dock request to Dock ID %u", request->dock_id);\
     
     service_future_ = dock_client_->async_send_request(request);
+    request_timestamp_ = node_->now();
     return BT::NodeStatus::RUNNING;
 }
 
 BT::NodeStatus DockRobot::onRunning() {
-    if (!service_future_.has_value()) return BT::NodeStatus::FAILURE;
-
-    if (service_future_->wait_for(std::chrono::seconds(0)) == std::future_status::ready){
-        spot_msgs::srv::Dock::Response::SharedPtr result = service_future_->get();
-        service_future_ = std::nullopt;
-        return result->success ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    if (!service_future_.has_value()) {
+        RCLCPP_WARN(node_->get_logger(), "Spot Dock behavior running without an active request. This should never happen");
+        return BT::NodeStatus::FAILURE;
     }
-    return BT::NodeStatus::RUNNING;
+
+    const auto status = rclcpp::spin_until_future_complete(node_, service_future_.value(), std::chrono::milliseconds(5));
+    switch (status){
+        case rclcpp::FutureReturnCode::SUCCESS:{
+            spot_msgs::srv::Dock::Response::SharedPtr result = service_future_->get();
+            service_future_ = std::nullopt;
+            return result->success ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+        }
+
+        default:
+        case rclcpp::FutureReturnCode::TIMEOUT:{
+            const double elapsed_seconds = (node_->now() - request_timestamp_).seconds();
+            if (elapsed_seconds > 15.0){
+                RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
+                dock_client_->remove_pending_request(service_future_.value());
+                service_future_ = std::nullopt;
+                return BT::NodeStatus::FAILURE;
+            }
+            else return BT::NodeStatus::RUNNING;
+        }
+
+        case rclcpp::FutureReturnCode::INTERRUPTED:
+            RCLCPP_WARN(node_->get_logger(), "Spot Dock request interrupted. Reporting failure");
+            return BT::NodeStatus::FAILURE;
+    }
 }
 
 void DockRobot::onHalted() {

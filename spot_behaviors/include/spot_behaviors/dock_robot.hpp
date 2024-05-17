@@ -67,6 +67,7 @@ private:
 
     // Service client
     rclcpp::Client<spot_msgs::srv::Dock>::SharedPtr dock_client_;
+    rclcpp::Time request_timestamp_;
 
     // Serivce client future result - empty optional if no request is active
     std::optional<rclcpp::Client<spot_msgs::srv::Dock>::FutureAndRequestId> service_future_;
