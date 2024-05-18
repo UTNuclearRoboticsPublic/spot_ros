@@ -297,6 +297,12 @@ class SpotBodyWrapper():
 
     def undock(self, timeout: float = 20.0) -> Tuple[bool, Text]:
         """Power motors on and undock the robot from the station."""
+        current_dock_state = self.get_docking_state()
+        undocked: bool = current_dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKED
+        undocking: bool = current_dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING
+        if undocked or undocking:
+            return True, 'Already undocked'
+        
         try:
             # Make sure we're powered on
             self._lease_manager.robot.power_on()
