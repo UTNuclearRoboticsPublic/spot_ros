@@ -36,7 +36,7 @@ TriggerService::TriggerService(const std::string& name, const BT::NodeConfigurat
 
 BT::PortsList TriggerService::providedPorts() {
     return {
-        BT::InputPort<float>("service_name"),
+        BT::InputPort<std::string>("service_name"),
         BT::InputPort<int>("timeout")
     };
 }
