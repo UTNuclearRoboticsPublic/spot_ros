@@ -16,12 +16,12 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <exec_depend>spot_control</exec_depend>
+  <exec_depend>spot_behaviors</exec_depend>
+  <exec_depend>spot_bringup</exec_depend>
   <exec_depend>spot_description</exec_depend>
   <exec_depend>spot_driver</exec_depend>
   <exec_depend>spot_msgs</exec_depend>
   <exec_depend>spot_navigation</exec_depend>
-  <exec_depend>spot_viz</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
