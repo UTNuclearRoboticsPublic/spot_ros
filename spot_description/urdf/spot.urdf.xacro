@@ -7,6 +7,8 @@
 
     <xacro:arg name="has_arm" default="False" />
     <xacro:arg name="has_eap" default="False" />
+    <xacro:arg name="has_eap_2" default="False" />
+    <xacro:arg name="has_realsense" default="False" />
 
     <!-- Fixed links -->
     <link name="body">
@@ -559,6 +561,27 @@
         <xacro:VLP-16 parent="lidar_assembly" name="velodyne">
             <origin xyz="0.0 0 0.08" rpy="0 0 0" />
         </xacro:VLP-16>
+    </xacro:if>
+
+    <!-- Updated Spot Enhanced Autonomy Package (EAP2) -->
+    <xacro:if value="$(arg has_eap_2)">
+        <link name="eap_2_assembly">
+            <visual>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/eap2_lidar.stl" />
+                </geometry>
+            </visual>
+            <collision>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/eap2_lidar.stl" />
+                </geometry>
+            </collision>
+        </link>
+        <joint name="lidar_mount" type="fixed">
+            <origin xyz="-0.03 0.0 0.0" rpy="0 0 0" />
+            <parent link="rear_rail" />
+            <child link="lidar_assembly" />
+        </joint>
     </xacro:if>
 
     <!-- Optional custom includes. -->
