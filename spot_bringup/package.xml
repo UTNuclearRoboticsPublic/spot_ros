@@ -12,13 +12,13 @@
 
   <license>Proprietary</license>
 
+  <exec_depend>velodyne</exec_depend>
   <exec_depend>spot_driver</exec_depend>
   <exec_depend>spot_navigation</exec_depend>
   <exec_depend>spot_description</exec_depend>
   <exec_depend>spot_manipulation_driver</exec_depend>
   <exec_depend>joy</exec_depend>
   <exec_depend>teleop_twist_joy</exec_depend>
-  <exec_depend>realsense2_description</exec_depend>
   <exec_depend>realsense2_camera</exec_depend>
   <exec_depend>joy_linux</exec_depend>
 

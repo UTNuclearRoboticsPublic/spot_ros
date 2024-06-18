@@ -2,6 +2,8 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
     <xacro:macro name="spot_arm" params="name" >
 
+    <xacro:arg name="has_realsense" default="False" />
+
     <link name="${name}_base_link"/>
 
     <link name="${name}_shoulder_yaw">
@@ -327,4 +329,11 @@
     </actuator>
   </transmission>
 <!-- EOF Transmissions -->
+
+  <xacro:if value="$(arg has_realsense)">
+    <xacro:include filename="$(find spot_description)/urdf/realsense_mount.urdf.xacro"/>
+    <xacro:realsense_mount parent = "arm0_wrist_roll">
+      <origin xyz = "0.145 0 -0.06" rpy = "3.1416 0 -1.57"/>
+    </xacro:realsense_mount>
+  </xacro:if>
 </robot>

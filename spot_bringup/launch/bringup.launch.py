@@ -19,6 +19,9 @@ def generate_launch_description():
         DeclareLaunchArgument('has_arm',
                             description='Robot includes the Spot Arm',
                             default_value="True"),
+        DeclareLaunchArgument('has_realsense',
+                            description='A realsense camera is mounted on the Spot Arm',
+                            default_value="False"),
         
 
         DeclareLaunchArgument('auto_claim',
@@ -34,6 +37,7 @@ def generate_launch_description():
 
     has_eap       = LaunchConfiguration('has_eap')
     has_arm       = LaunchConfiguration('has_arm')
+    has_realsense = LaunchConfiguration('has_realsense')
     auto_claim    = LaunchConfiguration('auto_claim')
     auto_power_on = LaunchConfiguration('auto_power_on')
     auto_stand    = LaunchConfiguration('auto_stand')
@@ -86,6 +90,7 @@ def generate_launch_description():
 
     # Realsense
     realsense_include = IncludeLaunchDescription(
+        condition=IfCondition(has_realsense),
         launch_description_source = PythonLaunchDescriptionSource(
             PathJoinSubstitution([
                 FindPackageShare('realsense2_camera'),
