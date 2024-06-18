@@ -48,12 +48,13 @@ from google.protobuf.message import Message as PB2Message
 from .spot_lease_manager import SpotLeaseManager
 
 class SpotBodyWrapper():
-    """Generic wrapper class to encompass release 1.1.4 API features"""
-    def __init__(self, logger, hostname, has_cam_payload: bool = False):
+    """Generic wrapper class to encompass release 4.0.2 API features"""
+    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
         self._logger = logger
         self._hostname = hostname
 
         self._is_connected = False
+        self._has_eap_2 = has_eap_2
         self._has_cam_payload = has_cam_payload
         self._lease_manager = None
 
@@ -117,11 +118,15 @@ class SpotBodyWrapper():
         for source in rear_image_sources:
             rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
+        point_cloud requests = {'velodyne-point-cloud'}
 
         # Spot service clients
         try:
             self._image_client = self._lease_manager.robot.ensure_client(ImageClient.default_service_name)
             self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
+
+            if self._has_eap_2:
+                self._pointcloud_client = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
@@ -137,14 +142,17 @@ class SpotBodyWrapper():
         self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
         self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
         self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-        self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
-        self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
+        sensor_tasks = [self._front_image_task, self._side_image_task, self._rear_image_task]
+        if self._has_eap_2:
+            self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
+            sensor_tasks.append(self._pointcloud_task)
+        self._async_sensor_tasks = AsyncTasks(sensor_tasks)
 
-        self._async_sensor_tasks = AsyncTasks([self._front_image_task,
-                                               self._side_image_task,
-                                               self._rear_image_task])
         
+        self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
         self._async_idle_task  = AsyncTasks([self._idle_task])
+
+        self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
         self._async_state_task = AsyncTasks([self._robot_state_task])
 
         self._is_connected = True
@@ -189,6 +197,11 @@ class SpotBodyWrapper():
     def rear_images(self):
         """Return latest proto from the _rear_image_task"""
         return self._rear_image_task.proto
+
+    @property
+    def point_clouds(self):
+        """Return the latest proto from teh _pointcloud_task"""
+        return self._pointcloud_task.proto
 
     @property
     def is_sitting(self) -> bool:

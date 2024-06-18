@@ -19,6 +19,9 @@ def generate_launch_description():
         DeclareLaunchArgument('has_arm',
                             description='Robot includes the Spot Arm',
                             default_value="True"),
+        DeclareLaunchArgument('has_eap_2',
+                            description="Robot includes the Updated Extended Autonomy Package (EAP2).",
+                            default_value="True"),
         DeclareLaunchArgument('has_realsense',
                             description='A realsense camera is mounted on the Spot Arm',
                             default_value="False"),
@@ -35,8 +38,9 @@ def generate_launch_description():
                             default_value='False')
     ]
 
-    has_eap       = LaunchConfiguration('has_eap')
     has_arm       = LaunchConfiguration('has_arm')
+    has_eap       = LaunchConfiguration('has_eap')
+    has_eap_2     = LaunchConfiguration('has_eap_2')
     has_realsense = LaunchConfiguration('has_realsense')
     auto_claim    = LaunchConfiguration('auto_claim')
     auto_power_on = LaunchConfiguration('auto_power_on')
@@ -85,7 +89,8 @@ def generate_launch_description():
         ])
       ),
       launch_arguments={'has_arm': has_arm,
-                        'has_eap': has_eap}.items()
+                        'has_eap': has_eap,
+                        'has_eap_2': has_eap_2}.items()
     )
 
     # Realsense

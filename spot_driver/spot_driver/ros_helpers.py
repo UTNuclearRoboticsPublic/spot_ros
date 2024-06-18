@@ -41,6 +41,7 @@ from geometry_msgs.msg import PoseWithCovariance, TransformStamped, TwistWithCov
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
+from sensor_msgs.msg import PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
 
 from spot_msgs.msg import DockState
@@ -53,7 +54,7 @@ from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 from spot_msgs.msg import ManipulatorState
 
-from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2
+from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
@@ -247,6 +248,50 @@ def getImageMsg(data: image_pb2.ImageResponse, lease_manager: SpotLeaseManager) 
     camera_info_msg.p[6] = data.source.pinhole.intrinsics.principal_point.y
 
     return image_msg, camera_info_msg, tf_msg
+
+def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
+                    lease_manager: SpotLeaseManager) -> PointCloud2:
+    """Converts a PointCloudResponse proto message to a sensor_msgs PointCloud2
+
+    Args: 
+        pointcloud: PointCloudResponse proto
+        lease_manager: A SpotWrapper object
+    Returns:
+        sensor_msgs/msg/PointCloud2 ROS message
+    """
+    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_SOURCE_DATA_ERROR):
+        lease_manager.logger.error("Error retrieving pointcloud source")
+        return None
+    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_POINT_CLOUD_DATA_ERROR):
+        lease_manager.logger.error(f"Error retrieving pointcloud from {pointcloud_response.source.name}")
+        return None
+    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_UNKNOWN_SOURCE):
+        lease_manager.logger.error(f"Unknown pointcloud source: {pointcloud_response.source.name}")
+        return None
+    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_UNKNOWN):
+        lease_manager.logger.error(f"Unknown error occured retrieving pointcloud")
+        return None
+    if (pointcloud_response.point_cloud.encoding != point_cloud_pb2.PointCloud.Encoding.ENCODING_XYZ_32F):
+        lease_manager.logger.error(f"Unknown pointcloud encoding: {pointcloud_response.point_cloud.encoding}")
+        return None
+
+    ros_pc = PointCloud2()
+    ros_pc.header.frame_id = pointcloud_response.source.frame_name_sensor
+    local_time = lease_manager.robotToLocalTime(pointcloud_response.source.acquisition_time)
+    ros_pc.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
+
+    ros_pc.fields.append(PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1))
+    ros_pc.fields.append(PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1))
+    ros_pc.fields.append(PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1))
+    ros_pc.data = pointcloud_response.point_cloud.data
+    ros_pc.point_step = 12
+    ros_pc.ros_step = len(ros_pc.data)
+    ros_pc.width = ros_pc.ros_step // ros_pc.point_step
+    ros_pc.height = 1
+    ros_pc.is_bigendian = False
+    ros_pc.is_dense = True
+
+    return ros_pc
 
 def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
                      lease_manager: SpotLeaseManager) -> JointState:

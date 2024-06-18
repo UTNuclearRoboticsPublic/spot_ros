@@ -128,6 +128,32 @@ class AsyncImageService(AsyncPeriodicQuery):
             callback_future.add_done_callback(self._callback)
             return callback_future
 
+class AsyncPointCloudService(AsyncPeriodicQuery):
+    """Class to get pointclouds at regular intervals. get_point_cloud_from_sources_async query sent to the robot at every tick.  Callback registered to defined callback function.
+        
+        Attributes:
+            client: The Client to a service on the robot
+            logger: Logger object
+            rate: Rate (Hz) to trigger the query
+            callback: Callback function to call when the results of the query are available
+    """
+    def __init__(self, client, logger, rate: float, callback, pointcloud_requests):
+        super(AsyncPointCloudService, self).__init__("robot_pointcloud_service", client, logger, period_sec=1.0/rate)
+
+        self._callback = None
+        if rate > 0.0:
+            self._callback = callback
+        else:
+            raise ValueError(f'Publish rates for async queries must be positive. Received value {rate} for PointCloudService')
+        self._pointcloud_requests = pointcloud_requests
+
+        def _start_query(self):
+            if self._callback:
+                callback_future = self._client.get_point_cloud_async(self._pointcloud_requests)
+                callback_future.add_done_callback(self._callback)
+                return callback_future
+
+
 class AsyncIdle(AsyncPeriodicQuery):
     """Class to check if the robot is moving, and if not, command a stand with the set mobility parameters
 

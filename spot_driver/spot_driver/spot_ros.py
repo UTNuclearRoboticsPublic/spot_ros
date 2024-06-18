@@ -46,7 +46,7 @@ from rcl_interfaces.msg import SetParametersResult
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo, PointCloud2
 from std_srvs.srv import Trigger, SetBool
 
 from google.protobuf import duration_pb2
@@ -109,7 +109,7 @@ class SpotROS(Node):
 
         """ ROS Parameters """
         status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease'}}
-        sensor_rate_params = {f'rates.sensors.{param}' for param in {'front_image', 'side_image', 'rear_image', 'hand_image'}}
+        sensor_rate_params = {f'rates.sensors.{param}' for param in {'front_image', 'side_image', 'rear_image', 'hand_image', 'point_cloud'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -153,6 +153,11 @@ class SpotROS(Node):
 
         self.declare_parameter('has_cam_payload', False,
             ParameterDescriptor(description='Set true if this robot features the Spot CAM payload.',
+                                type=ParameterType.PARAMETER_BOOL,
+                                read_only=True))
+
+        self.declare_parameter('has_eap_2', False,
+            ParameterDescriptor(description='Set true if this robot features the Spot EAP2 payload.',
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
 
@@ -311,6 +316,15 @@ class SpotROS(Node):
                 self.back_rgb_pub.process_data(image)
             elif image.source.name == "back_depth":
                 self.back_depth_pub.process_data(image)
+
+    def PointCloudCB(self, _) -> None:
+        """Callback for when the Spot Wrapper gets new pointcloud data."""
+
+        for idx, pointcloud in enumerate(self.spot_wrapper.point_clouds):
+            if self.point_cloud_pubs[idx].get_subscription_count() > 0:
+                pointcloud_msg = PointCloudToMsg(pointcloud)
+                if pointcloud_msg is not None:
+                    self.point_cloud_pub.publish(pointcloud_msg)
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
@@ -648,11 +662,13 @@ class SpotROS(Node):
         callbacks["front_image"] = self.FrontImageCB
         callbacks["side_image"]  = self.SideImageCB
         callbacks["rear_image"]  = self.RearImageCB
+        callbacks["point_cloud"] = self.PointCloudCB
 
         has_cam_payload = self.get_parameter('has_cam_payload').value
+        has_eap_2 = self.get_parameter('has_eap_2').value
 
         # Connect to the robot
-        self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_cam_payload)
+        self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
         # Dictionary of all param values in the 'rates' namespace
         rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
@@ -695,6 +711,10 @@ class SpotROS(Node):
         self.right_depth_pub = self.CameraPubs(self, 'depth/right')
         self.back_depth_pub = self.CameraPubs(self, 'depth/back')
 
+        ## --- Pointcloud Publishers --- ##
+
+        point_cloud_sources = {'velodyne-point-cloud': 'velodyne_points'}
+        self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for _, topic in point_cloud_sources]
 
         ## --- Status Publishers --- ##
         
