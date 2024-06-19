@@ -319,12 +319,13 @@ class SpotROS(Node):
 
     def PointCloudCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new pointcloud data."""
-
+        
         for idx, pointcloud in enumerate(self.spot_wrapper.point_clouds):
             if self.point_cloud_pubs[idx].get_subscription_count() > 0:
-                pointcloud_msg = PointCloudToMsg(pointcloud)
+                pointcloud_msg = PointCloudToMsg(pointcloud, self.spot_wrapper)
                 if pointcloud_msg is not None:
-                    self.point_cloud_pub.publish(pointcloud_msg)
+                    self._logger.info(f'Publishing pointcloud with {pointcloud_msg.width} points')
+                    self.point_cloud_pubs[idx].publish(pointcloud_msg)
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the claim service"""
@@ -713,8 +714,14 @@ class SpotROS(Node):
 
         ## --- Pointcloud Publishers --- ##
 
-        point_cloud_sources = {'velodyne-point-cloud': 'velodyne_points'}
-        self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for _, topic in point_cloud_sources]
+        point_cloud_sources = {}
+        if has_eap_2:
+            self._logger.info("Has EAP2")
+            point_cloud_sources['velodyne-point-cloud'] = 'velodyne_points'
+        else:
+            self._logger.info("Does not have EAP2")
+
+        self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for (_, topic) in point_cloud_sources.items()]
 
         ## --- Status Publishers --- ##
         

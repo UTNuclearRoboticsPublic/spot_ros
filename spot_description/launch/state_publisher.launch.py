@@ -42,7 +42,7 @@ def generate_launch_description():
     # Build the URDF from the xacro, applying specified hardware accessories.
     xacro_path = PathJoinSubstitution([this_pkg_share, 'urdf', 'spot.urdf.xacro'])
     urdf_param = ParameterValue(
-        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap, 'has_eap_2:=',has_eap_2, ' has_realsense:=',has_realsense]),
+        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap, ' has_eap_2:=',has_eap_2, ' has_realsense:=',has_realsense]),
         value_type=str)
 
     return launch.LaunchDescription([

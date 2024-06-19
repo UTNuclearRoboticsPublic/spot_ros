@@ -276,8 +276,8 @@ def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
         return None
 
     ros_pc = PointCloud2()
-    ros_pc.header.frame_id = pointcloud_response.source.frame_name_sensor
-    local_time = lease_manager.robotToLocalTime(pointcloud_response.source.acquisition_time)
+    ros_pc.header.frame_id = pointcloud_response.point_cloud.source.frame_name_sensor
+    local_time = lease_manager.robotToLocalTime(pointcloud_response.point_cloud.source.acquisition_time)
     ros_pc.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
     ros_pc.fields.append(PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1))
@@ -285,8 +285,8 @@ def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
     ros_pc.fields.append(PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1))
     ros_pc.data = pointcloud_response.point_cloud.data
     ros_pc.point_step = 12
-    ros_pc.ros_step = len(ros_pc.data)
-    ros_pc.width = ros_pc.ros_step // ros_pc.point_step
+    ros_pc.row_step = len(ros_pc.data)
+    ros_pc.width = ros_pc.row_step // ros_pc.point_step
     ros_pc.height = 1
     ros_pc.is_bigendian = False
     ros_pc.is_dense = True

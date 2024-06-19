@@ -62,6 +62,7 @@ def generate_launch_description():
             {'hostname':      LaunchConfiguration('hostname'),
                 'has_eap':       has_eap,
                 'has_arm':       has_arm,
+                'has_eap_2':     has_eap_2,
                 'auto_claim':    auto_claim,
                 'auto_power_on': auto_power_on,
                 'auto_stand':    auto_stand,
@@ -73,7 +74,8 @@ def generate_launch_description():
         package='spot_manipulation_driver',
         executable='combined_driver_node',
         parameters=[
-            {'hostname': LaunchConfiguration('hostname')},
+            {'hostname': LaunchConfiguration('hostname'),
+            'has_eap_2': has_eap_2},
             body_params,
             arm_params
         ]

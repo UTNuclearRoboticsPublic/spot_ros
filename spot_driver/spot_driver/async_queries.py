@@ -147,11 +147,11 @@ class AsyncPointCloudService(AsyncPeriodicQuery):
             raise ValueError(f'Publish rates for async queries must be positive. Received value {rate} for PointCloudService')
         self._pointcloud_requests = pointcloud_requests
 
-        def _start_query(self):
-            if self._callback:
-                callback_future = self._client.get_point_cloud_async(self._pointcloud_requests)
-                callback_future.add_done_callback(self._callback)
-                return callback_future
+    def _start_query(self):
+        if self._callback:
+            callback_future = self._client.get_point_cloud_async(self._pointcloud_requests)
+            callback_future.add_done_callback(self._callback)
+            return callback_future
 
 
 class AsyncIdle(AsyncPeriodicQuery):

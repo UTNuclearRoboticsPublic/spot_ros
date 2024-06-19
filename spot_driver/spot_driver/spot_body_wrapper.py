@@ -38,6 +38,7 @@ from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.image import ImageClient, build_image_request
+from bosdyn.client.point_cloud import build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
 
@@ -105,6 +106,7 @@ class SpotBodyWrapper():
         front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
         side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
         rear_image_sources = {'back_fisheye_image', 'back_depth'}
+        point_cloud_sources = {'velodyne-point-cloud'}
 
         front_image_requests = []
         for source in front_image_sources:
@@ -118,7 +120,9 @@ class SpotBodyWrapper():
         for source in rear_image_sources:
             rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
-        point_cloud requests = {'velodyne-point-cloud'}
+        point_cloud_requests = []
+        for source in point_cloud_sources:
+            point_cloud_requests.append(build_pc_request(source))
 
         # Spot service clients
         try:
