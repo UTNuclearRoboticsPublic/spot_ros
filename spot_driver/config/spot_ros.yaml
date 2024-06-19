@@ -11,6 +11,7 @@
         front_image: 10.0
         side_image: 10.0
         rear_image: 10.0
+        point_cloud: 10.0
       status:
         robot_state: 20.0
         lease: 1.0
