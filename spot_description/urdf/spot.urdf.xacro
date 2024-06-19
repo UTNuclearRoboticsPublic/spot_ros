@@ -568,12 +568,12 @@
         <link name="eap_2_assembly">
             <visual>
                 <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/eap2_lidar.stl" />
+                    <mesh filename="package://spot_description/meshes/accessories/EAP2.dae" />
                 </geometry>
             </visual>
             <collision>
                 <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/eap2_lidar.stl" />
+                    <mesh filename="package://spot_description/meshes/accessories/EAP2_compressed.stl" />
                 </geometry>
             </collision>
         </link>
