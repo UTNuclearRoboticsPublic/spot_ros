@@ -7,6 +7,8 @@
 
     <xacro:arg name="has_arm" default="False" />
     <xacro:arg name="has_eap" default="False" />
+    <xacro:arg name="has_eap_2" default="False" />
+    <xacro:arg name="has_realsense" default="False" />
 
     <!-- Virtual links -->
     <link name="base_footprint"/>
@@ -596,10 +598,26 @@
         </xacro:VLP-16>
     </xacro:if>
 
-    <xacro:include filename="$(find spot_description)/urdf/realsense_mount.urdf.xacro"/>
-    <xacro:realsense_mount parent = "arm0_wrist_roll">
-        <origin xyz = "0.145 0 -0.06" rpy = "3.1416 0 -1.57"/>
-    </xacro:realsense_mount>
+    <!-- Updated Spot Enhanced Autonomy Package (EAP2) -->
+    <xacro:if value="$(arg has_eap_2)">
+        <link name="eap_2_assembly">
+            <visual>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/EAP2.dae" />
+                </geometry>
+            </visual>
+            <collision>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/EAP2_compressed.stl" />
+                </geometry>
+            </collision>
+        </link>
+        <joint name="eap_2_mount" type="fixed">
+            <origin xyz="-0.03 0.0 0.0" rpy="0 0 0" />
+            <parent link="rear_rail" />
+            <child link="eap_2_assembly" />
+        </joint>
+    </xacro:if>
 
     <!-- Optional custom includes. -->
     <xacro:include filename="$(optenv SPOT_URDF_EXTRAS empty.urdf)" />

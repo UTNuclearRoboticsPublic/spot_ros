@@ -18,6 +18,7 @@
   <exec_depend>urdf</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>velodyne_description</exec_depend>
+  <exec_depend>realsense2_description</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

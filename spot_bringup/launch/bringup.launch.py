@@ -19,8 +19,11 @@ def generate_launch_description():
         DeclareLaunchArgument('has_arm',
                             description='Robot includes the Spot Arm',
                             default_value="True"),
+        DeclareLaunchArgument('has_eap_2',
+                            description="Robot includes the Updated Extended Autonomy Package (EAP2).",
+                            default_value="True"),
         DeclareLaunchArgument('has_realsense',
-                            description='Robot includes a mounted realsense camera',
+                            description='A realsense camera is mounted on the Spot Arm',
                             default_value="False"),
         
 
@@ -35,8 +38,9 @@ def generate_launch_description():
                             default_value='False')
     ]
 
-    has_eap       = LaunchConfiguration('has_eap')
     has_arm       = LaunchConfiguration('has_arm')
+    has_eap       = LaunchConfiguration('has_eap')
+    has_eap_2     = LaunchConfiguration('has_eap_2')
     has_realsense = LaunchConfiguration('has_realsense')
     auto_claim    = LaunchConfiguration('auto_claim')
     auto_power_on = LaunchConfiguration('auto_power_on')
@@ -58,6 +62,7 @@ def generate_launch_description():
             {'hostname':      LaunchConfiguration('hostname'),
                 'has_eap':       has_eap,
                 'has_arm':       has_arm,
+                'has_eap_2':     has_eap_2,
                 'auto_claim':    auto_claim,
                 'auto_power_on': auto_power_on,
                 'auto_stand':    auto_stand,
@@ -69,7 +74,8 @@ def generate_launch_description():
         package='spot_manipulation_driver',
         executable='combined_driver_node',
         parameters=[
-            {'hostname': LaunchConfiguration('hostname')},
+            {'hostname': LaunchConfiguration('hostname'),
+            'has_eap_2': has_eap_2},
             body_params,
             arm_params
         ]
@@ -85,7 +91,8 @@ def generate_launch_description():
         ])
       ),
       launch_arguments={'has_arm': has_arm,
-                        'has_eap': has_eap}.items()
+                        'has_eap': has_eap,
+                        'has_eap_2': has_eap_2}.items()
     )
 
     # Realsense
