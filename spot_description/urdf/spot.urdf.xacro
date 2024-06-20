@@ -578,7 +578,7 @@
             </collision>
         </link>
         <joint name="eap_2_mount" type="fixed">
-            <origin xyz="-0.03 0.0 0.0" rpy="0 0 0" />
+            <origin xyz="0.015 0.0 0.0" rpy="0 0 ${pi/2}" />
             <parent link="rear_rail" />
             <child link="eap_2_assembly" />
         </joint>

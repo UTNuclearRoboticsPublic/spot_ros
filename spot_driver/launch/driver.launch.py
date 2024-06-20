@@ -24,6 +24,9 @@ def generate_launch_description():
     DeclareLaunchArgument('has_eap',
                           description="Robot includes the Extended Autonomy Package.",
                           default_value="False"),
+    DeclareLaunchArgument('has_eap',
+                          description="Robot includes the Updated Extended Autonomy Package(EAP2).",
+                          default_value="False"),
     DeclareLaunchArgument('has_arm',
                           description='Robot includes the Spot Arm',
                           default_value="True"),
@@ -41,8 +44,9 @@ def generate_launch_description():
                           default_value='10.0')
   ]
 
-  has_eap = LaunchConfiguration('has_eap')
   has_arm = LaunchConfiguration('has_arm')
+  has_eap = LaunchConfiguration('has_eap')
+  has_eap_2 = LaunchConfiguration('has_eap_2')
 
   body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
 
@@ -61,6 +65,9 @@ def generate_launch_description():
                              value_type=str),
         ParameterDescription(name='has_eap',
                              value=has_eap,
+                             value_type=bool),
+        ParameterDescription(name='has_eap_2',
+                             value=has_eap_2,
                              value_type=bool),
         ParameterDescription(name='auto_claim',
                              value=LaunchConfiguration('auto_claim'),
