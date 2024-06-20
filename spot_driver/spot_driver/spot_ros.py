@@ -290,6 +290,8 @@ class SpotROS(Node):
 
     def FrontImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new front image data."""
+        if self.spot_wrapper.front_images is None:
+            return
 
         for image in self.spot_wrapper.front_images:
             if image.source.name == "frontleft_fisheye_image":
@@ -303,7 +305,9 @@ class SpotROS(Node):
 
     def SideImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new side image data."""
-
+        if self.spot_wrapper.side_images is None:
+            return
+        
         for image in self.spot_wrapper.side_images:
             if image.source.name == "left_fisheye_image":
                 self.left_rgb_pub.process_data(image)
@@ -316,8 +320,9 @@ class SpotROS(Node):
 
     def RearImageCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new rear image data."""
-
-        # [image, depth]
+        if self.spot_wrapper.rear_images is None:
+            return
+        
         for image in self.spot_wrapper.rear_images:
             if image.source.name == "back_fisheye_image":
                 self.back_rgb_pub.process_data(image)
@@ -887,6 +892,7 @@ class SpotROS(Node):
             feedback_msg.nickname = robot_id.nickname
             feedback_msg.computer_serial_number = robot_id.computer_serial_number
         self.feedback_pub.publish(feedback_msg)
+        self.get_logger().info("Published feedback")
 
         # publish mobility state
         mobility_params_msg = MobilityParams()

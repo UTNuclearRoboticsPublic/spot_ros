@@ -158,6 +158,7 @@ class SpotBodyWrapper():
         self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
         self._async_state_task = AsyncTasks([self._robot_state_task])
 
+        self._is_connected = True
         return True
 
     @property
