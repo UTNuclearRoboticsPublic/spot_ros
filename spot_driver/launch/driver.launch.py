@@ -24,7 +24,7 @@ def generate_launch_description():
     DeclareLaunchArgument('has_eap',
                           description="Robot includes the Extended Autonomy Package.",
                           default_value="False"),
-    DeclareLaunchArgument('has_eap',
+    DeclareLaunchArgument('has_eap_2',
                           description="Robot includes the Updated Extended Autonomy Package(EAP2).",
                           default_value="False"),
     DeclareLaunchArgument('has_arm',
