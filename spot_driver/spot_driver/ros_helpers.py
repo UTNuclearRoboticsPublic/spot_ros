@@ -304,6 +304,9 @@ def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
     Returns:
         sensor_msgs/JointState ROS message
     """
+    if kinematic_state is None:
+        return JointState()
+
     # static attributes of this method
     joint_state_msg = JointState()
     local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
