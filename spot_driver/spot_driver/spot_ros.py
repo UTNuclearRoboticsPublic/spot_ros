@@ -885,7 +885,6 @@ class SpotROS(Node):
             feedback_msg.nickname = robot_id.nickname
             feedback_msg.computer_serial_number = robot_id.computer_serial_number
         self.feedback_pub.publish(feedback_msg)
-        self.get_logger().info("Published feedback")
 
         # publish mobility state
         mobility_params_msg = MobilityParams()
