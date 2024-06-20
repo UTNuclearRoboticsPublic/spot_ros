@@ -331,7 +331,6 @@ class SpotROS(Node):
             if self.point_cloud_pubs[idx].get_subscription_count() > 0:
                 pointcloud_msg = PointCloudToMsg(pointcloud, self.spot_wrapper)
                 if pointcloud_msg is not None:
-                    self._logger.info(f'Publishing pointcloud with {pointcloud_msg.width} points')
                     self.point_cloud_pubs[idx].publish(pointcloud_msg)
         
     def handle_claim(self, _, res: Trigger.Response) -> Trigger.Response:

@@ -151,7 +151,6 @@ class SpotBodyWrapper():
             self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
             sensor_tasks.append(self._pointcloud_task)
         self._async_sensor_tasks = AsyncTasks(sensor_tasks)
-
         
         self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
         self._async_idle_task  = AsyncTasks([self._idle_task])
@@ -159,7 +158,6 @@ class SpotBodyWrapper():
         self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
         self._async_state_task = AsyncTasks([self._robot_state_task])
 
-        self._is_connected = True
         return True
 
     @property

@@ -277,7 +277,8 @@ def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
         return None
 
     ros_pc = PointCloud2()
-    ros_pc.header.frame_id = pointcloud_response.point_cloud.source.frame_name_sensor
+    # ros_pc.header.frame_id = pointcloud_response.point_cloud.source.frame_name_sensor
+    ros_pc.header.frame_id = "odom"
     local_time = lease_manager.robotToLocalTime(pointcloud_response.point_cloud.source.acquisition_time)
     ros_pc.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
 
