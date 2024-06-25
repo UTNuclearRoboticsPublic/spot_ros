@@ -5,45 +5,79 @@
          published by the driver (see spot_driver package) during runtime, so that the transforms
          include calibration adjustments. -->
 
-    <xacro:arg name="has_arm" default="False" />
-    <xacro:arg name="has_eap" default="False" />
-    <xacro:arg name="has_eap_2" default="False" />
-    <xacro:arg name="has_realsense" default="False" />
+    <xacro:arg name="has_arm" default="False"/>
+    <xacro:arg name="has_eap" default="False"/>
+    <xacro:arg name="has_eap_2" default="False"/>
+    <xacro:arg name="has_realsense" default="False"/>
+    <xacro:arg name="kinematic_model" default="default"/>
+    <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
 
     <!-- Virtual links -->
     <link name="base_footprint"/>
-    <link name="body_height"/>
-    <link name="body_with_yaw"/>
-    <link name="body_with_pitch_and_yaw"/>
 
     <!-- Virtual Joints -->
-    <joint name="body_height_joint" type="prismatic">
-        <parent link = "base_footprint"/>
-        <child  link = "body_height"/>
-        <axis xyz = "0 0 1"/>
-        <limit lower = "0.37" upper = "0.60" velocity="0.1" effort="1e9"/> 
-    </joint>
+    <xacro:if value="${kinematic_model == 'body_assist'}"/>
+        <link name="body_height"/>
+        <link name="body_with_yaw"/>
+        <link name="body_with_pitch_and_yaw"/>
+    
+        <joint name="body_height_joint" type="prismatic">
+            <parent link = "base_footprint"/>
+            <child  link = "body_height"/>
+            <axis xyz = "0 0 1"/>
+            <limit lower = "0.37" upper = "0.60" velocity="0.1" effort="1e9"/> 
+        </joint>
 
-    <joint name="body_yaw_joint" type="revolute">
-        <parent link = "body_height"/>
-        <child  link = "body_with_yaw"/>
-        <limit lower = "${-pi/9}" upper = "${pi/9}" velocity="0.1" effort="1e9"/>
-        <axis    xyz = "0 0 1"/>
-    </joint>
+        <joint name="body_yaw_joint" type="revolute">
+            <parent link = "body_height"/>
+            <child  link = "body_with_yaw"/>
+            <limit lower = "${-pi/9}" upper = "${pi/9}" velocity="0.1" effort="1e9"/>
+            <axis    xyz = "0 0 1"/>
+        </joint>
 
-    <joint name="body_pitch_joint" type="revolute">
-        <parent link = "body_with_yaw"/>
-        <child  link = "body_with_pitch_and_yaw"/>
-        <limit lower = "${-pi/12}" upper = "${pi/12}"  velocity="0.1" effort="1e9"/>
-        <axis    xyz = "0 1 0"/>
-    </joint>
+        <joint name="body_pitch_joint" type="revolute">
+            <parent link = "body_with_yaw"/>
+            <child  link = "body_with_pitch_and_yaw"/>
+            <limit lower = "${-pi/12}" upper = "${pi/12}"  velocity="0.1" effort="1e9"/>
+            <axis    xyz = "0 1 0"/>
+        </joint>
 
-    <joint name="body_roll_joint" type="revolute">
-        <parent link = "body_with_pitch_and_yaw"/>
-        <child  link = "body"/>
-        <limit lower = "${-pi/18}" upper = "${pi/18}"  velocity="0.1" effort="1e9"/>
-        <axis    xyz = "1 0 0"/>
-    </joint>
+        <joint name="body_roll_joint" type="revolute">
+            <parent link = "body_with_pitch_and_yaw"/>
+            <child  link = "body"/>
+            <limit lower = "${-pi/18}" upper = "${pi/18}"  velocity="0.1" effort="1e9"/>
+            <axis    xyz = "1 0 0"/>
+        </joint>
+    </xacro:if>
+
+    <xacro:if value="${kinematic_model == 'mobile_manipulation'}">
+        <!-- Virtual Base Movement links -->
+        <link name="body_x"/>
+        <link name="body_y"/>
+
+        <!-- Virtual Joints -->
+        <joint name="body_x" type="prismatic">
+            <parent link = "base_footprint"/>
+            <child  link = "body_x"/>
+            <axis xyz = "1 0 0"/>
+            <limit lower = "-10.0" upper = "10.0" velocity="0.1" effort="1e9"/>
+        </joint>
+
+        <joint name="body_y" type="prismatic">
+            <parent link = "body_x"/>
+            <child  link = "body_y"/>
+            <axis xyz = "0 1 0"/>
+            <limit lower = "-10.0" upper = "10.0" velocity="0.1" effort="1e9"/>
+        </joint>
+
+        <joint name="body_or" type="revolute">
+            <parent link = "body_y"/>
+            <child  link = "body"/>
+            <limit lower = "0" upper = "${2*pi}" velocity="0.1" effort="1e9"/>
+            <axis    xyz = "0 0 1"/>
+        </joint>
+        <!-- EOF Virtual Base Movement Links-->
+    </xacro:if>
 
     <!-- Fixed links -->
     <link name="body">
