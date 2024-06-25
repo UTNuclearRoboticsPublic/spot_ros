@@ -29,7 +29,10 @@ def generate_launch_description():
                           default_value="False"),
     DeclareLaunchArgument('has_arm',
                           description='Robot includes the Spot Arm',
-                          default_value="True"),
+                          default_value="False"),
+    DeclareLaunchArgument('has_cam_payload',
+                          description='Robot includes the CAM payload',
+                          default_value='False'),
     DeclareLaunchArgument('auto_claim',
                           description='Claim ownership of the robot upon connection.',
                           default_value='False'),
@@ -46,7 +49,6 @@ def generate_launch_description():
 
   has_arm = LaunchConfiguration('has_arm')
   has_eap = LaunchConfiguration('has_eap')
-  has_eap_2 = LaunchConfiguration('has_eap_2')
 
   body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
 
@@ -67,7 +69,10 @@ def generate_launch_description():
                              value=has_eap,
                              value_type=bool),
         ParameterDescription(name='has_eap_2',
-                             value=has_eap_2,
+                             value=LaunchConfiguration('has_eap_2'),
+                             value_type=bool),
+        ParameterDescription(name='has_cam_payload',
+                             value=LaunchConfiguration('has_cam_payload'),
                              value_type=bool),
         ParameterDescription(name='auto_claim',
                              value=LaunchConfiguration('auto_claim'),

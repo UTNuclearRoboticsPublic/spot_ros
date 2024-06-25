@@ -1,3 +1,4 @@
+import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
@@ -8,23 +9,42 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
 
+    spot_accessories: str = os.getenv('SPOT_ACCESSORIES', '')
+    spot_accessories_dict: dict = {}
+    for accessory in spot_accessories.split(' '):
+        if accessory == 'ARM':
+            spot_accessories_dict['has_arm'] = 'True'
+        elif accessory == 'EAP':
+            spot_accessories_dict['has_eap'] = 'True'
+        elif accessory == 'EAP2':
+            spot_accessories_dict['has_eap_2'] = 'True'
+        elif accessory == 'CAM':
+            spot_accessories_dict['has_cam_payload'] = 'True'
+        elif accessory == 'REALSENSE':
+            spot_accessories_dict['has_realsense'] = 'True'
+
     launch_args = [
 
         # Robot-specific configuration
         DeclareLaunchArgument('hostname',
                             default_value='no_value'),
+
+        # Accessories
         DeclareLaunchArgument('has_eap',
-                            description="Robot includes the Extended Autonomy Package.",
-                            default_value="True"),
+                            description="Robot includes the Extended Autonomy Package",
+                            default_value=spot_accessories_dict.get('has_eap', 'False')),
         DeclareLaunchArgument('has_arm',
                             description='Robot includes the Spot Arm',
-                            default_value="True"),
+                            default_value=spot_accessories_dict.get('has_arm', 'False')),
         DeclareLaunchArgument('has_eap_2',
-                            description="Robot includes the Updated Extended Autonomy Package (EAP2).",
-                            default_value="True"),
+                            description="Robot includes the Updated Extended Autonomy Package (EAP2)",
+                            default_value=spot_accessories_dict.get('has_eap_2', 'False')),
+        DeclareLaunchArgument('has_cam_payload',
+                            description="Robot includes the CAM payload.",
+                            default_value=spot_accessories_dict.get('has_cam_payload', 'False')),
         DeclareLaunchArgument('has_realsense',
                             description='A realsense camera is mounted on the Spot Arm',
-                            default_value="False"),
+                            default_value=spot_accessories_dict.get('has_realsense', 'False')),
         
 
         DeclareLaunchArgument('auto_claim',
@@ -38,13 +58,14 @@ def generate_launch_description():
                             default_value='False')
     ]
 
-    has_arm       = LaunchConfiguration('has_arm')
-    has_eap       = LaunchConfiguration('has_eap')
-    has_eap_2     = LaunchConfiguration('has_eap_2')
-    has_realsense = LaunchConfiguration('has_realsense')
-    auto_claim    = LaunchConfiguration('auto_claim')
-    auto_power_on = LaunchConfiguration('auto_power_on')
-    auto_stand    = LaunchConfiguration('auto_stand')
+    has_arm         = LaunchConfiguration('has_arm')
+    has_eap         = LaunchConfiguration('has_eap')
+    has_eap_2       = LaunchConfiguration('has_eap_2')
+    has_realsense   = LaunchConfiguration('has_realsense')
+    has_cam_payload = LaunchConfiguration('has_cam_payload')
+    auto_claim      = LaunchConfiguration('auto_claim')
+    auto_power_on   = LaunchConfiguration('auto_power_on')
+    auto_stand      = LaunchConfiguration('auto_stand')
 
     body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
     arm_params  = PathJoinSubstitution([FindPackageShare('spot_manipulation_driver'), 'config', 'spot_arm.yaml'])
@@ -60,12 +81,13 @@ def generate_launch_description():
         ),
         launch_arguments=
             {'hostname':      LaunchConfiguration('hostname'),
-                'has_eap':       has_eap,
-                'has_arm':       has_arm,
-                'has_eap_2':     has_eap_2,
-                'auto_claim':    auto_claim,
-                'auto_power_on': auto_power_on,
-                'auto_stand':    auto_stand,
+                'has_eap':         has_eap,
+                'has_arm':         has_arm,
+                'has_eap_2':       has_eap_2,
+                'has_cam_payload': has_cam_payload,
+                'auto_claim':      auto_claim,
+                'auto_power_on':   auto_power_on,
+                'auto_stand':      auto_stand,
             }.items()
     )
 
@@ -75,7 +97,8 @@ def generate_launch_description():
         executable='combined_driver_node',
         parameters=[
             {'hostname': LaunchConfiguration('hostname'),
-            'has_eap_2': has_eap_2},
+            'has_eap_2': has_eap_2,
+            'has_cam_payload': has_cam_payload},
             body_params,
             arm_params
         ]
