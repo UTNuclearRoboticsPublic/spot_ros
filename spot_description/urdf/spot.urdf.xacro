@@ -9,14 +9,13 @@
     <xacro:arg name="has_eap" default="False"/>
     <xacro:arg name="has_eap_2" default="False"/>
     <xacro:arg name="has_realsense" default="False"/>
-    <xacro:arg name="kinematic_model" default="default"/>
+    <xacro:arg name="kinematic_model" default="body_assist"/>
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
 
-    <!-- Virtual links -->
     <link name="base_footprint"/>
 
     <!-- Virtual Joints -->
-    <xacro:if value="${kinematic_model == 'body_assist'}"/>
+    <xacro:if value="${kinematic_model == 'body_assist'}">
         <link name="body_height"/>
         <link name="body_with_yaw"/>
         <link name="body_with_pitch_and_yaw"/>
@@ -54,6 +53,7 @@
         <!-- Virtual Base Movement links -->
         <link name="body_x"/>
         <link name="body_y"/>
+        <link name="body_or"/>
 
         <!-- Virtual Joints -->
         <joint name="body_x" type="prismatic">
@@ -72,9 +72,15 @@
 
         <joint name="body_or" type="revolute">
             <parent link = "body_y"/>
-            <child  link = "body"/>
+            <child  link = "body_or"/>
             <limit lower = "0" upper = "${2*pi}" velocity="0.1" effort="1e9"/>
             <axis    xyz = "0 0 1"/>
+        </joint>
+
+        <joint name="ground_to_body" type="fixed">
+            <parent link = "body_or"/>
+            <child  link = "body"/>
+            <origin xyz="0 0 0.52"/>
         </joint>
         <!-- EOF Virtual Base Movement Links-->
     </xacro:if>

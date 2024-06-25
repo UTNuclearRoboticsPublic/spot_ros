@@ -546,6 +546,21 @@ def GetVirtualJointValues(kinematic_state: robot_state_pb2.KinematicState) -> Jo
     joint_state.velocity.append(0)
     joint_state.effort.append(0)
 
+    joint_state.name.append("body_x")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    joint_state.name.append("body_y")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    joint_state.name.append("body_or")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
     return joint_state
 
 def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
