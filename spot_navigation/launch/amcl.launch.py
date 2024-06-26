@@ -16,13 +16,18 @@ def generate_launch_description():
             default_value=PathJoinSubstitution([
                 FindPackageShare('spot_navigation'),
                 'map',
-                'ahg.yaml']),
+                'new_map.yaml']),
             description='Full path to map file to load'),
 
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use simulation (Gazebo) clock if true')
+            description='Use simulation (Gazebo) clock if true'),
+
+        DeclareLaunchArgument(
+            'cloud_in',
+            default_value='velodyne_points',
+            description='Pointcloud to use for localization')
     ]
 
     laserscan_node = Node(
@@ -38,7 +43,7 @@ def generate_launch_description():
             {"max_height": 1.5}
         ],
         remappings=[
-            ("cloud_in", "/velodyne_points"),
+            ("cloud_in", LaunchConfiguration('cloud_in')),
             ("scan", "/spot/pointcloud_scan")
         ]
     )
@@ -48,7 +53,7 @@ def generate_launch_description():
         executable='map_server',
         name='map_server',
         parameters=[
-            {'yaml_filename': PathJoinSubstitution([FindPackageShare('spot_navigation'), 'map', 'new_map.yaml'])}
+            {'yaml_filename': LaunchConfiguration('map')}
         ]
     )
 

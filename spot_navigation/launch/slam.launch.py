@@ -14,7 +14,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use simulation (Gazebo) clock if true')
+            description='Use simulation (Gazebo) clock if true'
+        ),
+        DeclareLaunchArgument(
+            'cloud_in',
+            default_value='/velodyne_points',
+            description='The pointcloud topic to use for SLAM'
+        )
     ]
 
     this_pkg_share = FindPackageShare('spot_navigation')
@@ -31,12 +37,12 @@ def generate_launch_description():
                 {"angle_min": -math.pi},
                 {"angle_max":  math.pi},
                 {"angle_increment": math.radians(1.0)},
-                {"target_frame": "gpe"},
+                {"target_frame": "base_footprint"},
                 {"min_height": 0.20},
                 {"max_height": 1.5}
             ],
             remappings=[
-                ("cloud_in", "/velodyne_points"),
+                ("cloud_in", LaunchConfiguration('cloud_in')),
                 ("scan", "/spot/pointcloud_scan")
             ]
         ),
