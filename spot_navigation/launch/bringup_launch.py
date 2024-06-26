@@ -6,6 +6,12 @@ from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node, SetRemap
 
 def generate_launch_description():
+    config_arg = DeclareLaunchArgument(
+        'config',
+        description='Full path to the navigation configuration file',
+        default_value=PathJoinSubstitution([FindPackageShare("spot_navigation"), "config", "spot.yaml"])
+    )
+    
     nav_include = GroupAction(
         actions=[
             SetRemap(src='/cmd_vel', dst='/spot_driver/cmd_vel'),
@@ -15,12 +21,13 @@ def generate_launch_description():
                     PathJoinSubstitution([FindPackageShare("nav2_bringup"), "launch", "navigation_launch.py"])
                 ),
                 launch_arguments={
-                    "params_file": PathJoinSubstitution([FindPackageShare("spot_navigation"), "config", "spot.yaml"])
+                    "params_file": LaunchConfiguration('config')
                 }.items()
             )
         ]
     )
 
     return LaunchDescription([
-        nav_include
+        nav_include,
+        config_arg
     ])
