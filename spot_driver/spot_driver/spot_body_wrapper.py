@@ -147,7 +147,9 @@ class SpotBodyWrapper():
         self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
         self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
         sensor_tasks = [self._front_image_task, self._side_image_task, self._rear_image_task]
-        if self._has_eap_2:
+
+        # Optionally enable the pointcloud service
+        if self._has_eap_2 and 'point_cloud' in callbacks:
             self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
             sensor_tasks.append(self._pointcloud_task)
         self._async_sensor_tasks = AsyncTasks(sensor_tasks)

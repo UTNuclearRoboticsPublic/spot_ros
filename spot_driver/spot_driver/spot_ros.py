@@ -180,6 +180,11 @@ class SpotROS(Node):
             ParameterDescriptor(description='Automatically stand up the robot on connection.',
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
+        
+        self.declare_parameter('launch_pointcloud_service', False,
+            ParameterDescriptor(description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
+                                type=ParameterType.PARAMETER_BOOL,
+                                read_only=True))
 
     def __del__(self):
         if self.status_timer is not None:
@@ -674,7 +679,8 @@ class SpotROS(Node):
         callbacks["front_image"] = self.FrontImageCB
         callbacks["side_image"]  = self.SideImageCB
         callbacks["rear_image"]  = self.RearImageCB
-        callbacks["point_cloud"] = self.PointCloudCB
+        if self.get_parameter('launch_pointcloud_service').value:
+            callbacks["point_cloud"] = self.PointCloudCB
 
         has_cam_payload = self.get_parameter('has_cam_payload').value
         has_eap_2 = self.get_parameter('has_eap_2').value
@@ -726,11 +732,9 @@ class SpotROS(Node):
         ## --- Pointcloud Publishers --- ##
 
         point_cloud_sources = {}
-        if has_eap_2:
-            self._logger.info("Has EAP2")
+        if has_eap_2 and 'point_cloud' in callbacks:
+            self._logger.info("Launching EAP2 pointcloud service")
             point_cloud_sources['velodyne-point-cloud'] = 'velodyne_points'
-        else:
-            self._logger.info("Does not have EAP2")
 
         self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for (_, topic) in point_cloud_sources.items()]
 

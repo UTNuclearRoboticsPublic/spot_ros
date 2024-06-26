@@ -2,10 +2,11 @@ import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import SetParameter
 
 def generate_launch_description():
 
@@ -28,6 +29,8 @@ def generate_launch_description():
         # Robot-specific configuration
         DeclareLaunchArgument('hostname',
                             default_value='no_value'),
+        DeclareLaunchArgument('velodyne_ip',
+                            default_value='192.168.1.201'),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -55,6 +58,9 @@ def generate_launch_description():
                             default_value='False'),
         DeclareLaunchArgument('auto_stand',
                             description='Stand the robot upon connection.',
+                            default_value='False'),
+        DeclareLaunchArgument('launch_pointcloud_service',
+                            description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
                             default_value='False')
     ]
 
@@ -182,6 +188,23 @@ def generate_launch_description():
         condition=IfCondition(has_arm)
     )
 
+    # Launch Velodyne if not using the robot service
+    velodyne_include = GroupAction([
+        IncludeLaunchDescription(
+            condition=IfCondition(
+                OrSubstitution(
+                    has_eap,
+                    AndSubstitution(has_eap_2, NotSubstitution(LaunchConfiguration('launch_pointcloud_service')))
+                )
+            ),
+            launch_description_source = PythonLaunchDescriptionSource(
+                PathJoinSubstitution([FindPackageShare('velodyne'), 'launch',
+                                    'velodyne-all-nodes-VLP16-composed-launch.py'])
+            )
+        ),
+        SetParameter('device_ip', LaunchConfiguration('velodyne_ip'))
+    ])
+
     ## Launch
     return LaunchDescription([
         *launch_args,
@@ -192,5 +215,6 @@ def generate_launch_description():
         joy_node,
         teleop_twist_joy_node,
         spot_joy_node,
-        spot_arm_joy_include
+        spot_arm_joy_include,
+        velodyne_include
     ])

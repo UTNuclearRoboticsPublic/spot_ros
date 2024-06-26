@@ -92,17 +92,7 @@ def generate_launch_description():
     )
   ]
 
-  includes = [
-    IncludeLaunchDescription(
-      condition=IfCondition(has_eap),
-      launch_description_source = PythonLaunchDescriptionSource(
-        PathJoinSubstitution([FindPackageShare('velodyne'), 'launch',
-                              'velodyne-all-nodes-VLP16-composed-launch.py'])
-      ))
-  ]
-
   return LaunchDescription([
       *launch_args,
       *nodes,
-      *includes
   ])
