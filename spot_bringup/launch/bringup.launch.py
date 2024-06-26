@@ -188,22 +188,38 @@ def generate_launch_description():
         condition=IfCondition(has_arm)
     )
 
-    # Launch Velodyne if not using the robot service
-    velodyne_include = GroupAction([
-        IncludeLaunchDescription(
-            condition=IfCondition(
-                OrSubstitution(
-                    has_eap,
-                    AndSubstitution(has_eap_2, NotSubstitution(LaunchConfiguration('launch_pointcloud_service')))
+    velodyne_include = GroupAction(
+        # Only launch velodyne if we have the EAP or the EAP2 and we're not using the pointcloud service
+        condition=IfCondition(
+            OrSubstitution(
+                has_eap,
+                AndSubstitution(
+                    has_eap_2, 
+                    NotSubstitution(LaunchConfiguration('launch_pointcloud_service'))
                 )
-            ),
-            launch_description_source = PythonLaunchDescriptionSource(
-                PathJoinSubstitution([FindPackageShare('velodyne'), 'launch',
-                                    'velodyne-all-nodes-VLP16-composed-launch.py'])
             )
         ),
-        SetParameter('device_ip', LaunchConfiguration('velodyne_ip'))
-    ])
+        # Run velodyne nodes manually so we have access to parameter reassignment
+        actions=[
+            Node(package='velodyne_driver',
+                executable='velodyne_driver_node',
+                output='both',
+                parameters=[
+                    PathJoinSubstitution([FindPackageShare('velodyne_driver'), 'config', 'VLP16-velodyne_driver_node-params.yaml']), 
+                    {'device_ip': LaunchConfiguration('velodyne_ip')}
+                ]
+            ),
+
+            Node(package='velodyne_pointcloud',
+                executable='velodyne_transform_node',
+                output='both',
+                parameters=[
+                    PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'config', 'VLP16-velodyne_transform_node-params.yaml']), 
+                    {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
+                ]
+            )
+        ]
+    )
 
     ## Launch
     return LaunchDescription([
