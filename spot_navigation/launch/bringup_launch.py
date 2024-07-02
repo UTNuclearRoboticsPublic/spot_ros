@@ -28,6 +28,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        config_arg,
         nav_include,
-        config_arg
     ])
