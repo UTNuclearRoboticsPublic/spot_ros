@@ -60,7 +60,7 @@ BT::NodeStatus TriggerService::onStart() {
     // Update the timeout value if one has been provided
     BT::Expected<int> timeout_expected = getInput<int>("timeout");
     if (!timeout_expected.has_value()){
-        RCLCPP_WARN(node_->get_logger(), "Argument \"timeout\" not passed to TriggerService behavior, using defaul value of 2 seconds");
+        RCLCPP_WARN(node_->get_logger(), "Argument \"timeout\" not passed to TriggerService behavior, using default value of 2 seconds");
     }
     timeout_ = std::chrono::milliseconds(timeout_expected.value_or(2)*1000);
     
