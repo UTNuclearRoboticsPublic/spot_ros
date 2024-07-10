@@ -54,6 +54,9 @@ class SpotJoyUtils(Node):
 
         exclusive_group = MutuallyExclusiveCallbackGroup()
         self.lease_client = self.create_client(Trigger, "/spot_driver/claim", callback_group=exclusive_group)
+        self.release_client = self.create_client(Trigger, "/spot_driver/release", callback_group=exclusive_group)
+        self.estop_client_gentle = self.create_client(Trigger, "/spot_driver/estop/gentle", callback_group=exclusive_group)
+        self.estop_client_hard = self.create_client(Trigger, "/spot_driver/estop/hard", callback_group=exclusive_group)
         self.dock_client = self.create_client(Dock, "/spot_driver/dock", callback_group=exclusive_group)
         self.undock_client = self.create_client(Trigger, "/spot_driver/undock", callback_group=exclusive_group)
         self.power_on_client = self.create_client(Trigger, "/spot_driver/power_on", callback_group=exclusive_group)
@@ -96,9 +99,9 @@ class SpotJoyUtils(Node):
         if self.action is None:
             return
 
-        if self.action == "ToggleDock":
+        if self.action == "Dock":
             self.get_logger().info("Toggling dock")
-            self.toggleDock()
+            self.dockRobot()
         elif self.action == "ToggleStand":
             self.get_logger().info("Toggling stand")
             self.toggleStand()
@@ -110,12 +113,20 @@ class SpotJoyUtils(Node):
             q = Rotation.from_euler(seq="ZYX", angles=[self._body_yaw, self._body_pitch, 0.0], degrees=True).as_quat()
             pose_command.position.z = self._body_offset
             pose_command.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
-            self.get_logger().info(f"Commanding body pose: {pose_command.position.z} | {pose_command.orientation}")
             self.body_pose_pub.publish(pose_command)
         else:
-            if self.action == "Claim":
+            if self.action == "EStopGentle":
+                self.get_logger().warn("Triggering soft e-stop")
+                client = self.estop_client_gentle
+            elif self.action == "EStopHard":
+                self.get_logger().error("Triggering hard e-stop")
+                client = self.estop_client_hard
+            elif self.action == "Claim":
                 self.get_logger().info("Claiming lease")
                 client = self.lease_client
+            elif self.action == "Release":
+                self.get_logger().info("Releasing lease")
+                client = self.release_client
             elif self.action == "Sit":
                 self.get_logger().info("Sitting")
                 client = self.sit_client
@@ -125,6 +136,9 @@ class SpotJoyUtils(Node):
             elif self.action == "PowerOn":
                 self.get_logger().info("Powering on")
                 client = self.power_on_client
+            elif self.action == "Undock":
+                self.get_logger().info("Undocking robot")
+                client = self.undock_client
             elif self.action == "ArmStow":
                 self.get_logger().info("Stowing arm")
                 client = self.stow_client
@@ -149,14 +163,33 @@ class SpotJoyUtils(Node):
         if len(axes) != 6:
             self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=1.0)
 
-        # If both the start and back buttons are pressed, try to claim a lease
-        if buttons[LogitechButtons.START.value] and buttons[LogitechButtons.BACK.value]:
+        # If all four letter buttons are pressed, as well as both bumpers, trigger the hard estop
+        if buttons[LogitechButtons.A.value] and buttons[LogitechButtons.B.value] and buttons[LogitechButtons.X.value] and buttons[LogitechButtons.Y.value] and buttons[LogitechButtons.RB.value] and buttons[LogitechButtons.LB.value]:
+            self.action = "EStopHard"
+            return
+
+        # If the red button is pressed, trigger the soft estop
+        if buttons[LogitechButtons.B.value]:
+            self.action = "EStopGentle"
+            return
+
+        # If both the start button is pressed, try to claim a lease
+        if buttons[LogitechButtons.START.value]:
             self.action = "Claim"
+            return
+        
+        # If the back button is pressed, release the lease on the robot
+        if buttons[LogitechButtons.BACK.value]:
+            self.action = "Release"
             return
 
         # If both directional sticks are pressed, undock or dock the robot
-        if buttons[LogitechButtons.LEFT_STICK.value] and buttons[LogitechButtons.RIGHT_STICK.value]:
-            self.action = "ToggleDock"
+        if buttons[LogitechButtons.RIGHT_STICK.value]:
+            self.action = "Undock"
+            return
+        
+        if buttons[LogitechButtons.LEFT_STICK.value]:
+            self.action = "Dock"
             return
 
         # If the left trigger is pressed, command the robot to sit
@@ -194,24 +227,20 @@ class SpotJoyUtils(Node):
 
         self.action = None
         
-    def toggleDock(self):
-        if not self.verifyServer(self.dock_client) or not self.verifyServer(self.undock_client):
-            self.get_logger.warn("Cannot dock/undock robot, no available server")
+    def dockRobot(self):
+        if not self.verifyServer(self.dock_client):
+            self.get_logger.warn("Cannot dock robot, no available server")
+            return
 
-        # First try to undock. If this fails, try to dock
-        if self._docked:
-            self.get_logger().info("Undocking robot")
-            resp = self.undock_client.call(Trigger.Request())
-            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
-
-        else:
-            self.get_logger().info("Docking robot")
-            resp = self.dock_client.call(Dock.Request(dock_id=520))
-            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+        self.get_logger().info("Docking robot")
+        resp = self.dock_client.call(Dock.Request(dock_id=520))
+        self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            
 
     def toggleStand(self):
         if not self.verifyServer(self.stand_client) or not self.verifyServer(self.sit_client):
             self.get_logger.warn("Cannot stand/sit robot, no available server")
+            return
 
         if self._sitting:
             self.get_logger().info("Standing robot")
@@ -228,6 +257,7 @@ class SpotJoyUtils(Node):
     def toggleGripper(self):
         if not self.verifyServer(self.gripper_open_client) or not self.verifyServer(self.gripper_close_client):
             self.get_logger.warn("Cannot open/close gripper, no available server")
+            return
 
         if self._gripper_closed:
             self.get_logger().info("Opening Gripper")
