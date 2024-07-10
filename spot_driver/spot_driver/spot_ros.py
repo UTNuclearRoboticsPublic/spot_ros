@@ -402,21 +402,21 @@ class SpotROS(Node):
         res.success, res.message = self.spot_wrapper.power_off()
         return res
 
-    def handle_estop_hard(self, _) -> Trigger.Response:
+    def handle_estop_hard(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler to hard-eStop the robot.  The robot will immediately cut power to the motors"""
-        resp = self.spot_wrapper.assertEStop(True)
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper._lease_manager.assertEStop(True)
+        return res
 
-    def handle_estop_soft(self, _) -> Trigger.Response:
+    def handle_estop_soft(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler to soft-eStop the robot.  The robot will try to settle on the ground before cutting
         power to the motors """
-        resp = self.spot_wrapper.assertEStop(False)
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper._lease_manager.assertEStop(False)
+        return res
 
-    def handle_estop_disengage(self, _) -> Trigger.Response:
+    def handle_estop_disengage(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler to disengage the eStop on the robot."""
-        resp = self.spot_wrapper.disengageEStop()
-        return Trigger.Response(resp[0], resp[1])
+        res = self.spot_wrapper._lease_manager.disengageEStop()
+        return Trigger.Response(res[0], res[1])
 
     def handle_clear_behavior_fault(self, req) -> ClearBehaviorFault.Response:
         """ROS service handler for clearing behavior faults"""

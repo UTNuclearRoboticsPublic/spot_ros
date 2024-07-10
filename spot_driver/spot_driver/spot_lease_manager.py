@@ -298,7 +298,7 @@ class SpotLeaseManager():
         """Get the status for the EStop client"""
         return self._estop_client.get_status()
 
-    def assertEStop(self, severe=True) -> bool:
+    def assertEStop(self, severe=True) -> Tuple[bool, str]:
         """Forces the robot into eStop state.
 
         Args:
@@ -311,10 +311,10 @@ class SpotLeaseManager():
             else:
                 self._estop_endpoint.settle_then_cut()
                 self.logger.warn("EStop triggered")
-        except Exception:
-            return False
+        except Exception as e:
+            return False, f"{e}"
 
-        return True
+        return True, "Successfully triggered e-stop"
 
     def _releaseEStop(self) -> None:
         """Stop eStop keepalive"""
