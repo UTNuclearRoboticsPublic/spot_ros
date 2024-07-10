@@ -14,14 +14,14 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'cloud_in',
-            default_value='velodyne_points',
+            default_value='/velodyne_points',
             description='The topic on which to listen for the pointcloud data'
         ),
 
         DeclareLaunchArgument(
-            'config_file',
-            default_value='octomap_params.yaml',
-            description='The file within the /spot_navigation/config folder with which to look for params'
+            'config',
+            description='The file within the /spot_navigation/config folder with which to look for params',
+            default_value=PathJoinSubstitution([FindPackageShare('spot_navigation'), 'config', 'octomap_params.yaml']),
         ),
     ]
 
@@ -30,7 +30,7 @@ def generate_launch_description():
         executable="octomap_server_node",
         name="octomap_server_node",
         parameters=[
-            PathJoinSubstitution([FindPackageShare('spot_navigation'), 'config', LaunchConfiguration('config_file')])
+            LaunchConfiguration('config')
         ],
         remappings=[
             ('cloud_in', LaunchConfiguration('cloud_in'))
