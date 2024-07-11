@@ -1,0 +1,265 @@
+#include <geometry_msgs/msg/pose_array.hpp>
+#include "spot_behaviors/move_hand_through_poses.hpp"
+
+namespace spot_behaviors{
+
+MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config):
+    BT::StatefulActionNode(name, config),
+    node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
+{
+    path_computation_client_ = node_->create_client<moveit_msgs::srv::GetCartesianPath>("/compute_cartesian_path");
+    traj_execution_action_client_ = rclcpp_action::create_client<moveit_msgs::action::ExecuteTrajectory>(node_, "/execute_trajectory");
+
+    max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 5.0);
+    planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
+    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 1.0);
+    max_end_effector_velocity_   = node_->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.5);
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+BT::PortsList MoveHandThroughPoses::providedPorts() {
+    return {
+        BT::InputPort<geometry_msgs::msg::PoseArray>("waypoints", "The sequence of poses through which to move the hand")
+    };
+}
+    
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+BT::NodeStatus MoveHandThroughPoses::onStart() {
+    if (!path_computation_client_->wait_for_service(std::chrono::seconds(1))) {
+        RCLCPP_ERROR(node_->get_logger(), "Unable to connect to \"%s\" service, aborting MoveHandThroughPoses", path_computation_client_->get_service_name());
+        return BT::NodeStatus::FAILURE;
+    }
+
+    if (!traj_execution_action_client_->wait_for_action_server(std::chrono::seconds(1))) {
+        RCLCPP_ERROR(node_->get_logger(), "Unable to connect to \"\\execute_trajectory\" action server, aborting MoveHandThroughPoses");
+        return BT::NodeStatus::FAILURE;
+    }
+
+    auto waypoints_expected = getInput<geometry_msgs::msg::PoseArray>("waypoints");
+    if (!waypoints_expected.has_value()) {
+        RCLCPP_ERROR(node_->get_logger(), "Unable to retrieve waypoints for blackboard, aborting MoveHandThroughPoses");
+        return BT::NodeStatus::FAILURE;
+    }
+    waypoints_ = waypoints_expected.value();
+    
+    path_computation_response_future_.reset();
+    return BT::NodeStatus::RUNNING;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+BT::NodeStatus MoveHandThroughPoses::onRunning() {
+    if (hasOngoingPathRequest()) {
+        return checkPathRequestStatus();
+    }
+
+    else if (hasOngoingTrajectoryExecutionRequest()) {
+        return checkTrajectoryExecutionStatus();
+    }
+
+    else if (makeNewPathRequest()){
+        return BT::NodeStatus::RUNNING;
+    }
+
+    else {
+        return BT::NodeStatus::FAILURE;
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+void MoveHandThroughPoses::onHalted() {
+    cancelOngoingPathRequest();
+    cancelOngoingTrajectoryExecutionRequest();
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+bool MoveHandThroughPoses::hasOngoingPathRequest() const {
+    return path_computation_response_future_.has_value();
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+BT::NodeStatus MoveHandThroughPoses::checkPathRequestStatus() {
+    auto status = rclcpp::spin_until_future_complete(node_, path_computation_response_future_->future, std::chrono::milliseconds(5));
+    switch (status) {
+        case rclcpp::FutureReturnCode::TIMEOUT: {
+            const auto max_duration = std::chrono::milliseconds(static_cast<int>(1000*(max_planning_time_ + 1)));
+            if (node_->now() - path_computation_response_timestamp_ > max_duration) {
+                RCLCPP_ERROR(node_->get_logger(), "Did not get a response from the path client within the time limit, aborting MoveHandThroughPoses");
+                cancelOngoingPathRequest();
+                return BT::NodeStatus::FAILURE;
+            }
+            return BT::NodeStatus::RUNNING;
+        }
+    
+        default:
+        case rclcpp::FutureReturnCode::INTERRUPTED: {
+            RCLCPP_WARN(node_->get_logger(), "MoveHandThroughPoses path generation step interrupted, returning failure");
+            path_computation_response_future_.reset();
+            return BT::NodeStatus::FAILURE;
+        }
+
+        case rclcpp::FutureReturnCode::SUCCESS: {
+            moveit_msgs::srv::GetCartesianPath_Response::SharedPtr resp = path_computation_response_future_->get();
+            path_computation_response_future_.reset();
+            if (resp->error_code.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+                RCLCPP_ERROR(node_->get_logger(), "Unable to find a cartesian path through the poses, aborting");
+                return BT::NodeStatus::FAILURE;
+            }
+
+            RCLCPP_INFO(node_->get_logger(), "Found a certeisan path for %.2f of the waypoints", resp->fraction);
+            bool sent_new_request = makeNewTrajectoryExecutionRequest(resp);
+            return sent_new_request ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+void MoveHandThroughPoses::cancelOngoingPathRequest() {
+    if (path_computation_response_future_.has_value()) {
+        path_computation_client_->remove_pending_request(path_computation_response_future_.value());
+        path_computation_response_future_.reset();
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+bool MoveHandThroughPoses::hasOngoingTrajectoryExecutionRequest() const {
+    return traj_execution_response_future_.valid() ||  traj_execution_goal_handle_ != nullptr;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
+    // Possibility one - waiting for goal to be accepted by the action server
+    if (traj_execution_response_future_.valid()) {
+        auto status = rclcpp::spin_until_future_complete(node_, traj_execution_response_future_, std::chrono::milliseconds(5));
+        switch (status) {
+            case rclcpp::FutureReturnCode::TIMEOUT: {
+                const auto max_duration = std::chrono::seconds(1);
+                if (node_->now() - traj_execution_request_timestamp_ > max_duration) {
+                    RCLCPP_ERROR(node_->get_logger(), "Did not get a response from the TrajectoryExecution server within the time limit, aborting MoveHandThroughPoses");
+                    cancelOngoingTrajectoryExecutionRequest();
+                    return BT::NodeStatus::FAILURE;
+                }
+                return BT::NodeStatus::RUNNING;
+            }
+
+            case rclcpp::FutureReturnCode::INTERRUPTED: {
+                RCLCPP_WARN(node_->get_logger(), "TrajectoryEexcution request was interrupted, reporting failure");
+                traj_execution_response_future_ = decltype(traj_execution_response_future_){};
+                return BT::NodeStatus::FAILURE;
+            }
+
+            case rclcpp::FutureReturnCode::SUCCESS: {
+                traj_execution_goal_handle_ = traj_execution_response_future_.get();
+                traj_execution_response_future_ = decltype(traj_execution_response_future_){};
+                if (!traj_execution_goal_handle_) {
+                    RCLCPP_ERROR(node_->get_logger(), "Trajectory execution request was rejected, aborting MoveHandThroughPoses");
+                    return BT::NodeStatus::FAILURE;
+                }
+                return BT::NodeStatus::RUNNING;
+            }
+        }
+    } else if (!traj_execution_goal_handle_){
+        RCLCPP_ERROR(node_->get_logger(), "MoveHandThroughPoses has no active action or action request. This should never happen");
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // Possibility two - goal is active and we check its status
+    rclcpp::spin_some(node_);
+    const int8_t goal_status = traj_execution_goal_handle_->get_status();
+    switch (goal_status){
+        case action_msgs::msg::GoalStatus::STATUS_CANCELING:
+        case action_msgs::msg::GoalStatus::STATUS_ACCEPTED:
+        case action_msgs::msg::GoalStatus::STATUS_EXECUTING:
+            return BT::NodeStatus::RUNNING;
+
+        case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
+            RCLCPP_WARN(node_->get_logger(), "TrajectoryExecution action returned status UNKNOWN, reporting failure");
+            [[fallthrough]];
+        case action_msgs::msg::GoalStatus::STATUS_ABORTED:
+        case action_msgs::msg::GoalStatus::STATUS_CANCELED:
+            RCLCPP_WARN(node_->get_logger(), "TrajectoryExecution action failed");
+            traj_execution_goal_handle_.reset();
+            return BT::NodeStatus::FAILURE;
+
+        case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
+            RCLCPP_INFO(node_->get_logger(), "MoveHandThroughPoses: TrajectoryExecution action complete");
+            traj_execution_goal_handle_.reset();
+            return BT::NodeStatus::SUCCESS;
+    }
+
+    RCLCPP_ERROR(node_->get_logger(), "TrajectoryExecution action returned unknown status code \"%d\", reporting failure", +goal_status);
+    return BT::NodeStatus::FAILURE;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+void MoveHandThroughPoses::cancelOngoingTrajectoryExecutionRequest() {
+    if (traj_execution_response_future_.valid()) {
+        traj_execution_response_future_ = decltype(traj_execution_response_future_){};
+    }
+}
+    
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+void MoveHandThroughPoses::cancelOngoingTrajectoryExecution() {
+    if (traj_execution_goal_handle_) {
+        traj_execution_action_client_->async_cancel_goal(traj_execution_goal_handle_);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+bool MoveHandThroughPoses::makeNewPathRequest() {
+    auto req = std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>();
+    req->header = waypoints_.header;
+    req->group_name = planning_group_;
+    req->waypoints = waypoints_.poses;
+    req->max_step = 0.15;
+    req->avoid_collisions = true;
+    req->max_velocity_scaling_factor = max_velocity_scaling_factor_;
+    req->cartesian_speed_limited_link = "arm0_hand";
+    req->max_cartesian_speed = max_end_effector_velocity_;
+
+    path_computation_response_timestamp_ = node_->now();
+    path_computation_response_future_ = path_computation_client_->async_send_request(req);
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+bool MoveHandThroughPoses::makeNewTrajectoryExecutionRequest(
+    moveit_msgs::srv::GetCartesianPath::Response::SharedPtr path) 
+{
+    moveit_msgs::action::ExecuteTrajectory::Goal goal;
+    goal.trajectory = path->solution; 
+
+    rclcpp_action::Client<moveit_msgs::action::ExecuteTrajectory>::SendGoalOptions opts;
+    traj_execution_action_client_->async_send_goal(goal);  
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+} // namespace spot_behaviors
