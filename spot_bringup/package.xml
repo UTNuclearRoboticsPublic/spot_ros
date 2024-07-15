@@ -21,6 +21,7 @@
   <exec_depend>teleop_twist_joy</exec_depend>
   <exec_depend>realsense2_camera</exec_depend>
   <exec_depend>joy_linux</exec_depend>
+  <exec_depend>depth_image_proc</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
