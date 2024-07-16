@@ -10,10 +10,10 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     path_computation_client_ = node_->create_client<moveit_msgs::srv::GetCartesianPath>("/compute_cartesian_path");
     traj_execution_action_client_ = rclcpp_action::create_client<moveit_msgs::action::ExecuteTrajectory>(node_, "/execute_trajectory");
 
-    max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 5.0);
+    max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 15.0);
     planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
-    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 1.0);
-    max_end_effector_velocity_   = node_->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.5);
+    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.2);
+    max_end_effector_velocity_   = node_->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.1);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -21,7 +21,7 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
 
 BT::PortsList MoveHandThroughPoses::providedPorts() {
     return {
-        BT::InputPort<geometry_msgs::msg::PoseArray>("waypoints", "The sequence of poses through which to move the hand")
+        BT::InputPort<geometry_msgs::msg::PoseArray::SharedPtr>("waypoints", "The sequence of poses through which to move the hand")
     };
 }
     
@@ -39,12 +39,12 @@ BT::NodeStatus MoveHandThroughPoses::onStart() {
         return BT::NodeStatus::FAILURE;
     }
 
-    auto waypoints_expected = getInput<geometry_msgs::msg::PoseArray>("waypoints");
+    auto waypoints_expected = getInput<geometry_msgs::msg::PoseArray::SharedPtr>("waypoints");
     if (!waypoints_expected.has_value()) {
         RCLCPP_ERROR(node_->get_logger(), "Unable to retrieve waypoints for blackboard, aborting MoveHandThroughPoses");
         return BT::NodeStatus::FAILURE;
     }
-    waypoints_ = waypoints_expected.value();
+    waypoints_ = *(waypoints_expected.value());
     
     path_computation_response_future_.reset();
     return BT::NodeStatus::RUNNING;
@@ -117,7 +117,8 @@ BT::NodeStatus MoveHandThroughPoses::checkPathRequestStatus() {
                 return BT::NodeStatus::FAILURE;
             }
 
-            RCLCPP_INFO(node_->get_logger(), "Found a certeisan path for %.2f of the waypoints", resp->fraction);
+            RCLCPP_INFO(node_->get_logger(), "Found a carteisan path for %d (%.2f%%) of the waypoints", 
+                static_cast<int>(resp->fraction*waypoints_.poses.size()), 100.0*resp->fraction);
             bool sent_new_request = makeNewTrajectoryExecutionRequest(resp);
             return sent_new_request ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
         }
@@ -234,7 +235,7 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->header = waypoints_.header;
     req->group_name = planning_group_;
     req->waypoints = waypoints_.poses;
-    req->max_step = 0.15;
+    req->max_step = 0.01;
     req->avoid_collisions = true;
     req->max_velocity_scaling_factor = max_velocity_scaling_factor_;
     req->cartesian_speed_limited_link = "arm0_hand";
@@ -242,6 +243,7 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
 
     path_computation_response_timestamp_ = node_->now();
     path_computation_response_future_ = path_computation_client_->async_send_request(req);
+    RCLCPP_INFO(node_->get_logger(), "Making request to calculate cartesian path through %zd waypoints", req->waypoints.size());
     return true;
 }
 
@@ -255,7 +257,7 @@ bool MoveHandThroughPoses::makeNewTrajectoryExecutionRequest(
     goal.trajectory = path->solution; 
 
     rclcpp_action::Client<moveit_msgs::action::ExecuteTrajectory>::SendGoalOptions opts;
-    traj_execution_action_client_->async_send_goal(goal);  
+    traj_execution_response_future_ = traj_execution_action_client_->async_send_goal(goal);  
     return true;
 }
 
