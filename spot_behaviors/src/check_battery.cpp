@@ -64,7 +64,12 @@ BT::NodeStatus CheckBattery::tick() {
 
     const float battery_percentage = battery_percentage_.value();
     battery_percentage_ = std::nullopt;
-    return battery_percentage >= battery_threshold.value() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    if (battery_percentage >= battery_threshold.value()) {
+        return BT::NodeStatus::SUCCESS;
+    } else {
+        RCLCPP_ERROR(node_->get_logger(), "Robot battery (%.0f%%) is below threshold value of %.0f%%, aborting behavior tree execution", battery_percentage, battery_threshold.value());
+        return BT::NodeStatus::FAILURE;
+    }
 }
 
 void CheckBattery::batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg){
