@@ -1,4 +1,5 @@
 #include <geometry_msgs/msg/pose_array.hpp>
+#include <moveit/kinematic_constraints/utils.h>
 #include "spot_behaviors/move_hand_through_poses.hpp"
 
 namespace spot_behaviors{
@@ -9,11 +10,13 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
 {
     path_computation_client_ = node_->create_client<moveit_msgs::srv::GetCartesianPath>("/compute_cartesian_path");
     traj_execution_action_client_ = rclcpp_action::create_client<moveit_msgs::action::ExecuteTrajectory>(node_, "/execute_trajectory");
+    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/move_action");
 
-    max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 15.0);
-    planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
-    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.2);
-    max_end_effector_velocity_   = node_->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.1);
+    max_planning_time_           = node_->declare_parameter<double>("manipulation.max_planning_time", 3.0);
+    max_cartesian_planning_time_ = node_->declare_parameter<double>("manipulation.max_cartesian_planning_time", 5.0);
+    planning_group_              = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
+    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.05);
+    max_end_effector_velocity_   = node_->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -46,6 +49,7 @@ BT::NodeStatus MoveHandThroughPoses::onStart() {
     }
     waypoints_ = *(waypoints_expected.value());
     
+    next_idx_ = 0;
     path_computation_response_future_.reset();
     return BT::NodeStatus::RUNNING;
 }
@@ -56,6 +60,10 @@ BT::NodeStatus MoveHandThroughPoses::onStart() {
 BT::NodeStatus MoveHandThroughPoses::onRunning() {
     if (hasOngoingPathRequest()) {
         return checkPathRequestStatus();
+    }
+
+    else if (hasOngoingMoveGroupRequest()) {
+        return checkMoveGroupRequest();
     }
 
     else if (hasOngoingTrajectoryExecutionRequest()) {
@@ -77,6 +85,8 @@ BT::NodeStatus MoveHandThroughPoses::onRunning() {
 void MoveHandThroughPoses::onHalted() {
     cancelOngoingPathRequest();
     cancelOngoingTrajectoryExecutionRequest();
+    cancelOngoingTrajectoryExecution();
+    cancelOngoingMoveGroupRequest();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -119,8 +129,12 @@ BT::NodeStatus MoveHandThroughPoses::checkPathRequestStatus() {
 
             RCLCPP_INFO(node_->get_logger(), "Found a carteisan path for %d (%.2f%%) of the waypoints", 
                 static_cast<int>(resp->fraction*waypoints_.poses.size()), 100.0*resp->fraction);
-            bool sent_new_request = makeNewTrajectoryExecutionRequest(resp);
-            return sent_new_request ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
+            if (resp->fraction == 0.0) {
+                RCLCPP_INFO(node_->get_logger(), "Making a general (non-cartesian) move_group request instead");
+                return makeNewMoveGroupRequest() ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
+            }
+            next_idx_ += static_cast<int>(resp->fraction*waypoints_.poses.size());
+            return makeNewTrajectoryExecutionRequest(resp) ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
         }
     }
 }
@@ -202,7 +216,7 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
         case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
             RCLCPP_INFO(node_->get_logger(), "MoveHandThroughPoses: TrajectoryExecution action complete");
             traj_execution_goal_handle_.reset();
-            return BT::NodeStatus::SUCCESS;
+            return next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
     }
 
     RCLCPP_ERROR(node_->get_logger(), "TrajectoryExecution action returned unknown status code \"%d\", reporting failure", +goal_status);
@@ -230,11 +244,97 @@ void MoveHandThroughPoses::cancelOngoingTrajectoryExecution() {
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
+bool MoveHandThroughPoses::hasOngoingMoveGroupRequest() const {
+    return move_group_response_future_.valid() ||  move_group_goal_handle_ != nullptr;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+BT::NodeStatus MoveHandThroughPoses::checkMoveGroupRequest() {
+    // Check to see if we're still waiting on a response from the action server
+    if (move_group_response_future_.valid()){
+        const auto result = rclcpp::spin_until_future_complete(node_, move_group_response_future_, std::chrono::milliseconds(5));
+        switch (result){
+            case rclcpp::FutureReturnCode::SUCCESS:
+                move_group_goal_handle_ = move_group_response_future_.get();
+                move_group_response_future_ = decltype(move_group_response_future_){};
+                if (!move_group_goal_handle_) {
+                    RCLCPP_ERROR(node_->get_logger(), "Move group planning failed, aborting.");
+                    return BT::NodeStatus::FAILURE;
+                }
+                return BT::NodeStatus::RUNNING;
+
+            case rclcpp::FutureReturnCode::TIMEOUT:{
+                const double elapsed_seconds = (node_->now() - move_group_request_timestamp_).seconds();
+                if (elapsed_seconds > max_planning_time_){
+                    RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
+                    move_group_action_client_->async_cancel_all_goals();
+                    return BT::NodeStatus::FAILURE;
+                }
+                else return BT::NodeStatus::RUNNING;
+            }
+
+            case rclcpp::FutureReturnCode::INTERRUPTED:
+                move_group_response_future_ = decltype(move_group_response_future_){};
+                RCLCPP_WARN(node_->get_logger(), "MoveHandToPose MoveGroup request interrupted. Reporting failed movement");
+                return BT::NodeStatus::FAILURE;
+        }
+    } else if (!move_group_goal_handle_) {
+        RCLCPP_ERROR(node_->get_logger(), "MoveHandToPose has no active action or action request. This should never happen");
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // Check if the action is ongoing, or if it has concluded
+    rclcpp::spin_some(node_);
+    const int8_t goal_status = move_group_goal_handle_->get_status();
+    switch (goal_status){
+        case action_msgs::msg::GoalStatus::STATUS_CANCELING:
+        case action_msgs::msg::GoalStatus::STATUS_ACCEPTED:
+        case action_msgs::msg::GoalStatus::STATUS_EXECUTING:
+            return BT::NodeStatus::RUNNING;
+
+        case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
+            RCLCPP_WARN(node_->get_logger(), "MoveGroup action returned status UNKNOWN, reporting failure");
+            [[fallthrough]];
+        case action_msgs::msg::GoalStatus::STATUS_ABORTED:
+        case action_msgs::msg::GoalStatus::STATUS_CANCELED:
+            RCLCPP_WARN(node_->get_logger(), "MoveGroup action failed");
+            move_group_goal_handle_.reset();
+            return ++next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
+
+        case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
+            RCLCPP_INFO(node_->get_logger(), "MoveHandToPose: MoveGroup Action complete");
+            move_group_goal_handle_.reset();
+            return ++next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
+    }
+
+    RCLCPP_ERROR(node_->get_logger(), "MoveGroup action returned unknown status code \"%d\", reporting failure", +goal_status);
+    return BT::NodeStatus::FAILURE;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+void MoveHandThroughPoses::cancelOngoingMoveGroupRequest() {
+    if (move_group_response_future_.valid()) {
+        move_group_response_future_ = decltype(move_group_response_future_){};
+    }
+    if (move_group_goal_handle_) {
+        move_group_action_client_->async_cancel_goal(move_group_goal_handle_);
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
 bool MoveHandThroughPoses::makeNewPathRequest() {
     auto req = std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>();
+    auto next_poses = waypoints_.poses | std::views::drop(next_idx_);
+    
     req->header = waypoints_.header;
     req->group_name = planning_group_;
-    req->waypoints = waypoints_.poses;
+    req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
     req->max_velocity_scaling_factor = max_velocity_scaling_factor_;
@@ -258,10 +358,45 @@ bool MoveHandThroughPoses::makeNewTrajectoryExecutionRequest(
 
     rclcpp_action::Client<moveit_msgs::action::ExecuteTrajectory>::SendGoalOptions opts;
     traj_execution_response_future_ = traj_execution_action_client_->async_send_goal(goal);  
+    traj_execution_request_timestamp_ = node_->now();
     return true;
 }
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
+
+bool MoveHandThroughPoses::makeNewMoveGroupRequest() {
+    geometry_msgs::msg::PoseStamped target_pose;
+    target_pose.pose = waypoints_.poses.at(next_idx_);
+    target_pose.header = waypoints_.header;
+
+    moveit_msgs::action::MoveGroup::Goal move_group_goal;
+    move_group_goal.planning_options.plan_only = false;
+    move_group_goal.planning_options.replan = false;
+    move_group_goal.request.allowed_planning_time = max_planning_time_;
+    move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
+    move_group_goal.request.goal_constraints.push_back(
+        kinematic_constraints::constructGoalConstraints("arm0_hand", target_pose)
+    );
+    move_group_goal.request.group_name = "arm";
+    move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
+    move_group_goal.request.workspace_parameters.header.stamp = node_->now();
+    move_group_goal.request.workspace_parameters.min_corner.x = -1e9;
+    move_group_goal.request.workspace_parameters.min_corner.y = -1e9;
+    move_group_goal.request.workspace_parameters.min_corner.z = -1e9;
+    move_group_goal.request.workspace_parameters.max_corner.x = +1e9;
+    move_group_goal.request.workspace_parameters.max_corner.y = +1e9;
+    move_group_goal.request.workspace_parameters.max_corner.z = +1e9;
+
+    // Request the motion
+    RCLCPP_INFO(node_->get_logger(), "Made request of pose index %zd", next_idx_);
+    move_group_response_future_ = move_group_action_client_->async_send_goal(move_group_goal);
+    move_group_request_timestamp_ = move_group_goal.request.workspace_parameters.header.stamp;
+    return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
 
 } // namespace spot_behaviors

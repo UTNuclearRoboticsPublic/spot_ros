@@ -32,6 +32,7 @@
 #include <behaviortree_cpp/action_node.h>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
+#include <moveit_msgs/action/move_group.hpp>
 #include <moveit_msgs/srv/get_cartesian_path.hpp>
 #include <moveit_msgs/action/execute_trajectory.hpp>
 
@@ -65,11 +66,15 @@ public:
     void onHalted() override;
 
 protected:
+    // The index of the next pose to start from
+    std::size_t next_idx_ = 0;
+
     // The node instance
     rclcpp::Node::SharedPtr node_;
 
     // Parameters (default values are provided at parameter declaration)
     double max_planning_time_{};
+    double max_cartesian_planning_time_{};
     std::string planning_group_{};
     double max_velocity_scaling_factor_{};
     double max_end_effector_velocity_{};
@@ -94,10 +99,23 @@ protected:
     // Action client goal handle - nullptr if no request is active
     rclcpp_action::ClientGoalHandle<moveit_msgs::action::ExecuteTrajectory>::SharedPtr traj_execution_goal_handle_;
 
+    // MoveGroup action client - for non-Cartesian moves
+    rclcpp_action::Client<moveit_msgs::action::MoveGroup>::SharedPtr move_group_action_client_;
+    
+    std::shared_future<rclcpp_action::ClientGoalHandle<moveit_msgs::action::MoveGroup>::SharedPtr> move_group_response_future_;
+    rclcpp::Time move_group_request_timestamp_{};
+
+    rclcpp_action::ClientGoalHandle<moveit_msgs::action::MoveGroup>::SharedPtr move_group_goal_handle_;
+
     // Cartesian Path status update functions
     bool hasOngoingPathRequest() const;
     BT::NodeStatus checkPathRequestStatus();
     void cancelOngoingPathRequest();
+
+    // Move group request status update functions
+    bool hasOngoingMoveGroupRequest() const;
+    BT::NodeStatus checkMoveGroupRequest();
+    void cancelOngoingMoveGroupRequest();
 
     // Trajectory Execution status update functions 
     bool hasOngoingTrajectoryExecutionRequest() const;
@@ -108,6 +126,7 @@ protected:
     // New request functions
     bool makeNewPathRequest();
     bool makeNewTrajectoryExecutionRequest(moveit_msgs::srv::GetCartesianPath::Response::SharedPtr path);
+    bool makeNewMoveGroupRequest();
 };
 
 } // namespace spot_behaviors
