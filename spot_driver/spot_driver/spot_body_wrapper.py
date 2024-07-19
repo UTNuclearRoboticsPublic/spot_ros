@@ -28,11 +28,10 @@
 from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import image_pb2, header_pb2
+from bosdyn.api import image_pb2, header_pb2, geometry_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
-from bosdyn.api import mobility_command_pb2
 
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
@@ -330,6 +329,15 @@ class SpotBodyWrapper():
         except Exception as e:
             return False, Text(e)
         return True, 'Success'
+    
+    def walk_to(self, target_pose_in_odom: geometry_pb2.SE2Pose, max_duration: float) -> Tuple[bool, Text]:
+        navigate_command = RobotCommandBuilder.synchro_se2_trajectory_command(
+            goal_se2=target_pose_in_odom,
+            frame_name=ODOM_FRAME_NAME
+        )
+
+        success, message, command_id = self._lease_manager.robot_command(navigate_command, end_time_secs=time.time() + max_duration)
+        return success, message, command_id
 
     def get_docking_state(self, **kwargs) -> docking_pb2.DockState:
         """Get docking state of robot."""

@@ -15,7 +15,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ArmSurfaceContact.action"
   "action/ClawGripperCommand.action"
   "action/NavigateTo.action"
-  "action/Trajectory.action"
+  "action/WalkTo.action"
 
   "srv/ArmForceTrajectory.srv"
   "srv/ArmJointMovement.srv"

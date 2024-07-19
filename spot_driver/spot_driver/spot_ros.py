@@ -31,11 +31,13 @@ import yaml
 import time as pyTime
 import math
 
+import rclpy.action
+import rclpy.duration
 import rclpy.utilities
+import rclpy.callback_groups
 from rclpy.node import Node
 from rclpy.time import Time
-import rclpy.action
-import rclpy.callback_groups
+from rclpy.action.server import ServerGoalHandle
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
 
 from rcl_interfaces.msg import FloatingPointRange
@@ -61,6 +63,7 @@ from .spot_body_wrapper import SpotBodyWrapper
 
 import functools
 import tf2_ros
+from tf2_geometry_msgs import PoseStamped
 
 from spot_msgs.msg import LeaseArray, LeaseResource
 from spot_msgs.msg import FootStateArray
@@ -72,7 +75,7 @@ from spot_msgs.msg import SystemFaultState
 from spot_msgs.msg import BatteryStateArray
 from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
-from spot_msgs.action import NavigateTo, Trajectory
+from spot_msgs.action import NavigateTo, WalkTo
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
 from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
@@ -106,6 +109,9 @@ class SpotROS(Node):
         pub_period = 0.1
         self.status_timer = self.create_timer(pub_period, self.publishStatus)
         self.sensors_timer = self.create_timer(pub_period, self.publishSensors)
+
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         """ ROS Parameters """
         status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease'}}
@@ -470,61 +476,99 @@ class SpotROS(Node):
         except Exception as e:
             return SetVelocity.Response(False, e)
 
-    def handle_trajectory(self, req: Trajectory.Goal) -> None:
-        """ROS actionserver execution handler to handle receiving a request to move to a location"""
-        if req.target_pose.header.frame_id != 'body':
-            self.trajectory_server.set_aborted(
-                Trajectory.Result(False, 'frame_id of target_pose must be \'body\''))
-            return
-        if req.duration.data.to_sec() <= 0:
-            self.trajectory_server.set_aborted(Trajectory.Result(False, 'duration must be larger than 0'))
-            return
+    def handle_walk_to(self, goal_handle: ServerGoalHandle) -> WalkTo.Result:
+        req: WalkTo.Goal = goal_handle.request
+        resp = WalkTo.Result()
 
-        cmd_duration = rclpy.time.Duration(req.duration.data.secs, req.duration.data.nsecs)
-        resp = self.spot_wrapper.trajectory_cmd(
-            goal_x=req.target_pose.pose.position.x,
-            goal_y=req.target_pose.pose.position.y,
-            goal_heading=math_helpers.Quat(
-                w=req.target_pose.pose.orientation.w,
-                x=req.target_pose.pose.orientation.x,
-                y=req.target_pose.pose.orientation.y,
-                z=req.target_pose.pose.orientation.z
-                ).to_yaw(),
-            cmd_duration=cmd_duration.to_sec(),
-            precise_position=req.precise_positioning,
+        feedback_strings = {
+            "STATUS" : [
+                "STATUS_UNKNOWN: STATUS_UNKNOWN should never be used. If used, an internal error has happened.",
+                "STATUS_STOPPED: The robot has stopped. Either the robot has reached the end of the trajectory or it "
+                "                believes that it cannot reach the desired position. Robot may start to move again if "
+                "                a blocked path clears.",
+                "STATUS_IN_PROGRESS: The robot is actively following the requested trajectory.",
+                "STATUS_STOPPING: The robot is nearing the end of the requested trajectory and is doing final positioning.",
+            ],
+            "BODY_STATUS" : [
+                "BODY_STATUS_UNKNOWN: STATUS_UNKNOWN should never be used. If used, an internal error has happened.",
+                "BODY_STATUS_MOVING: The robot body is not settled at the goal.",
+                "BODY_STATUS_SETTLED: The robot is at the goal and the body has stopped moving."
+            ],
+            "GOAL_STATUS" : [
+                "FINAL_GOAL_STATUS_UNKNOWN: FINAL_GOAL_STATUS_UNKNOWN should never be used. If used, an internal error has happened.",
+                "FINAL_GOAL_STATUS_IN_PROGRESS: Robot is not stopped or stopping.",
+                "FINAL_GOAL_STATUS_ACHIEVABLE: Final position was achievable.",
+                "FINAL_GOAL_STATUS_BLOCKED: Final position was not achievable."
+            ]
+        }
+
+        # Transform the target frame into the odom frame
+        try:
+            target_pose_in_odom = self.tf_buffer.transform(req.target_pose, "odom", rclpy.duration.Duration(seconds=1.0))
+        except Exception as e:
+            self.get_logger().info(f"Unable to transform WalkTo target pose from {req.target_pose.header.frame_id} to the odom frame, aborting action: {e}")
+            goal_handle.abort()
+            resp.success = False
+            resp.message = f"Unable to transform WalkTo target pose from {req.target_pose.header.frame_id} to the odom frame, aborting action: {e}"
+            return resp
+        
+        # Convert the ROS type to the corresponding protobuf types
+        target_pose_se2 = geometry_pb2.SE2Pose(
+            position=geometry_pb2.Vec2(x=target_pose_in_odom.pose.position.x, y=target_pose_in_odom.pose.position.y),
+            angle=2*math.atan2(target_pose_in_odom.pose.orientation.z, target_pose_in_odom.pose.orientation.w)
         )
 
-        # Wait while robot performs the trajectory
-        rate = self.create_rate(10)
-        start_time = self.get_clock().now()
-        while (rclpy.ok() and self.trajectory_server.is_active()):
-            if self.trajectory_server.is_preempt_requested():
-                self.trajectory_server.set_preempted(Trajectory.Feedback(False, "Preempted"))
-                self.spot_wrapper.stop()
-                return
-            elif self.spot_wrapper.at_goal:
-                self.trajectory_server.set_succeeded(Trajectory.Result(resp[0], resp[1]))
-                return
-            elif self.spot_wrapper.near_goal:
-                if self.spot_wrapper._last_trajectory_command_precise:
-                    self.trajectory_server.publish_feedback(
-                        Trajectory.Feedback("Near goal, performing precise adjustments"))
-                else:
-                    self.trajectory_server.publish_feedback(Trajectory.Feedback("Near goal"))
+        self.get_logger().info(f"Moving robot to position ({target_pose_se2.position.x, target_pose_se2.position.y}) in the odom frame")
+
+        def abort(message: str):
+            self.get_logger().error(message)
+            self.spot_wrapper.stop()
+            goal_handle.abort()
+            resp.success = False
+            resp.message = message
+            return resp
+
+        # Make the command and make sure it was valid
+        try:
+            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_se2, req.maximum_movement_time)
+            if not command_accepted:
+                return abort(f"Unable to command robot to move. Reason: {message}")
             else:
-                self.trajectory_server.publish_feedback(Trajectory.Feedback("Moving to goal"))
+                self.get_logger().info(f"Started robot motion. Message: {message}")
+        except Exception as e:
+            return abort(f"Execption thrown in WalkTo action robot command execution: {e}")
 
-            # check for timeout
-            if (self.get_clock().now() - start_time > cmd_duration):
-                # the action has timed out. abort.
-                self.trajectory_server.set_aborted(
-                    Trajectory.Result(False, "Failed to reach goal, timed out"))
-                return
-
-            rate.sleep()
-
-        # We timed out
-        self.trajectory_server.set_aborted(Trajectory.Result(False, "Failed to reach goal"))
+        update_rate = self.create_rate(10.0)
+        while rclpy.ok():
+            # Check to see if we've concluded
+            try:
+                command_feedback = self.spot_wrapper._lease_manager.robot_command_feedback(command_id)
+                trajectory_feedback = command_feedback.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback
+            except Exception as e:
+                return abort(f"Execption thrown while getting command feedback: {e}")
+            try:
+                if trajectory_feedback.status == WalkTo.Feedback.STATUS_STOPPED:
+                    self.get_logger().info("WalkTo action completed successfully")
+                    goal_handle.succeed()
+                    resp.success = True
+                    resp.message = "WalkTo action completed successfully"
+                    return resp
+                elif trajectory_feedback.status == WalkTo.Feedback.STATUS_UNKNOWN:
+                    return abort("Robot is in an unknown state. Aborting motion")
+                elif trajectory_feedback.final_goal_status == WalkTo.Feedback.FINAL_GOAL_STATUS_BLOCKED:
+                    return abort("Final goal is not achievable, aborting motion")
+                else:
+                    feedback_msg = WalkTo.Feedback()
+                    feedback_msg.status_enum = trajectory_feedback.status
+                    feedback_msg.status_string = feedback_strings["STATUS"][feedback_msg.status_enum]
+                    feedback_msg.body_status_enum = trajectory_feedback.body_movement_status
+                    feedback_msg.body_status_string = feedback_strings["BODY_STATUS"][feedback_msg.body_status_enum]
+                    feedback_msg.final_goal_status_enum = trajectory_feedback.final_goal_status
+                    feedback_msg.final_goal_status_string = feedback_strings["GOAL_STATUS"][feedback_msg.final_goal_status_enum]
+                    goal_handle.publish_feedback(feedback_msg)
+                    update_rate.sleep()
+            except Exception as e:
+                return abort(f"Exception thrown while checking feedback: {e}. Aborting motion")
 
     def cmdVelCallback(self, data: Twist) -> None:
         """Callback for cmd_vel command"""
@@ -805,18 +849,20 @@ class SpotROS(Node):
         ## --- Action Servers --- ##
 
         self._navigate_to_server = rclpy.action.ActionServer(
-                self,
-                NavigateTo,
-                '~/navigate_to',
-                execute_callback=self.handle_navigate_to,
-                callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
+            self,
+            NavigateTo,
+            '~/navigate_to',
+            execute_callback=self.handle_navigate_to,
+            callback_group=srv_group
+        )
         
-        self._trajectory_server = rclpy.action.ActionServer(
-                self,
-                Trajectory,
-                '~/trajectory',
-                execute_callback=self.handle_trajectory,
-                callback_group=rclpy.callback_groups.ReentrantCallbackGroup())
+        self._walk_to_server = rclpy.action.ActionServer(
+            self,
+            WalkTo,
+            '~/walk_to',
+            execute_callback=self.handle_walk_to,
+            callback_group=srv_group
+        )
 
         # Populate the static transforms for the various robot cameras               
         self.populate_static_transforms()
