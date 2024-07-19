@@ -16,6 +16,8 @@ find_package(moveit_msgs REQUIRED)
 find_package(moveit_kinematics REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(tf2_kdl REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 include_directories(
   include
@@ -24,6 +26,7 @@ include_directories(
 add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
+  src/walk_to_pose.cpp
   src/trigger_service.cpp
   src/navigate_to_pose.cpp
   src/move_hand_to_pose.cpp
@@ -32,10 +35,12 @@ add_library(${PROJECT_NAME} SHARED
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   tf2_kdl
+  tf2_eigen
   spot_msgs
   nav2_msgs
   moveit_msgs
   behaviortree_cpp
+  tf2_geometry_msgs
   moveit_kinematics
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
