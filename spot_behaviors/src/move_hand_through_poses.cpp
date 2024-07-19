@@ -127,13 +127,14 @@ BT::NodeStatus MoveHandThroughPoses::checkPathRequestStatus() {
                 return BT::NodeStatus::FAILURE;
             }
 
+            const int num_waypoints_achieved = static_cast<int>(resp->fraction*waypoints_.poses.size());
             RCLCPP_INFO(node_->get_logger(), "Found a carteisan path for %d (%.2f%%) of the waypoints", 
-                static_cast<int>(resp->fraction*waypoints_.poses.size()), 100.0*resp->fraction);
-            if (resp->fraction == 0.0) {
+                num_waypoints_achieved, 100.0*resp->fraction);
+            if (num_waypoints_achieved == 0) {
                 RCLCPP_INFO(node_->get_logger(), "Making a general (non-cartesian) move_group request instead");
                 return makeNewMoveGroupRequest() ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
             }
-            next_idx_ += static_cast<int>(resp->fraction*waypoints_.poses.size());
+            next_idx_ += num_waypoints_achieved;
             return makeNewTrajectoryExecutionRequest(resp) ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
         }
     }
