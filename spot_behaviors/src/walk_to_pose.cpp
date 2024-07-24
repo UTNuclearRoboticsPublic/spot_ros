@@ -156,6 +156,9 @@ void WalkToPose::onHalted() {
 }
 
 bool WalkToPose::checkGoal() const {
+    // Let the most up-to-date TF data arrive
+    rclcpp::sleep_for(std::chrono::milliseconds(500));
+
     // Check to make sure we can lookup the transform
     if (std::string err; !tf_buffer_.canTransform("base_footprint", target_pose_.header.frame_id, tf2::TimePointZero, std::chrono::seconds(1), &err)) {
         RCLCPP_WARN(node_->get_logger(), "Cannot lookup robot frame, reporting navigation failure; %s", err.c_str());
