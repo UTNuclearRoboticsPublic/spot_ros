@@ -127,7 +127,7 @@ BT::NodeStatus WalkToPose::onRunning() {
                 goal_handle_.reset();
                 if (checkGoal()) {
                     RCLCPP_INFO(node_->get_logger(), "Robot is within acceptable tolerance of the goal pose, reporting success");
-                    return BT::NodeStatus::FAILURE;
+                    return BT::NodeStatus::SUCCESS;
                 }
                 else RCLCPP_WARN(node_->get_logger(), "Robot is too far from target pose, reporting failure");
                 return BT::NodeStatus::FAILURE;
@@ -177,8 +177,10 @@ bool WalkToPose::checkGoal() const {
     const auto rotation_diff = Eigen::Quaterniond(robot_pose.rotation()).inverse() *Eigen::Quaterniond(target_pose.rotation());
     const double rotation_error = std::abs(Eigen::AngleAxisd(rotation_diff).angle());
 
+    RCLCPP_INFO(node_->get_logger(), "Translation error: %.2f | Rotation error: %.2f", translation_error, rotation_error);
+
     // Compare to the threshold values (hard coded for now - will change to parameters later)
-    return translation_error < 0.15 && rotation_error < 0.25;
+    return translation_error < 0.25 && rotation_error < 0.25;
 }
 
 } // namespace spot_behaviors
