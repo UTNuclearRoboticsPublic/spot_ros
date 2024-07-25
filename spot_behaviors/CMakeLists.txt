@@ -30,6 +30,7 @@ add_library(${PROJECT_NAME} SHARED
   src/trigger_service.cpp
   src/navigate_to_pose.cpp
   src/move_hand_to_pose.cpp
+  src/record_current_location.cpp
   src/move_hand_through_poses.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
