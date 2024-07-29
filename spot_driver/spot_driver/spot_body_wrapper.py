@@ -301,9 +301,6 @@ class SpotBodyWrapper():
     def dock(self, dock_id) -> Tuple[bool, Text]:
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
         try:
-            # Make sure we're powered on and standing
-            self._lease_manager.robot.power_on()
-            self.stand()
             # Dock the robot
             self.last_docking_command = dock_id
             blocking_dock_robot(self._lease_manager.robot, dock_id)
@@ -321,9 +318,6 @@ class SpotBodyWrapper():
             return True, 'Already undocked'
         
         try:
-            # Make sure we're powered on
-            self._lease_manager.robot.power_on()
-
             # Undock the robot
             blocking_undock(self._lease_manager.robot, timeout)
         except Exception as e:
