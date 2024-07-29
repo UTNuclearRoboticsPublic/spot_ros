@@ -26,8 +26,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
 
 #pragma once
+#include <variant>
 #include <optional>
 #include <rclcpp/rclcpp.hpp>
+#include <std_srvs/srv/empty.hpp>
 #include <std_srvs/srv/trigger.hpp>
 #include "behaviortree_cpp/action_node.h"
 
@@ -75,9 +77,12 @@ private:
 
     // Service client
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr trigger_client_;
+    rclcpp::Client<std_srvs::srv::Empty>::SharedPtr empty_client_;
+    rclcpp::ClientBase::SharedPtr client_base_;
 
     // Serivce client future result - empty optional if no request is active
-    std::optional<rclcpp::Client<std_srvs::srv::Trigger>::FutureAndRequestId> service_future_;
+    std::optional<rclcpp::Client<std_srvs::srv::Trigger>::FutureAndRequestId> trigger_future_;
+    std::optional<rclcpp::Client<std_srvs::srv::Empty>::FutureAndRequestId> empty_future_;
 };
 
 } // namespace spot_behaviors
