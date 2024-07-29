@@ -2,7 +2,11 @@ from enum import Enum
 
 import time
 import rclpy
+from asyncio import Future
+
+import rclpy.duration
 from rclpy.node import Node
+from rclpy.client import Client
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Joy
@@ -55,8 +59,8 @@ class SpotJoyUtils(Node):
         exclusive_group = MutuallyExclusiveCallbackGroup()
         self.lease_client = self.create_client(Trigger, "/spot_driver/claim", callback_group=exclusive_group)
         self.release_client = self.create_client(Trigger, "/spot_driver/release", callback_group=exclusive_group)
-        self.estop_client_gentle = self.create_client(Trigger, "/spot_driver/estop/gentle", callback_group=exclusive_group)
-        self.estop_client_hard = self.create_client(Trigger, "/spot_driver/estop/hard", callback_group=exclusive_group)
+        self.estop_client_gentle = self.create_client(Trigger, "/spot_driver/estop/gentle")
+        self.estop_client_hard = self.create_client(Trigger, "/spot_driver/estop/hard")
         self.dock_client = self.create_client(Dock, "/spot_driver/dock", callback_group=exclusive_group)
         self.undock_client = self.create_client(Trigger, "/spot_driver/undock", callback_group=exclusive_group)
         self.power_on_client = self.create_client(Trigger, "/spot_driver/power_on", callback_group=exclusive_group)
@@ -68,6 +72,10 @@ class SpotJoyUtils(Node):
         self.gripper_close_client = self.create_client(Trigger, "/spot_manipulation_driver/close_gripper", callback_group=exclusive_group)
 
         self.body_pose_pub = self.create_publisher(Pose, "/spot_driver/body_pose", 10, callback_group=exclusive_group)
+
+        # E-Stop
+        self._estop_future: Future | None = None
+        self.estop_sub = self.create_subscription(Joy, "/joy", self.estopJoyCallback, 10) # no exclusive group so it has priority
 
         exclusive_group_2 = MutuallyExclusiveCallbackGroup()
         self.loop = self.create_timer(0.1, self.timerCallback, callback_group=exclusive_group_2)
@@ -86,7 +94,7 @@ class SpotJoyUtils(Node):
 
     def updateArmState(self, msg: ManipulatorState):
         self._arm_stowed = (msg.stow_state == ManipulatorState.STOWSTATE_STOWED) 
-        self._gripper_closed = (msg.gripper_open_percentage < 10.0)
+        self._gripper_closed = (msg.gripper_open_percentage < 70.0)
         
     def verifyServer(self, client) -> bool:
         if not client.wait_for_service(1):
@@ -95,11 +103,17 @@ class SpotJoyUtils(Node):
             return False
         return True
 
-    def timerCallback(self):
+    def timerCallback(self):        
+        if self._estop_future is not None:
+            if self._estop_future.done():
+                resp: Trigger.Response = self._estop_future.result()
+                self._logger.info(resp.message)
+                self._estop_future = None
+                return
+            
         if self.action is None:
             return
-
-        if self.action == "Dock":
+        elif self.action == "Dock":
             self.get_logger().info("Toggling dock")
             self.dockRobot()
         elif self.action == "ToggleStand":
@@ -115,13 +129,7 @@ class SpotJoyUtils(Node):
             pose_command.orientation = Quaternion(x=q[0], y=q[1], z=q[2], w=q[3])
             self.body_pose_pub.publish(pose_command)
         else:
-            if self.action == "EStopGentle":
-                self.get_logger().warn("Triggering soft e-stop")
-                client = self.estop_client_gentle
-            elif self.action == "EStopHard":
-                self.get_logger().error("Triggering hard e-stop")
-                client = self.estop_client_hard
-            elif self.action == "Claim":
+            if self.action == "Claim":
                 self.get_logger().info("Claiming lease")
                 client = self.lease_client
             elif self.action == "Release":
@@ -146,11 +154,7 @@ class SpotJoyUtils(Node):
                 self.get_logger().info("Unstowing arm")
                 client = self.unstow_client
 
-            if client is not None:
-                if not self.verifyServer(client):
-                    return
-                resp = client.call(Trigger.Request())
-                self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            self.triggerClient(client)
 
         self.action = None
 
@@ -162,16 +166,6 @@ class SpotJoyUtils(Node):
         # We need the controller in "D" mode, not "X" mode
         if len(axes) != 6:
             self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=1.0)
-
-        # If all four letter buttons are pressed, as well as both bumpers, trigger the hard estop
-        if buttons[LogitechButtons.A.value] and buttons[LogitechButtons.B.value] and buttons[LogitechButtons.X.value] and buttons[LogitechButtons.Y.value] and buttons[LogitechButtons.RB.value] and buttons[LogitechButtons.LB.value]:
-            self.action = "EStopHard"
-            return
-
-        # If the red button is pressed, trigger the soft estop
-        if buttons[LogitechButtons.B.value]:
-            self.action = "EStopGentle"
-            return
 
         # If both the start button is pressed, try to claim a lease
         if buttons[LogitechButtons.START.value]:
@@ -226,16 +220,69 @@ class SpotJoyUtils(Node):
             return
 
         self.action = None
+
+    def estopJoyCallback(self, data: Joy):
+        buttons = data.buttons
+        axes    = data.axes
+
+        # Even for EStop we need to do this check, since the EStop button changes depending on the mode
+        if len(axes) != 6:
+            return
+        
+        # If all four letter buttons are pressed, as well as both bumpers, trigger the hard estop
+        if buttons[LogitechButtons.A.value] and buttons[LogitechButtons.B.value] and buttons[LogitechButtons.X.value] and buttons[LogitechButtons.Y.value] and buttons[LogitechButtons.RB.value] and buttons[LogitechButtons.LB.value]:
+            self.TriggerEStop(hard=True)
+            return
+
+        # If the red button is pressed, trigger the soft estop
+        if buttons[LogitechButtons.B.value]:
+            self.TriggerEStop(hard=False)
+            return
+
         
     def dockRobot(self):
-        if not self.verifyServer(self.dock_client):
+        if self.dock_client is None or not self.verifyServer(self.dock_client):
             self.get_logger.warn("Cannot dock robot, no available server")
             return
 
         self.get_logger().info("Docking robot")
-        resp = self.dock_client.call(Dock.Request(dock_id=520))
+        resp_future: Future = self.dock_client.call_async(Dock.Request(dock_id=520))
+        start_time = self.get_clock().now()
+        max_duration = rclpy.duration.Duration(seconds=25)
+        while True:
+            if resp_future.done():
+                resp = resp_future.result()
+                break
+            elif (self.get_clock().now() - start_time) > max_duration:
+                resp = Dock.Response()
+                resp.success = False
+                resp.message = "Dock server response timed out after 25 seconds"
+                break
+
+            time.sleep(0.1)
+
         self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
-            
+
+    def triggerClient(self, client: Client | None):
+        if client is None or not self.verifyServer(client):
+            return
+        
+        resp_future = client.call_async(Trigger.Request())
+        start_time = self.get_clock().now()
+        max_duration = rclpy.duration.Duration(seconds=10)
+        while True:
+            if resp_future.done():
+                resp = resp_future.result()
+                break
+            elif (self.get_clock().now() - start_time) > max_duration:
+                resp = Trigger.Response()
+                resp.success = False
+                resp.message = f"{client.srv_name} server response timed out after 10 seconds"
+                break
+
+            time.sleep(0.1)
+
+        self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
     def toggleStand(self):
         if not self.verifyServer(self.stand_client) or not self.verifyServer(self.sit_client):
@@ -244,14 +291,12 @@ class SpotJoyUtils(Node):
 
         if self._sitting:
             self.get_logger().info("Standing robot")
-            resp = self.stand_client.call(Trigger.Request())
-            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            self.triggerClient(self.stand_client)
             time.sleep(2.0)
 
         else:
             self.get_logger().info("Sitting robot")
-            resp = self.sit_client.call(Trigger.Request())
-            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            self.triggerClient(self.sit_client)
             time.sleep(2.0)
 
     def toggleGripper(self):
@@ -261,13 +306,20 @@ class SpotJoyUtils(Node):
 
         if self._gripper_closed:
             self.get_logger().info("Opening Gripper")
-            resp = self.gripper_open_client.call(Trigger.Request())
-            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            self.triggerClient(self.gripper_open_client)
 
         else:
             self.get_logger().info("Closing Gripper")
-            resp = self.gripper_close_client.call(Trigger.Request())
-            self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
+            self.triggerClient(self.gripper_close_client)
+
+    def TriggerEStop(self, hard=False):  
+        client = self.estop_client_hard if hard else self.estop_client_gentle
+        self.get_logger().warn(f"Triggering {'hard' if hard else 'soft'} e-stop")
+        
+        if client is not None:
+            if not self.verifyServer(client):
+                return
+            self._estop_future = client.call_async(Trigger.Request())
 
 def main():
     rclpy.init()

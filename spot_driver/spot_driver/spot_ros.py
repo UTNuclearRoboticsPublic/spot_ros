@@ -827,9 +827,9 @@ class SpotROS(Node):
         self.create_service(Trigger, "~/power_on"  , self.handle_power_on,       callback_group=srv_group)
         self.create_service(Trigger, "~/power_off" , self.handle_safe_power_off, callback_group=srv_group)
 
-        # EStop services
-        self.create_service(Trigger, "~/estop/hard"   , self.handle_estop_hard,      callback_group=srv_group)
-        self.create_service(Trigger, "~/estop/gentle" , self.handle_estop_soft,      callback_group=srv_group)
+        # EStop services (no exclusive callback group so estop can interrupt other actions)
+        self.create_service(Trigger, "~/estop/hard"   , self.handle_estop_hard)
+        self.create_service(Trigger, "~/estop/gentle" , self.handle_estop_soft)
         self.create_service(Trigger, "~/estop/release", self.handle_estop_disengage, callback_group=srv_group)
 
         # Configuration services
