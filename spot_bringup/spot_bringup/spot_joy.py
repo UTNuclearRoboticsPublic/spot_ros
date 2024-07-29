@@ -166,6 +166,7 @@ class SpotJoyUtils(Node):
         # We need the controller in "D" mode, not "X" mode
         if len(axes) != 6:
             self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=1.0)
+            return
 
         # If both the start button is pressed, try to claim a lease
         if buttons[LogitechButtons.START.value]:
