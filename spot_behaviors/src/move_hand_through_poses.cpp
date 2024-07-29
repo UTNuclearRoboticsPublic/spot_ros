@@ -24,7 +24,9 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
 
 BT::PortsList MoveHandThroughPoses::providedPorts() {
     return {
-        BT::InputPort<geometry_msgs::msg::PoseArray::SharedPtr>("waypoints", "The sequence of poses through which to move the hand")
+        BT::InputPort<geometry_msgs::msg::PoseArray::SharedPtr>("waypoints", "The sequence of poses through which to move the hand"),
+        BT::InputPort<double>("position_tolerance", "Position tolerance for non-cartesian moves"),
+        BT::InputPort<double>("angular_tolerance", "Angular tolerance for non-cartesian moves")
     };
 }
     
@@ -212,8 +214,8 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
         case action_msgs::msg::GoalStatus::STATUS_CANCELED:
             RCLCPP_WARN(node_->get_logger(), "TrajectoryExecution action failed");
             traj_execution_goal_handle_.reset();
-            return BT::NodeStatus::FAILURE;
-
+            return next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
+            
         case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
             RCLCPP_INFO(node_->get_logger(), "MoveHandThroughPoses: TrajectoryExecution action complete");
             traj_execution_goal_handle_.reset();
@@ -377,7 +379,12 @@ bool MoveHandThroughPoses::makeNewMoveGroupRequest() {
     move_group_goal.request.allowed_planning_time = max_planning_time_;
     move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
     move_group_goal.request.goal_constraints.push_back(
-        kinematic_constraints::constructGoalConstraints("arm0_hand", target_pose)
+        kinematic_constraints::constructGoalConstraints(
+            "arm0_hand", 
+            target_pose, 
+            getInput<double>("position_tolerance").value_or(0.001),
+            getInput<double>("angular_tolerance").value_or(0.01)
+        )
     );
     move_group_goal.request.group_name = "arm";
     move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
