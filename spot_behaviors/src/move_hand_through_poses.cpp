@@ -50,6 +50,9 @@ BT::NodeStatus MoveHandThroughPoses::onStart() {
         return BT::NodeStatus::FAILURE;
     }
     waypoints_ = *(waypoints_expected.value());
+    if (waypoints_.poses.empty()) {
+        return BT::NodeStatus::SUCCESS;
+    }
     
     next_idx_ = 0;
     path_computation_response_future_.reset();
