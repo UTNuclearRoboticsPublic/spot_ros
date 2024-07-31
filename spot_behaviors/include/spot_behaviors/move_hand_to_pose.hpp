@@ -69,6 +69,7 @@ protected:
     // Parameters (default values are provided at parameter declaration)
     double max_planning_time_{};
     std::string planning_group_{};
+    double max_velocity_scaling_factor_{};
 
     // Action client
     rclcpp_action::Client<moveit_msgs::action::MoveGroup>::SharedPtr move_group_action_client_;

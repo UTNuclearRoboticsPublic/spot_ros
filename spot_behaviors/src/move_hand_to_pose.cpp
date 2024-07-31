@@ -39,6 +39,7 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
     move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/move_action");
     max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 5.0);
     planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
+    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.1);
 }
 
 BT::PortsList MoveHandToPose::providedPorts(){
@@ -81,7 +82,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     move_group_goal.planning_options.replan = true;
     move_group_goal.planning_options.replan_attempts = 4;
     move_group_goal.request.allowed_planning_time = max_planning_time_;
-    move_group_goal.request.max_velocity_scaling_factor = 0.1;
+    move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
     move_group_goal.request.goal_constraints.push_back(
         kinematic_constraints::constructGoalConstraints(target_frame, target_pose)
     );
