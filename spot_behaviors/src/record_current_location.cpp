@@ -34,7 +34,7 @@ BT::NodeStatus RecordCurrentLocation::tick() {
     );
 
     geometry_msgs::msg::PoseStamped frame_pose;
-    frame_pose.header.stamp = node_->now();
+    frame_pose.header.stamp = rclcpp::Time(0);
     frame_pose.header.frame_id = global_frame;
     frame_pose.pose.position.x = frame_transform.transform.translation.x;
     frame_pose.pose.position.y = frame_transform.transform.translation.y;
