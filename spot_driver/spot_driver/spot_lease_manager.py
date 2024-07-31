@@ -75,8 +75,10 @@ class SpotLeaseManager():
         self._robot_command_client = None
         self._power_client = None
         self._lease_client = None
+        self._lease_keepalive = None
         self._estop_client = None
         self._estop_endpoint = None
+        self._estop_keepalive = None
 
         # Keep track of who is using the lease
         self._lease_owners = []
@@ -295,6 +297,10 @@ class SpotLeaseManager():
     def resetEStop(self) -> None:
         """Get keepalive for eStop"""
         self.logger.info("Creating EStop endpoint")
+        if self._estop_keepalive is not None:
+            self._estop_keepalive.shutdown()
+            self._estop_keepalive = None
+
         self._estop_endpoint = EstopEndpoint(self._estop_client, 'ros', 9.0)
         self._estop_endpoint.force_simple_setup()  # Set this endpoint as the robot's sole estop.
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
@@ -346,6 +352,10 @@ class SpotLeaseManager():
         if self._lease:
             self._lease_client.return_lease(self._lease)
             self._lease = None
+            self.logger.info("Shutting down lease keepalive")
+            if self._lease_keepalive is not None:
+                self._lease_keepalive.shutdown()
+                self._lease_keepalive = None
 
     def safe_shut_down(self):
         if self.robot.has_arm():
