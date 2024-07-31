@@ -224,6 +224,11 @@ class SpotLeaseManager():
             True if the object owns a lease, False otherwise 
         """
         return True if ID in self._lease_owners else False 
+    
+    def updateLeaseTask(self) -> None:
+        """Update and retrieve the latest lease information"""
+        if self._lease_task is not None:
+            self._lease_task.update()
 
     def robot_command(self, command_proto: PB2Message,
                        end_time_secs: float =None) -> Tuple[bool, Text, int]:
@@ -340,8 +345,6 @@ class SpotLeaseManager():
         """Return the lease on the body."""
         if self._lease:
             self._lease_client.return_lease(self._lease)
-            self._lease_task = None
-            self._lease_client = None
             self._lease = None
 
     def safe_shut_down(self):

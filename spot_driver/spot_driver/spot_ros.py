@@ -277,6 +277,8 @@ class SpotROS(Node):
 
     def LeaseCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
+        self.spot_wrapper._lease_manager._lease_task.update()
+        
         lease_array_msg = LeaseArray()
         lease_list = self.spot_wrapper.lease
 
@@ -927,6 +929,7 @@ class SpotROS(Node):
         # call state periodic tasks
         self.spot_wrapper.updateIdleTasks()
         self.spot_wrapper.updateStateTasks()
+        self.spot_wrapper._lease_manager.updateLeaseTask()
 
         # publish robot feedback state
         feedback_msg = Feedback()
