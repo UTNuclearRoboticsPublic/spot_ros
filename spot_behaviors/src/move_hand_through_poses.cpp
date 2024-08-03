@@ -343,7 +343,7 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
-    req->max_velocity_scaling_factor = max_velocity_scaling_factor_;
+    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
     req->cartesian_speed_limited_link = "arm0_hand";
     req->max_cartesian_speed = max_end_effector_velocity_;
 
