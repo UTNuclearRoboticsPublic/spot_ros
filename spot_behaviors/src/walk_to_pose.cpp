@@ -177,8 +177,7 @@ bool WalkToPose::checkGoal() const {
 
     // Get the relative error
     const double translation_error = (robot_pose.translation() - target_pose.translation()).norm();
-    const auto rotation_diff = Eigen::Quaterniond(robot_pose.rotation()).inverse() *Eigen::Quaterniond(target_pose.rotation());
-    const double rotation_error = std::abs(Eigen::AngleAxisd(rotation_diff).angle());
+    const double rotation_error = std::abs(Eigen::Quaterniond(robot_pose.rotation()).angularDistance(Eigen::Quaterniond(target_pose.rotation())));
 
     RCLCPP_INFO(node_->get_logger(), "Translation error: %.2f | Rotation error: %.2f", translation_error, rotation_error);
 
