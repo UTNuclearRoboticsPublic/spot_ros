@@ -108,7 +108,7 @@ BT::NodeStatus MoveHandThroughPoses::checkPathRequestStatus() {
     auto status = rclcpp::spin_until_future_complete(node_, path_computation_response_future_->future, std::chrono::milliseconds(5));
     switch (status) {
         case rclcpp::FutureReturnCode::TIMEOUT: {
-            const auto max_duration = std::chrono::milliseconds(static_cast<int>(1000*(max_planning_time_ + 1)));
+            const auto max_duration = std::chrono::milliseconds(static_cast<int>(1000*(max_planning_time_ + 5)));
             if (node_->now() - path_computation_response_timestamp_ > max_duration) {
                 RCLCPP_ERROR(node_->get_logger(), "Did not get a response from the path client within the time limit, aborting MoveHandThroughPoses");
                 cancelOngoingPathRequest();
@@ -171,7 +171,7 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
         auto status = rclcpp::spin_until_future_complete(node_, traj_execution_response_future_, std::chrono::milliseconds(5));
         switch (status) {
             case rclcpp::FutureReturnCode::TIMEOUT: {
-                const auto max_duration = std::chrono::seconds(1);
+                const auto max_duration = std::chrono::seconds(5);
                 if (node_->now() - traj_execution_request_timestamp_ > max_duration) {
                     RCLCPP_ERROR(node_->get_logger(), "Did not get a response from the TrajectoryExecution server within the time limit, aborting MoveHandThroughPoses");
                     cancelOngoingTrajectoryExecutionRequest();
@@ -272,8 +272,8 @@ BT::NodeStatus MoveHandThroughPoses::checkMoveGroupRequest() {
                 return BT::NodeStatus::RUNNING;
 
             case rclcpp::FutureReturnCode::TIMEOUT:{
-                const double elapsed_seconds = (node_->now() - move_group_request_timestamp_).seconds();
-                if (elapsed_seconds > max_planning_time_){
+                const auto max_duration = std::chrono::milliseconds(static_cast<int>(1000*(max_planning_time_ + 5)));
+                if (node_->now() - move_group_request_timestamp_ > max_duration){
                     RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
                     move_group_action_client_->async_cancel_all_goals();
                     return BT::NodeStatus::FAILURE;
