@@ -79,8 +79,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     // Generate the action server goal
     moveit_msgs::action::MoveGroup::Goal move_group_goal;
     move_group_goal.planning_options.plan_only = false;
-    move_group_goal.planning_options.replan = true;
-    move_group_goal.planning_options.replan_attempts = 4;
+    move_group_goal.planning_options.replan = false;
     move_group_goal.request.allowed_planning_time = max_planning_time_;
     move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
     move_group_goal.request.goal_constraints.push_back(
