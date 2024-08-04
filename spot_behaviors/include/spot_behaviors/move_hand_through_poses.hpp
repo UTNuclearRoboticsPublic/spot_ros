@@ -67,6 +67,7 @@ public:
 
 protected:
     // The index of the next pose to start from
+    std::size_t last_idx_ = 0;
     std::size_t next_idx_ = 0;
 
     // The node instance
@@ -127,6 +128,10 @@ protected:
     bool makeNewPathRequest();
     bool makeNewTrajectoryExecutionRequest(moveit_msgs::srv::GetCartesianPath::Response::SharedPtr path);
     bool makeNewMoveGroupRequest();
+
+    // Functions for managing the current pose index
+    void incrementPoseIndex(std::ptrdiff_t offset);
+    void abortPoseIncrement();
 };
 
 } // namespace spot_behaviors

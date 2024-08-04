@@ -49,11 +49,14 @@ BT::NodeStatus MoveHandThroughPoses::onStart() {
         RCLCPP_ERROR(node_->get_logger(), "Unable to retrieve waypoints for blackboard, aborting MoveHandThroughPoses");
         return BT::NodeStatus::FAILURE;
     }
+    
     waypoints_ = *(waypoints_expected.value());
     if (waypoints_.poses.empty()) {
+        RCLCPP_WARN(node_->get_logger(), "MoveHandThroughPoses received an empty list of waypoints. Reporting successful execution of all 0 waypoints");
         return BT::NodeStatus::SUCCESS;
     }
     
+    last_idx_ = 0;
     next_idx_ = 0;
     path_computation_response_future_.reset();
     return BT::NodeStatus::RUNNING;
@@ -139,7 +142,7 @@ BT::NodeStatus MoveHandThroughPoses::checkPathRequestStatus() {
                 RCLCPP_INFO(node_->get_logger(), "Making a general (non-cartesian) move_group request instead");
                 return makeNewMoveGroupRequest() ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
             }
-            next_idx_ += num_waypoints_achieved;
+            incrementPoseIndex(num_waypoints_achieved);
             return makeNewTrajectoryExecutionRequest(resp) ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
         }
     }
@@ -182,6 +185,7 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
 
             case rclcpp::FutureReturnCode::INTERRUPTED: {
                 RCLCPP_WARN(node_->get_logger(), "TrajectoryEexcution request was interrupted, reporting failure");
+                abortPoseIncrement();
                 traj_execution_response_future_ = decltype(traj_execution_response_future_){};
                 return BT::NodeStatus::FAILURE;
             }
@@ -191,6 +195,7 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
                 traj_execution_response_future_ = decltype(traj_execution_response_future_){};
                 if (!traj_execution_goal_handle_) {
                     RCLCPP_ERROR(node_->get_logger(), "Trajectory execution request was rejected, aborting MoveHandThroughPoses");
+                    abortPoseIncrement();
                     return BT::NodeStatus::FAILURE;
                 }
                 return BT::NodeStatus::RUNNING;
@@ -216,6 +221,7 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
         case action_msgs::msg::GoalStatus::STATUS_ABORTED:
         case action_msgs::msg::GoalStatus::STATUS_CANCELED:
             RCLCPP_WARN(node_->get_logger(), "TrajectoryExecution action failed");
+            abortPoseIncrement();
             traj_execution_goal_handle_.reset();
             return next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
             
@@ -234,6 +240,7 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
 
 void MoveHandThroughPoses::cancelOngoingTrajectoryExecutionRequest() {
     if (traj_execution_response_future_.valid()) {
+        abortPoseIncrement();
         traj_execution_response_future_ = decltype(traj_execution_response_future_){};
     }
 }
@@ -243,6 +250,7 @@ void MoveHandThroughPoses::cancelOngoingTrajectoryExecutionRequest() {
 
 void MoveHandThroughPoses::cancelOngoingTrajectoryExecution() {
     if (traj_execution_goal_handle_) {
+        abortPoseIncrement();
         traj_execution_action_client_->async_cancel_goal(traj_execution_goal_handle_);
     }
 }
@@ -409,5 +417,19 @@ bool MoveHandThroughPoses::makeNewMoveGroupRequest() {
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
+void MoveHandThroughPoses::incrementPoseIndex(std::ptrdiff_t offset) {
+    last_idx_ = next_idx_;
+    next_idx_ += offset;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
+
+void MoveHandThroughPoses::abortPoseIncrement() {
+    next_idx_ = last_idx_;
+}
+
+// ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 
 } // namespace spot_behaviors
