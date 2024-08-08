@@ -102,23 +102,39 @@ class SpotBodyWrapper():
                 return False
 
         self._robot_id = self._lease_manager.ID
-        front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
-        side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
-        rear_image_sources = {'back_fisheye_image', 'back_depth'}
+        front_depth_image_sources = {'frontleft_depth', 'frontright_depth'}
+        side_depth_image_sources = {'left_depth', 'right_depth'}
+        rear_depth_image_sources = {'back_depth'}
+        front_visual_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image'}
+        side_visual_image_sources = {'left_fisheye_image', 'right_fisheye_image'}
+        rear_visual_image_sources = {'back_fisheye_image'}
         point_cloud_sources = {'velodyne-point-cloud'}
 
         front_image_requests = []
-        for source in front_image_sources:
-            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
         side_image_requests = []
-        for source in side_image_sources:
+        rear_image_requests = []
+
+        # Create visual image requests
+        for source in front_visual_image_sources:
+            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+        for source in side_visual_image_sources:
+            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+        for source in rear_visual_image_sources:
+            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+        # Create depth image requests
+        for source in side_depth_image_sources:
             side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
-        rear_image_requests = []
-        for source in rear_image_sources:
+        for source in front_depth_image_sources:
+            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+        for source in rear_depth_image_sources:
             rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
 
+        # Create point cloud requests
         point_cloud_requests = []
         for source in point_cloud_sources:
             point_cloud_requests.append(build_pc_request(source))
