@@ -49,13 +49,15 @@ from .spot_lease_manager import SpotLeaseManager
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
-    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
+    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False, publish_images: bool = False, publish_depth_images: bool = False):
         self._logger = logger
         self._hostname = hostname
 
         self._is_connected = False
         self._has_eap_2 = has_eap_2
         self._has_cam_payload = has_cam_payload
+        self._publish_images = publish_images
+        self._publish_depth_images = publish_depth_images
         self._lease_manager = None
 
         self._robot_id = None
@@ -83,8 +85,8 @@ class SpotBodyWrapper():
             rates    : The rates at which to call each of the callbacks
 
         Note:
-            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'status.robot_state'] 
-            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'robot_state']
+            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'sensors.front_depth_image', 'sensors.side_depth_image', 'sensors.rear_depth_image', 'status.robot_state'] 
+            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'front_depth_image', 'side_depth_image', 'rear_depth_image', 'robot_state']
 
         Returns:
             Bool describing whether connection was successful
@@ -102,42 +104,6 @@ class SpotBodyWrapper():
                 return False
 
         self._robot_id = self._lease_manager.ID
-        front_depth_image_sources = {'frontleft_depth', 'frontright_depth'}
-        side_depth_image_sources = {'left_depth', 'right_depth'}
-        rear_depth_image_sources = {'back_depth'}
-        front_visual_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image'}
-        side_visual_image_sources = {'left_fisheye_image', 'right_fisheye_image'}
-        rear_visual_image_sources = {'back_fisheye_image'}
-        point_cloud_sources = {'velodyne-point-cloud'}
-
-        front_image_requests = []
-        side_image_requests = []
-        rear_image_requests = []
-
-        # Create visual image requests
-        for source in front_visual_image_sources:
-            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-        for source in side_visual_image_sources:
-            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-        for source in rear_visual_image_sources:
-            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-        # Create depth image requests
-        for source in side_depth_image_sources:
-            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-        for source in front_depth_image_sources:
-            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-        for source in rear_depth_image_sources:
-            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-        # Create point cloud requests
-        point_cloud_requests = []
-        for source in point_cloud_sources:
-            point_cloud_requests.append(build_pc_request(source))
 
         # Spot service clients
         try:
@@ -146,6 +112,8 @@ class SpotBodyWrapper():
 
             if self._has_eap_2:
                 self._pointcloud_client = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
+
+
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
@@ -157,16 +125,68 @@ class SpotBodyWrapper():
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
 
-        # Async Tasks
-        self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-        self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-        self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-        sensor_tasks = [self._front_image_task, self._side_image_task, self._rear_image_task]
+        sensor_tasks = []
 
-        # Optionally enable the pointcloud service
+        # Request images asynchronously 
+        if self._publish_images:
+            front_visual_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image'}
+            side_visual_image_sources = {'left_fisheye_image', 'right_fisheye_image'}
+            rear_visual_image_sources = {'back_fisheye_image'}
+
+            # Create visual image requests
+            front_image_requests = []
+            side_image_requests = []
+            rear_image_requests = []
+            for source in front_visual_image_sources:
+                front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+            for source in side_visual_image_sources:
+                side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+            for source in rear_visual_image_sources:
+                rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+            # Call async service for visual images
+            self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
+            self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
+            self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+            sensor_tasks.extend([self._front_image_task, self._side_image_task, self._rear_image_task])
+
+        if self._publish_depth_images:
+            front_depth_image_sources = {'frontleft_depth', 'frontright_depth'}
+            side_depth_image_sources = {'left_depth', 'right_depth'}
+            rear_depth_image_sources = {'back_depth'}
+
+            # Create depth image requests
+            front_depth_image_requests = []
+            side_depth_image_requests = []
+            rear_depth_image_requests = []
+
+            for source in front_depth_image_sources:
+                front_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+            for source in side_depth_image_sources:
+                side_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+            for source in rear_depth_image_sources:
+                rear_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+            # Call async service for depth images
+            self._front_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_depth_image", 1.0), callbacks.get("front_depth_image", lambda:None), front_depth_image_requests)
+            self._side_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_depth_image", 1.0), callbacks.get("side_depth_image", lambda:None), side_depth_image_requests)
+            self._rear_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_depth_image", 1.0), callbacks.get("rear_depth_image", lambda:None), rear_depth_image_requests)
+            sensor_tasks.extend([self._front_depth_image_task, self._side_depth_image_task, self._rear_depth_image_task])
+
+        # Optionally populate pointcloud data asynchronously
         if self._has_eap_2 and 'point_cloud' in callbacks:
+            # Create point cloud requests
+            point_cloud_requests = []
+            point_cloud_sources = {'velodyne-point-cloud'}
+            for source in point_cloud_sources:
+                point_cloud_requests.append(build_pc_request(source))
             self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
             sensor_tasks.append(self._pointcloud_task)
+
         self._async_sensor_tasks = AsyncTasks(sensor_tasks)
         
         self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
@@ -217,6 +237,21 @@ class SpotBodyWrapper():
     def rear_images(self):
         """Return latest proto from the _rear_image_task"""
         return self._rear_image_task.proto
+
+    @property
+    def front_depth_images(self):
+        """Return latest proto from the _front_depth_image_task"""
+        return self._front_depth_image_task.proto
+
+    @property
+    def side_depth_images(self):
+        """Return latest proto from the _side_depth_image_task"""
+        return self._side_depth_image_task.proto
+
+    @property
+    def rear_depth_images(self):
+        """Return latest proto from the _rear_depth_image_task"""
+        return self._rear_depth_image_task.proto
 
     @property
     def point_clouds(self):
