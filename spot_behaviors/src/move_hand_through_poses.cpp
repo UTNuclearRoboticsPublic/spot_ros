@@ -25,6 +25,7 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
 BT::PortsList MoveHandThroughPoses::providedPorts() {
     return {
         BT::InputPort<geometry_msgs::msg::PoseArray::SharedPtr>("waypoints", "The sequence of poses through which to move the hand"),
+        BT::InputPort<std::string>("target_link", "The link on the robot which should achieve the waypoints"),
         BT::InputPort<double>("position_tolerance", "Position tolerance for non-cartesian moves"),
         BT::InputPort<double>("angular_tolerance", "Angular tolerance for non-cartesian moves")
     };
@@ -348,11 +349,12 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     
     req->header = waypoints_.header;
     req->group_name = planning_group_;
+    req->link_name = getInput<std::string>("target_link").value_or("arm0_hand");
     req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
     req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
-    req->cartesian_speed_limited_link = "arm0_hand";
+    req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
     req->max_cartesian_speed = max_end_effector_velocity_;
 
     path_computation_response_timestamp_ = node_->now();
@@ -391,7 +393,7 @@ bool MoveHandThroughPoses::makeNewMoveGroupRequest() {
     move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
     move_group_goal.request.goal_constraints.push_back(
         kinematic_constraints::constructGoalConstraints(
-            "arm0_hand", 
+            getInput<std::string>("target_link").value_or("arm0_hand"), 
             target_pose, 
             getInput<double>("position_tolerance").value_or(0.001),
             getInput<double>("angular_tolerance").value_or(0.01)
