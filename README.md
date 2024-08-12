@@ -28,6 +28,10 @@ This launch file accepts a number of launch arguments, including those for neste
 ```bash
 ros2 launch spot_bringup bringup.launch.py --show-args
 ```
+Some common arguments are summarized here:
+- `publish_images`, possible values: `True`, `False`
+- `publish_depth_images`, possible values: `True`, `False`
+- `launch_pointcloud_service`, possible values: `True`, `False`
 
 ## Gamepad Mapping
 
@@ -80,3 +84,6 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `RecordCurrentLocation` | `global_frame` `robot_frame` | `recorded_pose` | Records the pose of the robot frame in the global frame. Useful for returning to the dock |
 | `TriggerService` | `service_name` `timeout` `empty` | --- | Calls a service with `std_srvs/Trigger` (or `std_srvs/Empty` if `empty` is True) and waits for `timeout` seconds for a response. Returns the success value of the response (always `SUCCESS` for Empty), or `FAILURE` if no response is received |
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
+
+## Authors
+Janak Panthi (aka Crasun Jans), Alex Navarro, and Blake Anderson
