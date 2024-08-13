@@ -9,6 +9,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(tf2_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ArmImpedanceCommand.action"
@@ -16,6 +17,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ClawGripperCommand.action"
   "action/NavigateTo.action"
   "action/WalkTo.action"
+  "action/ImageToGrasp.action"
 
   "srv/ArmForceTrajectory.srv"
   "srv/ArmJointMovement.srv"
@@ -57,8 +59,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SystemFault.msg"
   "msg/SystemFaultState.msg"
   "msg/WiFiState.msg"
-  
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs
+
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)
