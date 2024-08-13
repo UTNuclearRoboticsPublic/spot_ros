@@ -29,15 +29,16 @@
 
 #include <optional>
 #include <rclcpp/rclcpp.hpp>
+#include <behaviortree_cpp/action_node.h>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <moveit_msgs/action/move_group.hpp>
-#include "behaviortree_cpp/action_node.h"
+#include "spot_behaviors/node_behavior_base.hpp"
 
 namespace spot_behaviors{
 
-class MoveHandToPose : public BT::StatefulActionNode {
+class MoveHandToPose : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    MoveHandToPose(const std::string& name, const BT::NodeConfiguration& config);
+    MoveHandToPose(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     /** We accept x input ports - TODO 
      *  - target_pose: geometry_msgs::msg::PoseStamped 
@@ -63,9 +64,6 @@ public:
     void onHalted() override;
 
 protected:
-    // The node instance
-    rclcpp::Node::SharedPtr node_;
-
     // Parameters (default values are provided at parameter declaration)
     double max_planning_time_{};
     std::string planning_group_{};

@@ -29,16 +29,16 @@
 
 namespace spot_behaviors {
 
-CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration& config) :
+CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer) :
     BT::SyncActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors"))
+    NodeBehaviorBase(name, tf_buffer)
     {
-        battery_sub_ = node_->create_subscription<spot_msgs::msg::BatteryStateArray>(
+        battery_sub_ = this->create_subscription<spot_msgs::msg::BatteryStateArray>(
             "/spot_driver/status/battery_states",
             rclcpp::ParametersQoS{},
             std::bind(&CheckBattery::batteryCallback, this, std::placeholders::_1)
         );
-        spin_thread_ = std::thread([this](){rclcpp::spin(node_);});
+        spin_thread_ = std::thread([this](){rclcpp::spin(this->get_node_base_interface());});
     }
 
 BT::PortsList CheckBattery::providedPorts() {
@@ -52,13 +52,13 @@ BT::NodeStatus CheckBattery::tick() {
     rclcpp::sleep_for(std::chrono::milliseconds(1000));
 
     if (!battery_percentage_.has_value()){
-        RCLCPP_ERROR(node_->get_logger(), "No messages received on topic %s", battery_sub_->get_topic_name());
+        RCLCPP_ERROR(get_logger(), "No messages received on topic %s", battery_sub_->get_topic_name());
         return BT::NodeStatus::FAILURE;
     }
 
     BT::Expected<float> battery_threshold = getInput<float>("battery_threshold");
     if (!battery_threshold.has_value()){
-        RCLCPP_ERROR(node_->get_logger(), "No battery threshold provided for BT Node %s", this->name().c_str());
+        RCLCPP_ERROR(get_logger(), "No battery threshold provided for BT Node %s", this->name().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
@@ -67,7 +67,7 @@ BT::NodeStatus CheckBattery::tick() {
     if (battery_percentage >= battery_threshold.value()) {
         return BT::NodeStatus::SUCCESS;
     } else {
-        RCLCPP_ERROR(node_->get_logger(), "Robot battery (%.0f%%) is below threshold value of %.0f%%, aborting behavior tree execution", battery_percentage, battery_threshold.value());
+        RCLCPP_ERROR(get_logger(), "Robot battery (%.0f%%) is below threshold value of %.0f%%, aborting behavior tree execution", battery_percentage, battery_threshold.value());
         return BT::NodeStatus::FAILURE;
     }
 }

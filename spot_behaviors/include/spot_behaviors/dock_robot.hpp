@@ -30,12 +30,13 @@
 #include <rclcpp/rclcpp.hpp>
 #include <spot_msgs/srv/dock.hpp>
 #include "behaviortree_cpp/action_node.h"
+#include "spot_behaviors/node_behavior_base.hpp"
 
 namespace spot_behaviors {
 
-class DockRobot : public BT::StatefulActionNode {
+class DockRobot : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    DockRobot(const std::string& name, const BT::NodeConfiguration& config);
+    DockRobot(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     /** We accept 1 input port - dock_id */
     static BT::PortsList providedPorts();
@@ -59,12 +60,6 @@ public:
     void onHalted() override;
 
 private:
-    // The node instance
-    rclcpp::Node::SharedPtr node_;
-
-    // Used to prevent node namespace clashes
-    static inline int node_count_ = 0;
-
     // Service client
     rclcpp::Client<spot_msgs::srv::Dock>::SharedPtr dock_client_;
     rclcpp::Time request_timestamp_;

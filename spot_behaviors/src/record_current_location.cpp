@@ -3,11 +3,9 @@
 
 namespace spot_behaviors{
     
-RecordCurrentLocation::RecordCurrentLocation(const std::string& name, const BT::NodeConfiguration& config) :
+RecordCurrentLocation::RecordCurrentLocation(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer) :
     BT::SyncActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors")),
-    tf_buffer_(node_->get_clock()),
-    tf_listener_(tf_buffer_)
+    NodeBehaviorBase(name, tf_buffer)
 {}
 
 BT::PortsList RecordCurrentLocation::providedPorts() {
@@ -22,12 +20,12 @@ BT::NodeStatus RecordCurrentLocation::tick() {
     const std::string global_frame = getInput<std::string>("global_frame").value_or("map");
     const std::string query_frame = getInput<std::string>("robot_frame").value_or("base_link");
 
-    if (std::string err; !tf_buffer_.canTransform(global_frame, query_frame, tf2::TimePointZero, std::chrono::seconds(2), &err)) {
-        RCLCPP_ERROR(node_->get_logger(), "Unable to record frame location: %s", err.c_str());
+    if (std::string err; !tf_buffer_->canTransform(global_frame, query_frame, tf2::TimePointZero, std::chrono::seconds(2), &err)) {
+        RCLCPP_ERROR(get_logger(), "Unable to record frame location: %s", err.c_str());
         return BT::NodeStatus::FAILURE;
     }
 
-    const geometry_msgs::msg::TransformStamped frame_transform = tf_buffer_.lookupTransform(
+    const geometry_msgs::msg::TransformStamped frame_transform = tf_buffer_->lookupTransform(
         global_frame,
         query_frame,
         tf2::TimePointZero

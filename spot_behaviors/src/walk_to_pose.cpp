@@ -32,13 +32,11 @@
 
 namespace spot_behaviors{
 
-WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config) :
+WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config, tf2_ros::Buffer::SharedPtr tf_buffer) :
     BT::StatefulActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors")),
-    tf_buffer_(node_->get_clock()),
-    tf_listener_(tf_buffer_)
+    NodeBehaviorBase(name, tf_buffer)
 {
-    navigation_action_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(node_, "/spot_driver/walk_to");
+    navigation_action_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(this, "/spot_driver/walk_to");
 }
 
 BT::PortsList WalkToPose::providedPorts() {
@@ -50,14 +48,14 @@ BT::PortsList WalkToPose::providedPorts() {
 BT::NodeStatus WalkToPose::onStart() {
     // Check to see that the server and input are in place
     if (!navigation_action_client_->wait_for_action_server(std::chrono::seconds(10))){
-        RCLCPP_ERROR(node_->get_logger(), "/navigate_to_pose action server not available, aborting call for Spot navigation");
+        RCLCPP_ERROR(get_logger(), "/navigate_to_pose action server not available, aborting call for Spot navigation");
         return BT::NodeStatus::FAILURE;
     }
 
     BT::Expected<geometry_msgs::msg::PoseStamped> target_pose_expected = getInput<geometry_msgs::msg::PoseStamped>("target_pose");
     if (!target_pose_expected.has_value()){
-        RCLCPP_ERROR(node_->get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
-        RCLCPP_ERROR(node_->get_logger(), "Error message: %s", target_pose_expected.error().c_str());
+        RCLCPP_ERROR(get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
+        RCLCPP_ERROR(get_logger(), "Error message: %s", target_pose_expected.error().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
@@ -70,19 +68,19 @@ BT::NodeStatus WalkToPose::onStart() {
     navigation_goal.maximum_movement_time = 10.0;
 
     goal_handle_future_ = navigation_action_client_->async_send_goal(navigation_goal);
-    request_time_point_ = node_->now();
+    request_time_point_ = now();
     return BT::NodeStatus::RUNNING;
 }
 
 BT::NodeStatus WalkToPose::onRunning() {
     // Check to see if we're still waiting for the request to be processed
     if (goal_handle_future_.valid()){
-        auto result = rclcpp::spin_until_future_complete(node_, goal_handle_future_, std::chrono::milliseconds(5));
+        auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), goal_handle_future_, std::chrono::milliseconds(5));
         switch (result){
             case rclcpp::FutureReturnCode::TIMEOUT:{
-                const rclcpp::Duration duration = node_->now() - request_time_point_; 
+                const rclcpp::Duration duration = now() - request_time_point_; 
                 if (duration > std::chrono::seconds(1)){
-                    RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for response from /navigate_to_pose server. Aborting");
+                    RCLCPP_ERROR(get_logger(), "Timed out waiting for response from /navigate_to_pose server. Aborting");
                     navigation_action_client_->async_cancel_all_goals();
                     goal_handle_future_ = decltype(goal_handle_future_){};
                     return BT::NodeStatus::FAILURE;
@@ -91,17 +89,17 @@ BT::NodeStatus WalkToPose::onRunning() {
             }
 
             case rclcpp::FutureReturnCode::INTERRUPTED:
-                RCLCPP_ERROR(node_->get_logger(), "Request interrupted waiting for response from /navigate_to_pose server. Aborting");
+                RCLCPP_ERROR(get_logger(), "Request interrupted waiting for response from /navigate_to_pose server. Aborting");
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return BT::NodeStatus::FAILURE;
 
             case rclcpp::FutureReturnCode::SUCCESS:
-                RCLCPP_INFO(node_->get_logger(), "WalkTo goal was acknowledged");
+                RCLCPP_INFO(get_logger(), "WalkTo goal was acknowledged");
                 goal_handle_ = goal_handle_future_.get();
                 if (goal_handle_ == nullptr){
-                    RCLCPP_INFO(node_->get_logger(), "WalkTo goal was rejected");
+                    RCLCPP_INFO(get_logger(), "WalkTo goal was rejected");
                 }else{
-                    RCLCPP_INFO(node_->get_logger(), "WalkTo goal was accepted");
+                    RCLCPP_INFO(get_logger(), "WalkTo goal was accepted");
                 }
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return (goal_handle_ == nullptr) ? BT::NodeStatus::FAILURE : BT::NodeStatus::RUNNING;
@@ -110,7 +108,7 @@ BT::NodeStatus WalkToPose::onRunning() {
 
     // If we have a goal, check its status
     if (goal_handle_ != nullptr){
-        rclcpp::spin_some(node_);
+        rclcpp::spin_some(this->get_node_base_interface());
         auto goal_status = goal_handle_->get_status();
         switch (goal_status){
             case action_msgs::msg::GoalStatus::STATUS_CANCELING:
@@ -119,38 +117,38 @@ BT::NodeStatus WalkToPose::onRunning() {
                 return BT::NodeStatus::RUNNING;
 
             case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
-                RCLCPP_WARN(node_->get_logger(), "Navigate action returned status UNKNOWN, reporting failure");
+                RCLCPP_WARN(get_logger(), "Navigate action returned status UNKNOWN, reporting failure");
                 [[fallthrough]];
             case action_msgs::msg::GoalStatus::STATUS_ABORTED:
             case action_msgs::msg::GoalStatus::STATUS_CANCELED:
-                RCLCPP_WARN(node_->get_logger(), "Navigate action failed, checking if we're within threshold distance of the goal");
+                RCLCPP_WARN(get_logger(), "Navigate action failed, checking if we're within threshold distance of the goal");
                 goal_handle_.reset();
                 if (checkGoal()) {
-                    RCLCPP_INFO(node_->get_logger(), "Robot is within acceptable tolerance of the goal pose, reporting success");
+                    RCLCPP_INFO(get_logger(), "Robot is within acceptable tolerance of the goal pose, reporting success");
                     return BT::NodeStatus::SUCCESS;
                 }
-                else RCLCPP_WARN(node_->get_logger(), "Robot is too far from target pose, reporting failure");
+                else RCLCPP_WARN(get_logger(), "Robot is too far from target pose, reporting failure");
                 return BT::NodeStatus::FAILURE;
 
             case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
-                RCLCPP_INFO(node_->get_logger(), "WalkToPose: Navigate Action completed successfully");
+                RCLCPP_INFO(get_logger(), "WalkToPose: Navigate Action completed successfully");
                 goal_handle_.reset();
                 return BT::NodeStatus::SUCCESS;
         }
-        RCLCPP_ERROR(node_->get_logger(), "WalkToPose action returned unknown status code \"%d\", reporting failure", +goal_status);
+        RCLCPP_ERROR(get_logger(), "WalkToPose action returned unknown status code \"%d\", reporting failure", +goal_status);
         return BT::NodeStatus::FAILURE;
     }
 
-    RCLCPP_ERROR(node_->get_logger(), "WalkToPose has no active action or action request. This should never happen");
+    RCLCPP_ERROR(get_logger(), "WalkToPose has no active action or action request. This should never happen");
     return BT::NodeStatus::FAILURE;
 }
 
 void WalkToPose::onHalted() {
     if (goal_handle_future_.valid() || goal_handle_ != nullptr){
         auto cancel_future = navigation_action_client_->async_cancel_all_goals();
-        auto response = rclcpp::spin_until_future_complete(node_, cancel_future, std::chrono::seconds(1));
+        auto response = rclcpp::spin_until_future_complete(this->get_node_base_interface(), cancel_future, std::chrono::seconds(1));
         if (response == rclcpp::FutureReturnCode::TIMEOUT || response == rclcpp::FutureReturnCode::INTERRUPTED){
-            RCLCPP_FATAL(node_->get_logger(), "Unable to cancel WalkToPose action request. Robot may move unexpectedly!!!");
+            RCLCPP_FATAL(get_logger(), "Unable to cancel WalkToPose action request. Robot may move unexpectedly!!!");
         }
     }
 }
@@ -159,27 +157,21 @@ bool WalkToPose::checkGoal() const {
     // Let the most up-to-date TF data arrive
     rclcpp::sleep_for(std::chrono::milliseconds(500));
 
-    // Check to make sure we can lookup the transform
-    if (std::string err; !tf_buffer_.canTransform("base_footprint", target_pose_.header.frame_id, tf2::TimePointZero, std::chrono::seconds(1), &err)) {
-        RCLCPP_WARN(node_->get_logger(), "Cannot lookup robot frame, reporting navigation failure; %s", err.c_str());
+    // Get the robot pose in the target frame
+    std::optional<Eigen::Isometry3d> robot_pose = getFramePose("base_footprint", target_pose_.header.frame_id).value();
+    if (!robot_pose.has_value()) {
         return false;
     }
 
-    // Get the robot pose in the target frame
-    geometry_msgs::msg::PoseStamped robot_pose_in_robot_frame{};
-    robot_pose_in_robot_frame.header.frame_id = "base_footprint";
-    geometry_msgs::msg::PoseStamped robot_pose_in_target_frame = tf_buffer_.transform(robot_pose_in_robot_frame, target_pose_.header.frame_id, std::chrono::seconds(1));
-
-    // Convert both to Eigen
-    Eigen::Isometry3d robot_pose, target_pose;
-    tf2::fromMsg(robot_pose_in_target_frame.pose, robot_pose);
+    // Convert the target pose to Eigen
+    Eigen::Isometry3d target_pose;
     tf2::fromMsg(target_pose_.pose, target_pose);
 
     // Get the relative error
-    const double translation_error = (robot_pose.translation() - target_pose.translation()).norm();
-    const double rotation_error = std::abs(Eigen::Quaterniond(robot_pose.rotation()).angularDistance(Eigen::Quaterniond(target_pose.rotation())));
+    const double translation_error = (robot_pose->translation() - target_pose.translation()).norm();
+    const double rotation_error = std::abs(Eigen::Quaterniond(robot_pose->rotation()).angularDistance(Eigen::Quaterniond(target_pose.rotation())));
 
-    RCLCPP_INFO(node_->get_logger(), "Translation error: %.2f | Rotation error: %.2f", translation_error, rotation_error);
+    RCLCPP_INFO(get_logger(), "Translation error: %.2f | Rotation error: %.2f", translation_error, rotation_error);
 
     // Compare to the threshold values (hard coded for now - will change to parameters later)
     return translation_error < 0.25 && rotation_error < 0.25;

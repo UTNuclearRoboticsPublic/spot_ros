@@ -29,11 +29,11 @@
 
 namespace spot_behaviors{
 
-NavigateToPose::NavigateToPose(const std::string& name, const BT::NodeConfig& config) :
+NavigateToPose::NavigateToPose(const std::string& name, const BT::NodeConfig& config, tf2_ros::Buffer::SharedPtr tf_buffer) :
     BT::StatefulActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
+    NodeBehaviorBase(name, tf_buffer)
 {
-    navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(node_, "/spot_nav/navigate_to_pose");
+    navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(this, "/spot_nav/navigate_to_pose");
 }
 
 BT::PortsList NavigateToPose::providedPorts() {
@@ -45,14 +45,14 @@ BT::PortsList NavigateToPose::providedPorts() {
 BT::NodeStatus NavigateToPose::onStart() {
     // Check to see that the server and input are in place
     if (!navigation_action_client_->wait_for_action_server(std::chrono::seconds(10))){
-        RCLCPP_ERROR(node_->get_logger(), "/navigate_to_pose action server not available, aborting call for Spot navigation");
+        RCLCPP_ERROR(get_logger(), "/navigate_to_pose action server not available, aborting call for Spot navigation");
         return BT::NodeStatus::FAILURE;
     }
 
     BT::Expected<geometry_msgs::msg::PoseStamped> target_pose_expected = getInput<geometry_msgs::msg::PoseStamped>("target_pose");
     if (!target_pose_expected.has_value()){
-        RCLCPP_ERROR(node_->get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
-        RCLCPP_ERROR(node_->get_logger(), "Error message: %s", target_pose_expected.error().c_str());
+        RCLCPP_ERROR(get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
+        RCLCPP_ERROR(get_logger(), "Error message: %s", target_pose_expected.error().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
@@ -62,19 +62,19 @@ BT::NodeStatus NavigateToPose::onStart() {
     navigation_goal.pose = target_pose_expected.value();
 
     goal_handle_future_ = navigation_action_client_->async_send_goal(navigation_goal);
-    request_time_point_ = node_->now();
+    request_time_point_ = now();
     return BT::NodeStatus::RUNNING;
 }
 
 BT::NodeStatus NavigateToPose::onRunning() {
     // Check to see if we're still waiting for the request to be processed
     if (goal_handle_future_.valid()){
-        auto result = rclcpp::spin_until_future_complete(node_, goal_handle_future_, std::chrono::milliseconds(5));
+        auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), goal_handle_future_, std::chrono::milliseconds(5));
         switch (result){
             case rclcpp::FutureReturnCode::TIMEOUT:{
-                const rclcpp::Duration duration = node_->now() - request_time_point_; 
+                const rclcpp::Duration duration = now() - request_time_point_; 
                 if (duration > std::chrono::seconds(1)){
-                    RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for response from /navigate_to_pose server. Aborting");
+                    RCLCPP_ERROR(get_logger(), "Timed out waiting for response from /navigate_to_pose server. Aborting");
                     navigation_action_client_->async_cancel_all_goals();
                     goal_handle_future_ = decltype(goal_handle_future_){};
                     return BT::NodeStatus::FAILURE;
@@ -83,17 +83,17 @@ BT::NodeStatus NavigateToPose::onRunning() {
             }
 
             case rclcpp::FutureReturnCode::INTERRUPTED:
-                RCLCPP_ERROR(node_->get_logger(), "Request interrupted waiting for response from /navigate_to_pose server. Aborting");
+                RCLCPP_ERROR(get_logger(), "Request interrupted waiting for response from /navigate_to_pose server. Aborting");
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return BT::NodeStatus::FAILURE;
 
             case rclcpp::FutureReturnCode::SUCCESS:
-                RCLCPP_INFO(node_->get_logger(), "Navigation goal was acknowledged");
+                RCLCPP_INFO(get_logger(), "Navigation goal was acknowledged");
                 goal_handle_ = goal_handle_future_.get();
                 if (goal_handle_ == nullptr){
-                    RCLCPP_INFO(node_->get_logger(), "Navigation goal was rejected");
+                    RCLCPP_INFO(get_logger(), "Navigation goal was rejected");
                 }else{
-                    RCLCPP_INFO(node_->get_logger(), "Navigation goal was accepted");
+                    RCLCPP_INFO(get_logger(), "Navigation goal was accepted");
                 }
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return (goal_handle_ == nullptr) ? BT::NodeStatus::FAILURE : BT::NodeStatus::RUNNING;
@@ -102,7 +102,7 @@ BT::NodeStatus NavigateToPose::onRunning() {
 
     // If we have a goal, check its status
     if (goal_handle_ != nullptr){
-        rclcpp::spin_some(node_);
+        rclcpp::spin_some(this->get_node_base_interface());
         auto goal_status = goal_handle_->get_status();
         switch (goal_status){
             case action_msgs::msg::GoalStatus::STATUS_CANCELING:
@@ -111,33 +111,33 @@ BT::NodeStatus NavigateToPose::onRunning() {
                 return BT::NodeStatus::RUNNING;
 
             case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
-                RCLCPP_WARN(node_->get_logger(), "Navigate action returned status UNKNOWN, reporting failure");
+                RCLCPP_WARN(get_logger(), "Navigate action returned status UNKNOWN, reporting failure");
                 [[fallthrough]];
             case action_msgs::msg::GoalStatus::STATUS_ABORTED:
             case action_msgs::msg::GoalStatus::STATUS_CANCELED:
-                RCLCPP_WARN(node_->get_logger(), "Navigate action failed");
+                RCLCPP_WARN(get_logger(), "Navigate action failed");
                 goal_handle_.reset();
                 return BT::NodeStatus::FAILURE;
 
             case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
-                RCLCPP_INFO(node_->get_logger(), "NavigateToPose: Navigate Action completed successfully");
+                RCLCPP_INFO(get_logger(), "NavigateToPose: Navigate Action completed successfully");
                 goal_handle_.reset();
                 return BT::NodeStatus::SUCCESS;
         }
-        RCLCPP_ERROR(node_->get_logger(), "NavigateToPose action returned unknown status code \"%d\", reporting failure", +goal_status);
+        RCLCPP_ERROR(get_logger(), "NavigateToPose action returned unknown status code \"%d\", reporting failure", +goal_status);
         return BT::NodeStatus::FAILURE;
     }
 
-    RCLCPP_ERROR(node_->get_logger(), "NavigateToPose has no active action or action request. This should never happen");
+    RCLCPP_ERROR(get_logger(), "NavigateToPose has no active action or action request. This should never happen");
     return BT::NodeStatus::FAILURE;
 }
 
 void NavigateToPose::onHalted() {
     if (goal_handle_future_.valid() || goal_handle_ != nullptr){
         auto cancel_future = navigation_action_client_->async_cancel_all_goals();
-        auto response = rclcpp::spin_until_future_complete(node_, cancel_future, std::chrono::seconds(1));
+        auto response = rclcpp::spin_until_future_complete(this->get_node_base_interface(), cancel_future, std::chrono::seconds(1));
         if (response == rclcpp::FutureReturnCode::TIMEOUT || response == rclcpp::FutureReturnCode::INTERRUPTED){
-            RCLCPP_FATAL(node_->get_logger(), "Unable to cancel NavigateToPose action request. Robot may move unexpectedly!!!");
+            RCLCPP_FATAL(get_logger(), "Unable to cancel NavigateToPose action request. Robot may move unexpectedly!!!");
         }
     }
 }

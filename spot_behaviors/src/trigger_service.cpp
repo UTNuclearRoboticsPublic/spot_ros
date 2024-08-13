@@ -29,9 +29,9 @@
 
 namespace spot_behaviors {
 
-TriggerService::TriggerService(const std::string& name, const BT::NodeConfiguration& config):
+TriggerService::TriggerService(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors"))
+    NodeBehaviorBase(name, tf_buffer)
 {}
 
 BT::PortsList TriggerService::providedPorts() {
@@ -47,71 +47,71 @@ BT::NodeStatus TriggerService::onStart() {
     const bool use_empty = getInput<bool>("empty").value_or(false);
 
     if (use_empty) {
-        empty_client_ = node_->create_client<std_srvs::srv::Empty>(service_name.value());
+        empty_client_ = this->create_client<std_srvs::srv::Empty>(service_name.value());
         client_base_ = std::dynamic_pointer_cast<rclcpp::ClientBase>(empty_client_);
     }else{
-        trigger_client_ = node_->create_client<std_srvs::srv::Trigger>(service_name.value());
+        trigger_client_ = this->create_client<std_srvs::srv::Trigger>(service_name.value());
         client_base_ = std::dynamic_pointer_cast<rclcpp::ClientBase>(trigger_client_);
     }
 
     // Make sure the server is available to us
     if (!client_base_->wait_for_service(std::chrono::seconds(2))){
-        RCLCPP_ERROR(node_->get_logger(), "%s server \"%s\" not found, aborting", (trigger_client_ ? "Trigger" : "Empty"), service_name.value().c_str());
+        RCLCPP_ERROR(get_logger(), "%s server \"%s\" not found, aborting", (trigger_client_ ? "Trigger" : "Empty"), service_name.value().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
     // Make sure there aren't any existing requests - should not be possible
     if ((trigger_client_ && trigger_future_.has_value()) || (empty_client_ && empty_future_.has_value())){
-        RCLCPP_ERROR(node_->get_logger(), "Service \"%s\" called with an existing request. This should never happen", service_name.value().c_str());
+        RCLCPP_ERROR(get_logger(), "Service \"%s\" called with an existing request. This should never happen", service_name.value().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
     // Update the timeout value if one has been provided
     BT::Expected<int> timeout_expected = getInput<int>("timeout");
     if (!timeout_expected.has_value()){
-        RCLCPP_WARN(node_->get_logger(), "Argument \"timeout\" not passed to TriggerService behavior, using default value of 2 seconds");
+        RCLCPP_WARN(get_logger(), "Argument \"timeout\" not passed to TriggerService behavior, using default value of 2 seconds");
     }
     timeout_ = std::chrono::milliseconds(timeout_expected.value_or(2)*1000);
 
     // Create and send the request
     if (trigger_client_) {
-        RCLCPP_INFO(node_->get_logger(), "Calling trigger request on \"%s\"", service_name.value().c_str());
+        RCLCPP_INFO(get_logger(), "Calling trigger request on \"%s\"", service_name.value().c_str());
         trigger_future_ = trigger_client_->async_send_request(std::make_shared<std_srvs::srv::Trigger::Request>());
     }else {
-        RCLCPP_INFO(node_->get_logger(), "Calling empty request on \"%s\"", service_name.value().c_str());
+        RCLCPP_INFO(get_logger(), "Calling empty request on \"%s\"", service_name.value().c_str());
         empty_future_ = empty_client_->async_send_request(std::make_shared<std_srvs::srv::Empty::Request>());
     }
-    service_call_time_ = node_->now();
+    service_call_time_ = now();
     return BT::NodeStatus::RUNNING;
 }
 
 BT::NodeStatus TriggerService::onRunning() {
     // If there is no existing request, return failure - this should never happen
     if ( (trigger_client_ && !trigger_future_.has_value()) || (empty_client_ && !empty_future_.has_value()) ) {
-        RCLCPP_ERROR(node_->get_logger(), "Trigger request called on service %s has no active future. This should never happen", client_base_->get_service_name());
+        RCLCPP_ERROR(get_logger(), "Trigger request called on service %s has no active future. This should never happen", client_base_->get_service_name());
         return BT::NodeStatus::FAILURE;
     }
 
     // Check the status of the future. If it's done, return its success value
-    rclcpp::Duration time_elapsed = node_->now() - service_call_time_;
+    rclcpp::Duration time_elapsed = now() - service_call_time_;
     rclcpp::FutureReturnCode status = std::invoke([&](){
         if (trigger_future_.has_value())
-            return rclcpp::spin_until_future_complete(node_, trigger_future_.value(), std::chrono::milliseconds(5));
+            return rclcpp::spin_until_future_complete(this->get_node_base_interface(), trigger_future_.value(), std::chrono::milliseconds(5));
         else
-            return rclcpp::spin_until_future_complete(node_, empty_future_.value(), std::chrono::milliseconds(5));
+            return rclcpp::spin_until_future_complete(this->get_node_base_interface(), empty_future_.value(), std::chrono::milliseconds(5));
     });
 
     switch (status){
         case rclcpp::FutureReturnCode::TIMEOUT:
             if (time_elapsed > timeout_){
-                RCLCPP_ERROR(node_->get_logger(), "Service timeout. Failed to trigger service %s", client_base_->get_service_name());
+                RCLCPP_ERROR(get_logger(), "Service timeout. Failed to trigger service %s", client_base_->get_service_name());
                 onHalted();
                 return BT::NodeStatus::FAILURE;
             }
             return BT::NodeStatus::RUNNING;
 
         case rclcpp::FutureReturnCode::INTERRUPTED:
-            RCLCPP_ERROR(node_->get_logger(), "Service interrupted. Failed to trigger service %s", client_base_->get_service_name());
+            RCLCPP_ERROR(get_logger(), "Service interrupted. Failed to trigger service %s", client_base_->get_service_name());
             onHalted();
             return BT::NodeStatus::FAILURE;
 
@@ -120,7 +120,7 @@ BT::NodeStatus TriggerService::onRunning() {
                 const std_srvs::srv::Trigger::Response::SharedPtr resp = trigger_future_->get();
                 trigger_future_ = std::nullopt;
                 if (!resp->success){
-                    RCLCPP_ERROR(node_->get_logger(), "Error in service call to %s: %s", client_base_->get_service_name(), resp->message.c_str());
+                    RCLCPP_ERROR(get_logger(), "Error in service call to %s: %s", client_base_->get_service_name(), resp->message.c_str());
                     return BT::NodeStatus::FAILURE;
                 }
             }else {
@@ -130,7 +130,7 @@ BT::NodeStatus TriggerService::onRunning() {
     }
 
     // Otherwise return running
-    RCLCPP_ERROR(node_->get_logger(), "Trigger service behavior for %s running without an active request. This should never happend", client_base_->get_service_name());
+    RCLCPP_ERROR(get_logger(), "Trigger service behavior for %s running without an active request. This should never happend", client_base_->get_service_name());
     return BT::NodeStatus::FAILURE;
 }
 

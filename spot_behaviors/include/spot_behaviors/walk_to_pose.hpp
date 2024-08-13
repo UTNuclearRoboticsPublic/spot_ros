@@ -39,13 +39,15 @@
 #include <tf2_ros/transform_listener.h>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <behaviortree_cpp/action_node.h>
-#include <spot_msgs/action/walk_to.hpp>
+
+#include "spot_msgs/action/walk_to.hpp"
+#include "spot_behaviors/node_behavior_base.hpp"
 
 namespace spot_behaviors{
 
-class WalkToPose : public BT::StatefulActionNode {
+class WalkToPose : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    WalkToPose(const std::string& name, const BT::NodeConfig& config);
+    WalkToPose(const std::string& name, const BT::NodeConfig& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     static BT::PortsList providedPorts();
 
@@ -56,14 +58,11 @@ public:
     void onHalted() override;
 
 private:
-    rclcpp::Node::SharedPtr node_;
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SharedPtr navigation_action_client_;
     std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::WalkTo>::SharedPtr> goal_handle_future_;
     rclcpp_action::ClientGoalHandle<spot_msgs::action::WalkTo>::SharedPtr goal_handle_;
     rclcpp::Time request_time_point_{};
 
-    tf2_ros::Buffer tf_buffer_;
-    tf2_ros::TransformListener tf_listener_;
     geometry_msgs::msg::PoseStamped target_pose_;
     bool checkGoal() const;
 };

@@ -32,14 +32,14 @@
 
 namespace spot_behaviors{
 
-MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfiguration& config):
+MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
+    NodeBehaviorBase(name, tf_buffer)
 {
-    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/spot_moveit/move_action");
-    max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 5.0);
-    planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
-    max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.1);
+    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(this, "/spot_moveit/move_action");
+    max_planning_time_ = this->declare_parameter<double>("manipulation.max_planning_time", 5.0);
+    planning_group_    = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
+    max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.1);
 }
 
 BT::PortsList MoveHandToPose::providedPorts(){
@@ -53,17 +53,17 @@ BT::PortsList MoveHandToPose::providedPorts(){
 BT::NodeStatus MoveHandToPose::onStart() {
     // Make sure the action client is up and running
     if (!move_group_action_client_->wait_for_action_server(std::chrono::seconds(10))){
-        RCLCPP_ERROR(node_->get_logger(), "Move Group action client did not respond, aborting MoveHandToPose behavior");
+        RCLCPP_ERROR(get_logger(), "Move Group action client did not respond, aborting MoveHandToPose behavior");
         return BT::NodeStatus::FAILURE;
     }else{
-        RCLCPP_INFO(node_->get_logger(), "Move Group action client found");
+        RCLCPP_INFO(get_logger(), "Move Group action client found");
     }
 
     // Retrieve the target pose from blackboard
     BT::Expected<geometry_msgs::msg::PoseStamped> target_pose_expected = getInput<geometry_msgs::msg::PoseStamped>("target_pose");
     if (!target_pose_expected.has_value()){
         RCLCPP_ERROR(
-            node_->get_logger(), 
+            get_logger(), 
             "Unable to retrieve target pose from blackboard, aborting MoveHandToPose behavior\nReason: %s", 
             target_pose_expected.error().c_str()
         );
@@ -85,7 +85,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     );
     move_group_goal.request.group_name = getInput<std::string>("planning_group").value_or("arm");
     move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
-    move_group_goal.request.workspace_parameters.header.stamp = node_->now();
+    move_group_goal.request.workspace_parameters.header.stamp = now();
     move_group_goal.request.workspace_parameters.min_corner.x = -1e9;
     move_group_goal.request.workspace_parameters.min_corner.y = -1e9;
     move_group_goal.request.workspace_parameters.min_corner.z = -1e9;
@@ -94,7 +94,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     move_group_goal.request.workspace_parameters.max_corner.z = +1e9;
 
     // Request the motion
-    RCLCPP_INFO(node_->get_logger(), "Sending move group goal to action server");
+    RCLCPP_INFO(get_logger(), "Sending move group goal to action server");
     move_group_response_future_ = move_group_action_client_->async_send_goal(move_group_goal);
     request_timestamp_ = move_group_goal.request.workspace_parameters.header.stamp;
 
@@ -106,7 +106,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
 
     // Check to see if we're still waiting on a response from the action server
     if (move_group_response_future_.valid()){
-        const auto result = rclcpp::spin_until_future_complete(node_, move_group_response_future_, std::chrono::milliseconds(5));
+        const auto result = rclcpp::spin_until_future_complete(this->get_node_base_interface(), move_group_response_future_, std::chrono::milliseconds(5));
         switch (result){
             case rclcpp::FutureReturnCode::SUCCESS:
                 move_group_goal_handle_ = move_group_response_future_.get();
@@ -114,9 +114,9 @@ BT::NodeStatus MoveHandToPose::onRunning() {
                 return move_group_goal_handle_ ? BT::NodeStatus::RUNNING : BT::NodeStatus::FAILURE;
 
             case rclcpp::FutureReturnCode::TIMEOUT:{
-                const double elapsed_seconds = (node_->now() - request_timestamp_).seconds();
+                const double elapsed_seconds = (now() - request_timestamp_).seconds();
                 if (elapsed_seconds > 2.0){
-                    RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
+                    RCLCPP_ERROR(get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
                     move_group_action_client_->async_cancel_all_goals();
                     return BT::NodeStatus::FAILURE;
                 }
@@ -124,16 +124,16 @@ BT::NodeStatus MoveHandToPose::onRunning() {
             }
 
             case rclcpp::FutureReturnCode::INTERRUPTED:
-                RCLCPP_WARN(node_->get_logger(), "MoveHandToPose MoveGroup request interrupted. Reporting failed movement");
+                RCLCPP_WARN(get_logger(), "MoveHandToPose MoveGroup request interrupted. Reporting failed movement");
                 return BT::NodeStatus::FAILURE;
         }
     } else if (!move_group_goal_handle_){
-        RCLCPP_ERROR(node_->get_logger(), "MoveHandToPose has no active action or action request. This should never happen");
+        RCLCPP_ERROR(get_logger(), "MoveHandToPose has no active action or action request. This should never happen");
         return BT::NodeStatus::FAILURE;
     }
 
     // Check if the action is ongoing, or if it has concluded
-    rclcpp::spin_some(node_);
+    rclcpp::spin_some(this->get_node_base_interface());
     const int8_t goal_status = move_group_goal_handle_->get_status();
     switch (goal_status){
         case action_msgs::msg::GoalStatus::STATUS_CANCELING:
@@ -142,30 +142,30 @@ BT::NodeStatus MoveHandToPose::onRunning() {
             return BT::NodeStatus::RUNNING;
 
         case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
-            RCLCPP_WARN(node_->get_logger(), "MoveGroup action returned status UNKNOWN, reporting failure");
+            RCLCPP_WARN(get_logger(), "MoveGroup action returned status UNKNOWN, reporting failure");
             [[fallthrough]];
         case action_msgs::msg::GoalStatus::STATUS_ABORTED:
         case action_msgs::msg::GoalStatus::STATUS_CANCELED:
-            RCLCPP_WARN(node_->get_logger(), "MoveGroup action failed");
+            RCLCPP_WARN(get_logger(), "MoveGroup action failed");
             move_group_goal_handle_.reset();
             return BT::NodeStatus::FAILURE;
 
         case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
-            RCLCPP_INFO(node_->get_logger(), "MoveHandToPose: MoveGroup Action complete");
+            RCLCPP_INFO(get_logger(), "MoveHandToPose: MoveGroup Action complete");
             move_group_goal_handle_.reset();
             return BT::NodeStatus::SUCCESS;
     }
 
-    RCLCPP_ERROR(node_->get_logger(), "MoveGroup action returned unknown status code \"%d\", reporting failure", +goal_status);
+    RCLCPP_ERROR(get_logger(), "MoveGroup action returned unknown status code \"%d\", reporting failure", +goal_status);
     return BT::NodeStatus::FAILURE;
 }
 
 void MoveHandToPose::onHalted() {
     if (move_group_response_future_.valid() || move_group_goal_handle_ != nullptr){
         auto cancel_future = move_group_action_client_->async_cancel_all_goals();
-        auto response = rclcpp::spin_until_future_complete(node_, cancel_future, std::chrono::seconds(1));
+        auto response = rclcpp::spin_until_future_complete(this->get_node_base_interface(), cancel_future, std::chrono::seconds(1));
         if (response == rclcpp::FutureReturnCode::TIMEOUT || response == rclcpp::FutureReturnCode::INTERRUPTED){
-            RCLCPP_FATAL(node_->get_logger(), "Unable to cancel MoveGroup action request. Robot may move unexpectedly!!!");
+            RCLCPP_FATAL(get_logger(), "Unable to cancel MoveGroup action request. Robot may move unexpectedly!!!");
         }
     }
 }

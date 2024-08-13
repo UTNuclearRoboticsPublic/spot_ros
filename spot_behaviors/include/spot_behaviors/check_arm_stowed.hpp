@@ -32,12 +32,13 @@
 #include <behaviortree_cpp/action_node.h>
 
 #include "spot_msgs/msg/manipulator_state.hpp"
+#include "spot_behaviors/node_behavior_base.hpp"
 
 namespace spot_behaviors {
 
-class CheckArmStowed : public BT::SyncActionNode {
+class CheckArmStowed : public BT::SyncActionNode, public NodeBehaviorBase {
 public:
-    CheckArmStowed(const std::string& name, const BT::NodeConfiguration& config);
+    CheckArmStowed(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     static BT::PortsList providedPorts();
 
@@ -45,9 +46,6 @@ public:
     BT::NodeStatus tick() override;
 
 private:
-    // The node instance to use to collect data
-    rclcpp::Node::SharedPtr node_;
-
     // Subscriber to data
     rclcpp::Subscription<spot_msgs::msg::ManipulatorState>::SharedPtr manipulator_sub_;
 
@@ -56,9 +54,6 @@ private:
 
     // A thread to spin the node and look for messages
     std::thread spin_thread_;
-
-    // How many instances of such BT nodes have been created (used to avoid namespace conflicts)
-    static inline int node_count_ = 0;
 
     // Record the battery state obtained from the message
     void manipulatorStateCallback(spot_msgs::msg::ManipulatorState::UniquePtr msg);

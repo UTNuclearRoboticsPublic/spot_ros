@@ -36,11 +36,13 @@
 #include <moveit_msgs/srv/get_cartesian_path.hpp>
 #include <moveit_msgs/action/execute_trajectory.hpp>
 
+#include "spot_behaviors/node_behavior_base.hpp"
+
 namespace spot_behaviors{
 
-class MoveHandThroughPoses : public BT::StatefulActionNode {
+class MoveHandThroughPoses : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config);
+    MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     /** We accept 1 input ports 
      *  - waypoints: geometry_msgs::msg::PoseArray 
@@ -69,9 +71,6 @@ protected:
     // The index of the next pose to start from
     std::size_t last_idx_ = 0;
     std::size_t next_idx_ = 0;
-
-    // The node instance
-    rclcpp::Node::SharedPtr node_;
 
     // Parameters (default values are provided at parameter declaration)
     double max_planning_time_{};

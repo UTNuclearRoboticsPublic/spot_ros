@@ -33,29 +33,18 @@
 #include <tf2_ros/transform_listener.h>
 #include <behaviortree_cpp/action_node.h>
 
-#include "spot_msgs/msg/battery_state_array.hpp"
+#include "spot_behaviors/node_behavior_base.hpp"
 
 namespace spot_behaviors {
 
-class RecordCurrentLocation : public BT::SyncActionNode {
+class RecordCurrentLocation : public BT::SyncActionNode, public NodeBehaviorBase {
 public:
-    RecordCurrentLocation(const std::string& name, const BT::NodeConfiguration& config);
+    RecordCurrentLocation(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     static BT::PortsList providedPorts();
 
     // Returns SUCCESS if battery is over a given threshold, FAILURE otherwise
     BT::NodeStatus tick() override;
-
-private:
-    // The node instance to use to collect data
-    rclcpp::Node::SharedPtr node_;
-
-    // TF listener to get robot pose
-    tf2_ros::Buffer tf_buffer_;
-    tf2_ros::TransformListener tf_listener_;
-
-    // How many instances of such BT nodes have been created (used to avoid namespace conflicts)
-    static inline int node_count_ = 0;
 };
 
 } // namespace spot_behaviors

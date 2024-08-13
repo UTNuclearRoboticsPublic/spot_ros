@@ -39,11 +39,13 @@
 #include <behaviortree_cpp/action_node.h>
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 
+#include "spot_behaviors/node_behavior_base.hpp"
+
 namespace spot_behaviors{
 
-class NavigateToPose : public BT::StatefulActionNode {
+class NavigateToPose : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    NavigateToPose(const std::string& name, const BT::NodeConfig& config);
+    NavigateToPose(const std::string& name, const BT::NodeConfig& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     static BT::PortsList providedPorts();
 
@@ -54,7 +56,6 @@ public:
     void onHalted() override;
 
 private:
-    rclcpp::Node::SharedPtr node_;
     rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigation_action_client_;
     std::shared_future<rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr> goal_handle_future_;
     rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle_;

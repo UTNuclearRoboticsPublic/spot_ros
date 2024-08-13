@@ -33,11 +33,13 @@
 #include <std_srvs/srv/trigger.hpp>
 #include "behaviortree_cpp/action_node.h"
 
+#include "spot_behaviors/node_behavior_base.hpp"
+
 namespace spot_behaviors {
 
-class TriggerService : public BT::StatefulActionNode {
+class TriggerService : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    TriggerService(const std::string& name, const BT::NodeConfiguration& config);
+    TriggerService(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     /** 
      * We accept 1 input port: service name 
@@ -63,12 +65,6 @@ public:
     void onHalted() override;
 
 private:
-    // The node instance
-    rclcpp::Node::SharedPtr node_;
-
-    // Used to prevent node namespace clashes
-    static inline int node_count_ = 0;
-
     // The start time of the service call to check for timeout
     rclcpp::Time service_call_time_{};
 

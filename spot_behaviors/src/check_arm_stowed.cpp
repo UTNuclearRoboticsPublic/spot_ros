@@ -29,16 +29,17 @@
 
 namespace spot_behaviors {
 
-CheckArmStowed::CheckArmStowed(const std::string& name, const BT::NodeConfiguration& config) :
+CheckArmStowed::CheckArmStowed(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer) :
     BT::SyncActionNode(name, config),
-    node_(std::make_shared<rclcpp::Node>(name+"BT"+std::to_string(node_count_++), "spot_behaviors"))
+    NodeBehaviorBase(name, tf_buffer)
     {
-        manipulator_sub_ = node_->create_subscription<spot_msgs::msg::ManipulatorState>(
+        tf_buffer_->allFramesAsYAML();
+        manipulator_sub_ = this->create_subscription<spot_msgs::msg::ManipulatorState>(
             "/spot_manipulation_driver/manipulator_state",
             rclcpp::ParametersQoS{},
             std::bind(&CheckArmStowed::manipulatorStateCallback, this, std::placeholders::_1)
         );
-        spin_thread_ = std::thread([this](){rclcpp::spin(node_);});
+        spin_thread_ = std::thread([this](){rclcpp::spin(this->get_node_base_interface());});
     }
 
 BT::PortsList CheckArmStowed::providedPorts() {
@@ -52,13 +53,13 @@ BT::NodeStatus CheckArmStowed::tick() {
     rclcpp::sleep_for(std::chrono::milliseconds(1000));
 
     if (!arm_is_stowed_.has_value()){
-        RCLCPP_ERROR(node_->get_logger(), "No messages received on topic %s", manipulator_sub_->get_topic_name());
+        RCLCPP_ERROR(get_logger(), "No messages received on topic %s", manipulator_sub_->get_topic_name());
         return BT::NodeStatus::FAILURE;
     }
 
     const bool arm_is_stowed = arm_is_stowed_.value();
     arm_is_stowed_ = std::nullopt;
-    RCLCPP_INFO(node_->get_logger(), "Arm is %sstowed", arm_is_stowed ? "" : "un");
+    RCLCPP_INFO(get_logger(), "Arm is %sstowed", arm_is_stowed ? "" : "un");
     return arm_is_stowed ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
