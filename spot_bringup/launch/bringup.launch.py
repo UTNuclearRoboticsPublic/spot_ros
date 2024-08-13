@@ -49,7 +49,7 @@ def generate_launch_description():
                             description='A realsense camera is mounted on the Spot Arm',
                             default_value=spot_accessories_dict.get('has_realsense', 'False')),
         
-
+        # Startup actions
         DeclareLaunchArgument('auto_claim',
                             description='Claim ownership of the robot upon connection.',
                             default_value='False'),
@@ -61,7 +61,12 @@ def generate_launch_description():
                             default_value='False'),
         DeclareLaunchArgument('launch_pointcloud_service',
                             description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
-                            default_value='False')
+                            default_value='False'),
+
+        # Other configurations
+        DeclareLaunchArgument('manipulation_action_namespace',
+                            description='Namespace for the manipulation action servers. Temporary fix until remppaing is added to action servers (https://github.com/ros2/rcl/pull/1170)',
+                            default_value='')
     ]
 
     has_arm         = LaunchConfiguration('has_arm')
@@ -104,7 +109,8 @@ def generate_launch_description():
         parameters=[
             {'hostname': LaunchConfiguration('hostname'),
             'has_eap_2': has_eap_2,
-            'has_cam_payload': has_cam_payload},
+            'has_cam_payload': has_cam_payload,
+            'action_namespace': LaunchConfiguration('manipulation_action_namespace')},
             body_params,
             arm_params
         ]

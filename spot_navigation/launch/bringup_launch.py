@@ -3,7 +3,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDesc
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import Node, SetRemap
+from launch_ros.actions import PushRosNamespace, SetRemap
 
 def generate_launch_description():
     config_arg = DeclareLaunchArgument(
@@ -14,7 +14,10 @@ def generate_launch_description():
     
     nav_include = GroupAction(
         actions=[
-            SetRemap(src='/cmd_vel', dst='/spot_driver/cmd_vel'),
+            PushRosNamespace("spot_nav"),
+            SetRemap(src='cmd_vel'   , dst='/spot_driver/cmd_vel'),
+            SetRemap(src='/tf'       , dst='/tf'),
+            SetRemap(src='/tf_static', dst='/tf_static'),
 
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(

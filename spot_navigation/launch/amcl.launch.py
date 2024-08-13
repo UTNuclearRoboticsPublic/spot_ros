@@ -3,7 +3,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import Node
+from launch_ros.actions import Node, PushRosNamespace
 
 def generate_launch_description():
 
@@ -26,7 +26,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument(
             'cloud_in',
-            default_value='velodyne_points',
+            default_value='/velodyne_points',
             description='Pointcloud to use for localization')
     ]
 
@@ -43,8 +43,7 @@ def generate_launch_description():
             {"max_height": 1.5}
         ],
         remappings=[
-            ("cloud_in", LaunchConfiguration('cloud_in')),
-            ("scan", "/spot/pointcloud_scan")
+            ("/spot_nav/cloud_in", LaunchConfiguration('cloud_in')),
         ]
     )
 
@@ -80,6 +79,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         *launch_args,
+        PushRosNamespace("spot_nav"),
         amcl,
         map_server,
         laserscan_node,

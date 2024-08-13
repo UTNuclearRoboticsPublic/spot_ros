@@ -8,9 +8,9 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     BT::StatefulActionNode(name, config),
     node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
 {
-    path_computation_client_ = node_->create_client<moveit_msgs::srv::GetCartesianPath>("/compute_cartesian_path");
-    traj_execution_action_client_ = rclcpp_action::create_client<moveit_msgs::action::ExecuteTrajectory>(node_, "/execute_trajectory");
-    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/move_action");
+    path_computation_client_ = node_->create_client<moveit_msgs::srv::GetCartesianPath>("/spot_moveit/compute_cartesian_path");
+    traj_execution_action_client_ = rclcpp_action::create_client<moveit_msgs::action::ExecuteTrajectory>(node_, "/spot_moveit/execute_trajectory");
+    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/spot_moveit/move_action");
 
     max_planning_time_           = node_->declare_parameter<double>("manipulation.max_planning_time", 3.0);
     max_cartesian_planning_time_ = node_->declare_parameter<double>("manipulation.max_cartesian_planning_time", 5.0);

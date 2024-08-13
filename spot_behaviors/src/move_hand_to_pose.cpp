@@ -36,7 +36,7 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
     BT::StatefulActionNode(name, config),
     node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
 {
-    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/move_action");
+    move_group_action_client_ = rclcpp_action::create_client<moveit_msgs::action::MoveGroup>(node_, "/spot_moveit/move_action");
     max_planning_time_ = node_->declare_parameter<double>("manipulation.max_planning_time", 5.0);
     planning_group_    = node_->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = node_->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.1);

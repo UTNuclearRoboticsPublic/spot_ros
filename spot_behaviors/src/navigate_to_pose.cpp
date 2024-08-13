@@ -33,7 +33,7 @@ NavigateToPose::NavigateToPose(const std::string& name, const BT::NodeConfig& co
     BT::StatefulActionNode(name, config),
     node_(std::make_shared<rclcpp::Node>(name, "spot_behaviors"))
 {
-    navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(node_, "/navigate_to_pose");
+    navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(node_, "/spot_nav/navigate_to_pose");
 }
 
 BT::PortsList NavigateToPose::providedPorts() {
