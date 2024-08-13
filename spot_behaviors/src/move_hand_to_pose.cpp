@@ -45,14 +45,13 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
 BT::PortsList MoveHandToPose::providedPorts(){
     return {
         BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose"),
-        BT::InputPort<std::string>("target_frame"),
+        BT::InputPort<std::string>("target_link"),
         BT::InputPort<std::string>("planning_group")
     };
 }
 
 BT::NodeStatus MoveHandToPose::onStart() {
     // Make sure the action client is up and running
-    RCLCPP_INFO(node_->get_logger(), "Waiting for action server");
     if (!move_group_action_client_->wait_for_action_server(std::chrono::seconds(10))){
         RCLCPP_ERROR(node_->get_logger(), "Move Group action client did not respond, aborting MoveHandToPose behavior");
         return BT::NodeStatus::FAILURE;
@@ -73,8 +72,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     const geometry_msgs::msg::PoseStamped& target_pose = target_pose_expected.value();
 
     // Check to see what frame we want to define the pose for
-    const std::string target_frame = getInput<std::string>("target_frame").value_or("arm0_hand");
-    RCLCPP_INFO(node_->get_logger(), "Target frame: %s", target_frame.c_str());
+    const std::string target_link = getInput<std::string>("target_link").value_or("arm0_hand");
 
     // Generate the action server goal
     moveit_msgs::action::MoveGroup::Goal move_group_goal;
@@ -83,7 +81,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     move_group_goal.request.allowed_planning_time = max_planning_time_;
     move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
     move_group_goal.request.goal_constraints.push_back(
-        kinematic_constraints::constructGoalConstraints(target_frame, target_pose)
+        kinematic_constraints::constructGoalConstraints(target_link, target_pose)
     );
     move_group_goal.request.group_name = getInput<std::string>("planning_group").value_or("arm");
     move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
@@ -96,6 +94,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     move_group_goal.request.workspace_parameters.max_corner.z = +1e9;
 
     // Request the motion
+    RCLCPP_INFO(node_->get_logger(), "Sending move group goal to action server");
     move_group_response_future_ = move_group_action_client_->async_send_goal(move_group_goal);
     request_timestamp_ = move_group_goal.request.workspace_parameters.header.stamp;
 
