@@ -38,7 +38,7 @@ def generate_launch_description():
             {"angle_min": -math.pi},
             {"angle_max":  math.pi},
             {"angle_increment": math.radians(1.0)},
-            {"target_frame": "gpe"},
+            {"target_frame": "base_footprint"},
             {"min_height": 0.20},
             {"max_height": 1.5}
         ],
