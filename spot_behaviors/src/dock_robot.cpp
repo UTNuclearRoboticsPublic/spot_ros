@@ -79,8 +79,8 @@ BT::NodeStatus DockRobot::onRunning() {
         default:
         case rclcpp::FutureReturnCode::TIMEOUT:{
             const double elapsed_seconds = (node_->now() - request_timestamp_).seconds();
-            if (elapsed_seconds > 15.0){
-                RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for MoveGroup action server to respond. Aborting MoveHandToPose behavior");
+            if (elapsed_seconds > 25.0){
+                RCLCPP_ERROR(node_->get_logger(), "Timed out waiting for Dock server to respond. Aborting Dock behavior");
                 dock_client_->remove_pending_request(service_future_.value());
                 service_future_ = std::nullopt;
                 return BT::NodeStatus::FAILURE;
