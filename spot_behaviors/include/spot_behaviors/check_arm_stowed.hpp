@@ -31,8 +31,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <behaviortree_cpp/action_node.h>
 
-#include "spot_msgs/msg/manipulator_state.hpp"
 #include "spot_behaviors/node_behavior_base.hpp"
+#include "spot_msgs/msg/manipulator_stow_state.hpp"
 
 namespace spot_behaviors {
 
@@ -47,7 +47,7 @@ public:
 
 private:
     // Subscriber to data
-    rclcpp::Subscription<spot_msgs::msg::ManipulatorState>::SharedPtr manipulator_sub_;
+    rclcpp::Subscription<spot_msgs::msg::ManipulatorStowState>::SharedPtr manipulator_sub_;
 
     // How much battery percentage is left
     std::optional<bool> arm_is_stowed_;
@@ -56,7 +56,7 @@ private:
     std::thread spin_thread_;
 
     // Record the battery state obtained from the message
-    void manipulatorStateCallback(spot_msgs::msg::ManipulatorState::UniquePtr msg);
+    void manipulatorStateCallback(spot_msgs::msg::ManipulatorStowState::UniquePtr msg);
 };
 
 } // namespace spot_behaviors

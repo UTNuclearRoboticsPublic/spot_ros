@@ -34,8 +34,8 @@ CheckArmStowed::CheckArmStowed(const std::string& name, const BT::NodeConfigurat
     NodeBehaviorBase(name, tf_buffer)
     {
         tf_buffer_->allFramesAsYAML();
-        manipulator_sub_ = this->create_subscription<spot_msgs::msg::ManipulatorState>(
-            "/spot_manipulation_driver/manipulator_state",
+        manipulator_sub_ = this->create_subscription<spot_msgs::msg::ManipulatorStowState>(
+            "/spot_manipulation_driver/manipulator_state/stow_state",
             rclcpp::ParametersQoS{},
             std::bind(&CheckArmStowed::manipulatorStateCallback, this, std::placeholders::_1)
         );
@@ -63,8 +63,8 @@ BT::NodeStatus CheckArmStowed::tick() {
     return arm_is_stowed ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
-void CheckArmStowed::manipulatorStateCallback(spot_msgs::msg::ManipulatorState::UniquePtr msg){
-    arm_is_stowed_ = (msg->stow_state == msg->STOWSTATE_STOWED);
+void CheckArmStowed::manipulatorStateCallback(spot_msgs::msg::ManipulatorStowState::UniquePtr msg){
+    arm_is_stowed_ = (msg->state == msg->STOWSTATE_STOWED);
 }
 
 } // namespace spot_behaviors

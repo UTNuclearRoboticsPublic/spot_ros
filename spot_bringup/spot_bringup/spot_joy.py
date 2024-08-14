@@ -11,7 +11,8 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Joy
 from spot_msgs.srv import Dock
-from spot_msgs.msg import Feedback, ManipulatorState
+from spot_msgs.msg import Feedback, ManipulatorStowState
+from std_msgs.msg import Float32
 from std_srvs.srv import Trigger
 from geometry_msgs.msg import Pose, Quaternion
 from scipy.spatial.transform import Rotation
@@ -54,7 +55,8 @@ class SpotJoyUtils(Node):
 
         # Subscribe to the feedback topic to monitor dock state
         self._feedback_sub = self.create_subscription(Feedback, '/spot_driver/status/feedback', self.updateState, 10)
-        self._arm_feedback_sub = self.create_subscription(ManipulatorState, '/spot_manipulation_driver/manipulator_state', self.updateArmState, 10)
+        self._arm_stow_sub = self.create_subscription(ManipulatorStowState, '/spot_manipulation_driver/manipulator_state/stow_state', self.updateArmStowState, 10)
+        self._gripper_sub  = self.create_subscription(Float32, '/spot_manipulation_driver/manipulator_state/gripper_open_percentage', self.updateArmGripperState, 10)
 
         exclusive_group = MutuallyExclusiveCallbackGroup()
         self.lease_client = self.create_client(Trigger, "/spot_driver/claim", callback_group=exclusive_group)
@@ -92,9 +94,11 @@ class SpotJoyUtils(Node):
         self._docked = msg.docked
         self._sitting = msg.sitting
 
-    def updateArmState(self, msg: ManipulatorState):
-        self._arm_stowed = (msg.stow_state == ManipulatorState.STOWSTATE_STOWED) 
-        self._gripper_closed = (msg.gripper_open_percentage < 70.0)
+    def updateArmStowState(self, msg: ManipulatorStowState):
+        self._arm_stowed = (msg.state == ManipulatorStowState.STOWSTATE_STOWED) 
+
+    def updateArmGripperState(self, msg: Float32):
+        self._gripper_closed = (msg.data < 70.0)
         
     def verifyServer(self, client) -> bool:
         if not client.wait_for_service(1):
