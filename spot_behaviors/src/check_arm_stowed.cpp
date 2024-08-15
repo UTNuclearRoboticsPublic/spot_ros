@@ -33,7 +33,6 @@ CheckArmStowed::CheckArmStowed(const std::string& name, const BT::NodeConfigurat
     BT::SyncActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
     {
-        tf_buffer_->allFramesAsYAML();
         manipulator_sub_ = this->create_subscription<spot_msgs::msg::ManipulatorStowState>(
             "/spot_manipulation_driver/manipulator_state/stow_state",
             rclcpp::ParametersQoS{},

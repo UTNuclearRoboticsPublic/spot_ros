@@ -42,20 +42,20 @@ public:
 
     static BT::PortsList providedPorts();
 
-    // Returns SUCCESS if battery is over a given threshold, FAILURE otherwise
+    // Returns SUCCESS if the arm is stowed, FAILURE otherwise
     BT::NodeStatus tick() override;
 
 private:
     // Subscriber to data
     rclcpp::Subscription<spot_msgs::msg::ManipulatorStowState>::SharedPtr manipulator_sub_;
 
-    // How much battery percentage is left
+    // Record the last stow state
     std::optional<bool> arm_is_stowed_;
 
     // A thread to spin the node and look for messages
     std::thread spin_thread_;
 
-    // Record the battery state obtained from the message
+    // Record the last stow state obtained from the message
     void manipulatorStateCallback(spot_msgs::msg::ManipulatorStowState::UniquePtr msg);
 };
 
