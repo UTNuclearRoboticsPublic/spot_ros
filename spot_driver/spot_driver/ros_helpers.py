@@ -745,26 +745,3 @@ def BehaviorFaultsToMsg(behavior_fault_state: robot_state_pb2.BehaviorFaultState
     behavior_fault_state_msg.faults = getBehaviorFaults(behavior_fault_state.faults, lease_manager)
     return behavior_fault_state_msg
 
-def ManipulatorStatesToMsg(manipulator_state: robot_state_pb2.ManipulatorState,
-                           lease_manager: SpotLeaseManager) -> ManipulatorState:
-    """Maps manipulator state data from robot state proto to ROS ManipulatorState message
-
-    Args:
-        manipulator_state: ManipulatorState proto
-        lease_manager: A SpotWrapper object
-    Returns:
-        spot_msgs/ManipulatorState ROS message
-    """
-    if manipulator_state is None:
-        return ManipulatorState()
-    manipulator_state_msg = ManipulatorState()
-    manipulator_state_msg.gripper_open_percentage = manipulator_state.gripper_open_percentage
-    manipulator_state_msg.is_gripper_holding_item = manipulator_state.is_gripper_holding_item
-    manipulator_state_msg.estimated_end_effector_force_in_hand.x = manipulator_state.estimated_end_effector_force_in_hand.x
-    manipulator_state_msg.estimated_end_effector_force_in_hand.y = manipulator_state.estimated_end_effector_force_in_hand.y
-    manipulator_state_msg.estimated_end_effector_force_in_hand.z = manipulator_state.estimated_end_effector_force_in_hand.z
-    manipulator_state_msg.stow_state = manipulator_state.stow_state
-    # manipulator_state_msg.velocity_of_hand_in_vision = manipulator_state.velocity_of_hand_in_vision
-    # manipulator_state_msg.velocity_of_hand_in_odom = manipulator_state.velocity_of_hand_in_odom
-    manipulator_state_msg.carry_state = manipulator_state.carry_state
-    return manipulator_state_msg
