@@ -26,9 +26,7 @@
 ############################################################################################
 
 from typing import List, Text, Tuple
-import struct
-from numpy import float32, linalg
-from math import nan
+from numpy import linalg
 
 import rclpy.time
 
@@ -36,7 +34,8 @@ from .spot_lease_manager import SpotLeaseManager
 
 from builtin_interfaces.msg import Time as ROSTime
 from builtin_interfaces.msg import Duration as ROSDuration
-from geometry_msgs.msg import PoseWithCovariance, TransformStamped, TwistWithCovarianceStamped
+from geometry_msgs.msg import (PoseWithCovariance, TransformStamped, TwistWithCovarianceStamped, 
+                               Vector3, Twist, Quaternion, Transform, Pose, Point)
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
@@ -54,7 +53,7 @@ from spot_msgs.msg import BatteryState, BatteryStateArray
 from spot_msgs.msg import ManipulatorState
 
 from google.protobuf import timestamp_pb2
-from bosdyn.api.geometry_pb2 import FrameTreeSnapshot
+from bosdyn.api import geometry_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
@@ -88,6 +87,66 @@ arm_joint_names = {
 }
 
 friendly_joint_names = dict(body_joint_names, **arm_joint_names)
+
+def TimestampToMsg(timestamp: timestamp_pb2.Timestamp) -> ROSTime:
+    """Convert timestamp_pb2.Timestamp to rclpy.time.Time"""
+    return ROSTime(sec=timestamp.seconds, nanosec=timestamp.nanos)
+
+def MsgToTimestamp(timestamp_msg: ROSTime) -> timestamp_pb2.Timestamp:
+    """Convert rclpy.time.Time to timestamp_pb2.Timestamp"""
+    return timestamp_pb2.Timestamp(seconds=timestamp_msg.sec, nanos=timestamp_msg.nanosec)
+
+def Vec3ToMsg(vector3_proto: geometry_pb2.Vec3) -> Vector3:
+    """Convert geometry_pb2.Vec3 to geometry_msgs.msg.Vector3"""
+    return Vector3(x=vector3_proto.x, y=vector3_proto.y, z=vector3_proto.z)
+
+def MsgToVec3(msg: Vector3 | Point) -> geometry_pb2.Vec3:
+    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to geometry_pb2.Vec3"""
+    return geometry_pb2.Vec3(x = msg.x, y=msg.y, z=msg.z)
+
+def QuaternionToMsg(quat_proto: geometry_pb2.Quaternion) -> Quaternion:
+    """Converts geometry_pb2.Quaternion to geometry_msgs.msg.Quaternion"""
+    return Quaternion(x=quat_proto.x, y=quat_proto.y, z=quat_proto.z, w=quat_proto.w)
+
+def MsgToQuaternion(quat_msg: Quaternion) -> geometry_pb2.Quaternion:
+    """Converts geometry_msgs.msg.Quaternion to geometry_pb2.Quaternion"""
+    return geometry_pb2.Quaternion(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
+
+def SE3VelocityToMsg(se3_velocity: geometry_pb2.SE3Velocity) -> Twist:
+    """Converts geometry_pb2.SE3Velocity to geometry_msgs.msg.Twist"""
+    return Twist(
+        linear=Vec3ToMsg(se3_velocity.linear),
+        angular=Vec3ToMsg(se3_velocity.angular)
+    )
+
+def TransformToMsg(*, child_frame: str, parent_frame: str, transform: SE3Pose, timestamp: rclpy.time.Time):
+    """Converts bosdyn.client.math_helpers.SE3Pose with metadata to geometry_msgs.msg.TransformStamped"""
+    new_tf = TransformStamped()
+    new_tf.header.stamp = TimestampToMsg(timestamp)
+    new_tf.header.frame_id = parent_frame
+    new_tf.child_frame_id = child_frame
+
+    new_tf.transform.translation = Vec3ToMsg(transform.position)
+    new_tf.transform.rotation = QuaternionToMsg(transform.rotation.to_proto())
+
+    return new_tf
+
+def MsgToTransform(msg: Transform) -> SE3Pose:
+    """Converts geometry_msgs.msg.Transform to bosdyn.client.math_helpers.SE3Pose"""
+    return SE3Pose (
+        x = msg.translation.x,
+        y = msg.translation.y,
+        z = msg.translation.z,
+        rot = MsgToQuaternion(msg.rotation)
+    )
+
+def MsgToPose(msg: Pose) -> SE3Pose:
+    return SE3Pose (
+        x = msg.position.x,
+        y = msg.position.y,
+        z = msg.position.z,
+        rot = MsgToQuaternion(msg.orientation)
+    )
 
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: Text,
@@ -457,22 +516,6 @@ def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
 
     return wifi_msg
 
-def TransformToMsg(child_frame: str, parent_frame: str, transform: SE3Pose, timestamp: rclpy.time.Time):
-    new_tf = TransformStamped()
-    new_tf.header.stamp = ROSTime(sec=timestamp.seconds, nanosec=timestamp.nanos)
-    new_tf.header.frame_id = parent_frame
-    new_tf.child_frame_id = child_frame
-
-    new_tf.transform.translation.x = transform.x
-    new_tf.transform.translation.y = transform.y
-    new_tf.transform.translation.z = transform.z
-    new_tf.transform.rotation.x = transform.rot.x
-    new_tf.transform.rotation.y = transform.rot.y
-    new_tf.transform.rotation.z = transform.rot.z
-    new_tf.transform.rotation.w = transform.rot.w
-
-    return new_tf
-
 def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
                    lease_manager: SpotLeaseManager) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
@@ -495,7 +538,12 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
 
         # Convert to SE3Pose and convert that to ROS TF message
         transform = SE3Pose.from_proto(parent.parent_tform_child)
-        new_tf = TransformToMsg(child_frame, parent_frame, transform, timestamp)
+        new_tf = TransformToMsg(
+            child_frame=child_frame, 
+            parent_frame=parent_frame, 
+            transform=transform, 
+            timestamp=timestamp
+        )
         tf_msg.transforms.append(new_tf)
 
     ## === TODO: Fix orientation when on slopes === ##
@@ -507,7 +555,12 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
     tform_gpe_to_base_footprint.x = 0.0
     tform_gpe_to_base_footprint.y = 0.0
     tform_gpe_to_base_footprint.z = 0.0
-    tf_msg.transforms.append(TransformToMsg("base_footprint", "gpe", tform_gpe_to_base_footprint, timestamp))
+    tf_msg.transforms.append(TransformToMsg(
+        child_frame="base_footprint", 
+        parent_frame="gpe", 
+        transform=tform_gpe_to_base_footprint, 
+        timestamp=timestamp)
+    )
 
     return tf_msg
 
