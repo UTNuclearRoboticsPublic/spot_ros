@@ -31,6 +31,7 @@ add_library(${PROJECT_NAME} SHARED
   src/navigate_to_pose.cpp
   src/check_arm_stowed.cpp
   src/move_hand_to_pose.cpp
+  src/check_hand_collision.cpp
   src/record_current_location.cpp
   src/move_hand_through_poses.cpp
 )
