@@ -14,6 +14,7 @@ find_package(tf2_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ArmImpedanceCommand.action"
   "action/ArmSurfaceContact.action"
+  "action/ArmCartesianCommand.action"
   "action/ClawGripperCommand.action"
   "action/NavigateTo.action"
   "action/WalkTo.action"

@@ -1,0 +1,71 @@
+# ArmCartesianCommand.action
+
+# === Request ===
+
+uint8 AXIS_MODE_POSITION=0
+uint8 AXIS_MODE_FORCE=1
+
+# The header defined the frame of reference for the waypoints and the wrenches
+std_msgs/Header header
+
+# Pose waypoints for the cartesian commands.
+# Ignored for all axes marked as force control axes.
+geometry_msgs/Pose[] waypoints
+
+# Wrench trajectory for the cartesian commands.
+# Ignored for all axes marked as position control axes.
+geometry_msgs/Wrench[] wrench_trajectory
+
+# Timestamps at which each waypoint should be achieved relative to the starting point of the trajectory
+float64[] timestamps
+
+# Max acceleration of the end effector (m/s^2) [Optional]
+float64 max_acceleration
+
+# Max linear speed of the end effector (m/s) [Optional]
+float64 max_linear_velocity
+
+# Max angular speed of the end effector (rad/s) [Optional]
+float64 max_angular_velocity
+
+# Maximum deviation from the trajectory before cancellation (m) [Optional]
+float64 max_pos_tracking_error 
+
+# Maximum deviation from the trajectory orientation before cancellation (m) [Optional]
+float64 max_rot_tracking_error 
+
+# Whether or not to force the robot to avoid large reconfigurations [Optional]
+bool force_remain_near_current_joint_configuration False
+
+uint8 x_axis_mode
+uint8 y_axis_mode
+uint8 z_axis_mode
+uint8 rx_axis_mode
+uint8 ry_axis_mode
+uint8 rz_axis_mode
+
+---
+
+# === Response ===
+
+# Whether or not the trajectory was carried out successfully
+bool success
+
+# Error message if not successful
+string message
+
+---
+
+# === Feedback ===
+
+uint8 STATUS_UNKNOWN=0
+uint8 STATUS_TRAJECTORY_COMPLETE=1
+uint8 STATUS_IN_PROGRESS=2
+uint8 STATUS_TRAJECTORY_CANCELLED=3
+uint8 STATUS_TRAJECTORY_STALLED=4
+
+uint8 status
+float64 measured_pos_tracking_error
+float64 measured_rot_tracking_error
+float64 measured_pos_distance_to_goal
+float64 measured_rot_distance_to_goal
