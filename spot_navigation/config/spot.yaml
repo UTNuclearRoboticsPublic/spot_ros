@@ -42,7 +42,6 @@ amcl:
     z_max: 0.05
     z_rand: 0.5
     z_short: 0.05
-    scan_topic: /spot/pointcloud_scan
 
 # amcl_map_client:
 #   ros__parameters:
@@ -52,12 +51,12 @@ amcl:
 #   ros__parameters:
 #     use_sim_time: False
 
-bt_navigator:
+spot_nav/bt_navigator:
   ros__parameters:
     use_sim_time: False
     global_frame: map
     robot_base_frame: base_footprint
-    odom_topic: /odom
+    odom_topic: /spot_nav/odom
     default_bt_xml_filename: "nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml"
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -117,12 +116,12 @@ bt_navigator:
 #   ros__parameters:
 #     use_sim_time: False
 
-controller_server:
+spot_nav/controller_server:
   ros__parameters:
     use_sim_time: False
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.1
-    min_y_velocity_threshold: 0.5
+    min_y_velocity_threshold: 0.1
     min_theta_velocity_threshold: 0.05
     failure_tolerance: 0.3
     progress_checker_plugin: "progress_checker"
@@ -138,21 +137,21 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.10
+      xy_goal_tolerance: 0.50
+      yaw_goal_tolerance: 1.57
 
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
-      min_vel_x: -0.35
-      min_vel_y: -0.35
-      max_vel_x: 0.35
-      max_vel_y: 0.35
-      max_vel_theta: 0.5
-      min_speed_xy: 0.0
+      min_vel_x: -0.50
+      min_vel_y: -0.50
+      max_vel_x: 0.50
+      max_vel_y: 0.50
+      max_vel_theta: 1.0
+      min_speed_xy: 0.2 # Testing this out
       max_speed_xy: 0.50
-      min_speed_theta: 0.0
+      min_speed_theta: 0.15
       # Add high threshold velocity for turtlebot 3 issue.
       # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
       acc_lim_x: 1.0
@@ -168,8 +167,8 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.5
-      xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.25
+      xy_goal_tolerance: 0.50
+      trans_stopped_velocity: 0.15
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
@@ -188,7 +187,7 @@ controller_server:
 #   ros__parameters:
 #     use_sim_time: False
 
-local_costmap:
+spot_nav/local_costmap:
   local_costmap:
     ros__parameters:
       update_frequency: 5.0
@@ -200,12 +199,12 @@ local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      footprint: "[[0.6, 0.25], [0.6, -0.25], [-0.6, -0.25], [-0.6, 0.25]]"
+      footprint: "[[0.45, 0.25], [0.45, -0.25], [-0.45, -0.25], [-0.45, 0.25]]"
       plugins: ["obstacle_layer", "inflation_layer"] # voxel_layer
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 1.0
-        inflation_radius: 0.55
+        inflation_radius: 0.10
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -248,7 +247,7 @@ local_costmap:
     ros__parameters:
       use_sim_time: False
 
-global_costmap:
+spot_nav/global_costmap:
   global_costmap:
     ros__parameters:
       update_frequency: 1.0
@@ -302,7 +301,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.55
+        inflation_radius: 0.10
       always_send_full_costmap: True
   global_costmap_client:
     ros__parameters:
@@ -311,7 +310,7 @@ global_costmap:
     ros__parameters:
       use_sim_time: False
 
-map_server:
+spot_nav/map_server:
   ros__parameters:
     use_sim_time: False
     yaml_filename: "daniel_ahg.yaml"
@@ -324,7 +323,7 @@ map_server:
 #     occupied_thresh_default: 0.65
 #     map_subscribe_transient_local: True
 
-planner_server:
+spot_nav/planner_server:
   ros__parameters:
     expected_planner_frequency: 20.0
     use_sim_time: False
@@ -339,7 +338,7 @@ planner_server:
 #   ros__parameters:
 #     use_sim_time: False
 
-recoveries_server:
+spot_nav/recoveries_server:
   ros__parameters:
     costmap_topic: local_costmap/costmap_raw
     footprint_topic: local_costmap/published_footprint
@@ -364,7 +363,7 @@ recoveries_server:
 #   ros__parameters:
 #     use_sim_time: False
 
-waypoint_follower:
+spot_nav/waypoint_follower:
   ros__parameters:
     loop_rate: 2000
     stop_on_failure: false
@@ -374,7 +373,7 @@ waypoint_follower:
       enabled: True
       waypoint_pause_duration: 200
 
-behavior_server:
+spot_nav/behavior_server:
   ros__parameters:
     costmap_topic: local_costmap/costmap_raw
     footprint_topic: local_costmap/published_footprint
