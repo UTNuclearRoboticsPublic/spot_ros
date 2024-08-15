@@ -46,6 +46,7 @@ from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
 from .spot_lease_manager import SpotLeaseManager
+from .type_hint_helpers import *
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
@@ -375,7 +376,7 @@ class SpotBodyWrapper():
             return False, Text(e)
         return True, 'Success'
     
-    def walk_to(self, target_pose_in_odom: geometry_pb2.SE2Pose, max_duration: float) -> Tuple[bool, Text]:
+    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_duration: float) -> Tuple[bool, Text]:
         navigate_command = RobotCommandBuilder.synchro_se2_trajectory_command(
             goal_se2=target_pose_in_odom,
             frame_name=ODOM_FRAME_NAME
@@ -384,7 +385,7 @@ class SpotBodyWrapper():
         success, message, command_id = self._lease_manager.robot_command(navigate_command, end_time_secs=time.time() + max_duration)
         return success, message, command_id
 
-    def get_docking_state(self, **kwargs) -> docking_pb2.DockState:
+    def get_docking_state(self, **kwargs) -> DockStateProto:
         """Get docking state of robot."""
         state = self._docking_client.get_docking_state(**kwargs)
         return state
@@ -394,7 +395,7 @@ class SpotBodyWrapper():
                             footprint_R_body: EulerZXY = EulerZXY(),
                             locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
-                            external_force_params: robot_command_pb2.BodyExternalForceParams = None) -> None:
+                            external_force_params: BodyExternalParamsProto = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -405,7 +406,7 @@ class SpotBodyWrapper():
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
-    def get_mobility_params(self) -> robot_command_pb2.MobilityParams:
+    def get_mobility_params(self) -> MobilityParamsProto:
         """Get mobility params
         """
         return self._mobility_params

@@ -31,6 +31,7 @@ from numpy import linalg
 import rclpy.time
 
 from .spot_lease_manager import SpotLeaseManager
+from .type_hint_helpers import *
 
 from builtin_interfaces.msg import Time as ROSTime
 from builtin_interfaces.msg import Duration as ROSDuration
@@ -58,23 +59,6 @@ from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_clou
 from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot
-
-# Until python type hints gets proper support for protobuf types
-class Vec3Proto(type[geometry_pb2.Vec3]): pass
-class QuaternionProto(type[geometry_pb2.Quaternion]): pass
-class SE3VelocityProto(type[geometry_pb2.SE3Velocity]): pass
-class ImageResponseProto(type[image_pb2.ImageResponse]): pass
-class PointCloudResponseProto(type[point_cloud_pb2.PointCloudResponse]): pass
-class KinematicStateProto(type[robot_state_pb2.KinematicState]): pass
-class EStopStateProto(type[robot_state_pb2.EStopState]): pass
-class FootStateProto(type[robot_state_pb2.FootState]): pass
-class DockStateProto(type[docking_pb2.DockState]): pass
-class CommsStateProto(type[robot_state_pb2.CommsState]): pass
-class BatteryStateProto(type[robot_state_pb2.BatteryState]): pass
-class ServiceFaultProto(type[service_fault_pb2.ServiceFault]): pass
-class PowerStateProto(type[robot_state_pb2.PowerState]): pass
-class SystemFaultStateProto(type[robot_state_pb2.SystemFaultState]): pass
-class BehaviorFaultStateProto(type[robot_state_pb2.BehaviorFaultState]): pass
 
 """Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {

@@ -47,6 +47,9 @@ from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
+# Type hint helpers
+class EStopSystemStatusProto(type[estop_pb2.EstopSystemStatus]): pass
+
 class DefaultLogger():
     """Generic print logger to act as default logger for the lease manager"""
     def info(self, msg):
@@ -305,7 +308,7 @@ class SpotLeaseManager():
         self._estop_endpoint.force_simple_setup()  # Set this endpoint as the robot's sole estop.
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
 
-    def eStopStatus(self) -> estop_pb2.EstopSystemStatus:
+    def eStopStatus(self) -> EStopSystemStatusProto:
         """Get the status for the EStop client"""
         return self._estop_client.get_status()
 
