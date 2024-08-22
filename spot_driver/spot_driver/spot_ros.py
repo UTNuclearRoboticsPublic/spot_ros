@@ -533,6 +533,12 @@ class SpotROS(Node):
             ]
         }
 
+        # Check to see if the pose is very old - if it is then update to now time
+        time_offset: rclpy.duration.Duration = self.get_clock().now() - Time.from_msg(req.target_pose.header.stamp)
+        if time_offset > rclpy.duration.Duration(seconds=10):
+            self._logger.warn("Received WalkTo goal with a very old timestamp. Updating with current timestamp")
+            req.target_pose.header.stamp = self.get_clock().now().to_msg()
+
         # Transform the target frame into the odom frame
         try:
             target_pose_in_odom = self.tf_buffer.transform(req.target_pose, "odom", rclpy.duration.Duration(seconds=1.0))
