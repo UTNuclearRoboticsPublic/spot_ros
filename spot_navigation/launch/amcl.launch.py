@@ -12,6 +12,10 @@ def generate_launch_description():
             description="Filepath for navigation configuration. See navigation2 package documentation.",
             default_value=PathJoinSubstitution([FindPackageShare('spot_navigation'), 'config', 'spot.yaml'])),
 
+        DeclareLaunchArgument('initial_pose_file',
+            description='An initial pose to pass to the AMCL which overwrites that in the config file',
+            default_value="{}"),
+
         DeclareLaunchArgument('map',
             default_value=PathJoinSubstitution([
                 FindPackageShare('spot_navigation'),
@@ -61,7 +65,8 @@ def generate_launch_description():
         executable='amcl',
         name='amcl',
         parameters=[
-            LaunchConfiguration('config')
+            LaunchConfiguration('config'),
+            LaunchConfiguration('initial_pose_file')
         ]
     )
 
