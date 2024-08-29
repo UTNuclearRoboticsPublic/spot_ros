@@ -63,6 +63,7 @@ class SpotJoyUtils(Node):
         self.release_client = self.create_client(Trigger, "/spot_driver/release", callback_group=exclusive_group)
         self.estop_client_gentle = self.create_client(Trigger, "/spot_driver/estop/gentle")
         self.estop_client_hard = self.create_client(Trigger, "/spot_driver/estop/hard")
+        self.freeze_client = self.create_client(Trigger, "/spot_driver/estop/freeze")
         self.dock_client = self.create_client(Dock, "/spot_driver/dock", callback_group=exclusive_group)
         self.undock_client = self.create_client(Trigger, "/spot_driver/undock", callback_group=exclusive_group)
         self.power_on_client = self.create_client(Trigger, "/spot_driver/power_on", callback_group=exclusive_group)
@@ -120,9 +121,6 @@ class SpotJoyUtils(Node):
         elif self.action == "Dock":
             self.get_logger().info("Toggling dock")
             self.dockRobot()
-        elif self.action == "ToggleStand":
-            self.get_logger().info("Toggling stand")
-            self.toggleStand()
         elif self.action == "ToggleGripper":
             self.get_logger().info("Toggling gripper")
             self.toggleGripper()
@@ -136,6 +134,12 @@ class SpotJoyUtils(Node):
             if self.action == "Claim":
                 self.get_logger().info("Claiming lease")
                 client = self.lease_client
+            elif self.action == "Stand":
+                self.get_logger().info("Standing robot")
+                client = self.stand_client
+            elif self.action == "Sit":
+                self.get_logger().info("Sitting robot")
+                client = self.sit_client
             elif self.action == "Release":
                 self.get_logger().info("Releasing lease")
                 client = self.release_client
@@ -158,7 +162,8 @@ class SpotJoyUtils(Node):
                 self.get_logger().info("Unstowing arm")
                 client = self.unstow_client
 
-            self.triggerClient(client)
+            future = self.triggerClient(client)
+            self.waitForTriggerFuture(client, future)
 
         self.action = None
 
@@ -192,8 +197,12 @@ class SpotJoyUtils(Node):
             return
 
         # If the left trigger is pressed, command the robot to sit
-        if buttons[LogitechButtons.A.value]:
-            self.action = "ToggleStand"
+        if axes[LogitechAxes.DPAD_HORIZONTAL.value] == 1.0:
+            self.action = "Sit"
+            return
+
+        if axes[LogitechAxes.DPAD_HORIZONTAL.value] == -1.0:
+            self.action = "Stand"
             return
         
         # If the Y button is pressed, command the robot to power on
@@ -243,7 +252,12 @@ class SpotJoyUtils(Node):
         if buttons[LogitechButtons.B.value]:
             self.TriggerEStop(hard=False)
             return
-
+        
+        # If the green button is pressed, trigger the freeze estop
+        if buttons[LogitechButtons.A.value]:
+            self.get_logger().info("Freezing robot")
+            self._estop_future = self.triggerClient(self.freeze_client)
+            return
         
     def dockRobot(self):
         if self.dock_client is None or not self.verifyServer(self.dock_client):
@@ -268,16 +282,19 @@ class SpotJoyUtils(Node):
 
         self.get_logger().info(f"Success: {resp.success}. Message: {resp.message}")
 
-    def triggerClient(self, client: Client | None):
+    def triggerClient(self, client: Client | None) -> Future:
         if client is None or not self.verifyServer(client):
             return
         
         resp_future = client.call_async(Trigger.Request())
+        return resp_future
+
+    def waitForTriggerFuture(self, client: Client, future: Future, timeout_sec: int = 10) -> None:
         start_time = self.get_clock().now()
-        max_duration = rclpy.duration.Duration(seconds=10)
+        max_duration = rclpy.duration.Duration(seconds=timeout_sec)
         while True:
-            if resp_future.done():
-                resp = resp_future.result()
+            if future.done():
+                resp = future.result()
                 break
             elif (self.get_clock().now() - start_time) > max_duration:
                 resp = Trigger.Response()
