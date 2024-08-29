@@ -361,6 +361,9 @@ class SpotBodyWrapper():
 
     def dock(self, dock_id) -> Tuple[bool, Text]:
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
+        if self._lease_manager.frozen:
+            return False, "Cannot issue a command to the robot while frozen"
+        
         try:
             # Dock the robot
             self.last_docking_command = dock_id
@@ -377,6 +380,9 @@ class SpotBodyWrapper():
         undocking: bool = current_dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING
         if undocked or undocking:
             return True, 'Already undocked'
+        
+        elif self._lease_manager.frozen:
+            return False, "Cannot issue a command to the robot while frozen"
         
         try:
             # Undock the robot
