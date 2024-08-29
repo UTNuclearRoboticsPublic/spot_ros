@@ -31,7 +31,9 @@ from bosdyn.api import basic_command_pb2
 from bosdyn.client.async_tasks import AsyncPeriodicQuery
 from bosdyn.client import ResponseError, RpcError
 
-from .spot_body_wrapper import SpotBodyWrapper
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from spot_body_wrapper import SpotBodyWrapper
 
 class AsyncRobotState(AsyncPeriodicQuery):
     """Class to get robot state at regular intervals.  get_robot_state_async query sent to the robot at every tick.  Callback registered to defined callback function.
