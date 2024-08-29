@@ -253,7 +253,7 @@ class SpotLeaseManager():
             self._robot_command_client.robot_command(RobotCommandBuilder.stop_command())
             return True, "Robot frozen"
         except Exception as e:
-            return False, f"Error occured stopping the robot: {e}.\nHowever the robot is still disabled from accepting any new commands"
+            return False, f"Error occured commanding the robot to stop: {e}. However the robot is still disabled from accepting any new commands"
         
     def unfreeze(self) -> None:
         self._is_frozen = False
@@ -269,7 +269,7 @@ class SpotLeaseManager():
         """
         if self._is_frozen:
             message = "Cannot issue a command to the robot while frozen"
-            return message, False, None
+            return False, message, None
         
         try:
             id = self._robot_command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
