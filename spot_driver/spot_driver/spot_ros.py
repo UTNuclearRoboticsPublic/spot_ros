@@ -60,6 +60,8 @@ from bosdyn.geometry import to_euler_zxy
 
 from .spot_lease_manager import SpotLeaseManager
 from .spot_body_wrapper import SpotBodyWrapper
+from .type_hint_helpers import *
+from .ros_helpers import *
 
 import functools
 import tf2_ros
@@ -79,8 +81,6 @@ from spot_msgs.action import NavigateTo, WalkTo
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
 from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
-    
-from .ros_helpers import *
 
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
@@ -438,6 +438,18 @@ class SpotROS(Node):
         """ROS service handler for the safe-power-off service"""
         res.success, res.message = self.spot_wrapper.power_off()
         return res
+    
+    def handle_estop_freeze(self, _, res:Trigger.Response) -> Trigger.Response:
+        """ROS service handler to freeze the robot in place and prevent further movement"""
+        res.success, res.message = self.spot_wrapper.freeze()
+        return res
+    
+    def handle_estop_unfreeze(self, _, res:Trigger.Response) -> Trigger.Response:
+        """ROS service handler to unfreeze the robot and allow new commands to be executed"""
+        self.spot_wrapper.unfreeze()
+        res.success = True
+        res.message = "Robot can now accept new commands"
+        return res
 
     def handle_estop_hard(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler to hard-eStop the robot.  The robot will immediately cut power to the motors"""
@@ -656,7 +668,7 @@ class SpotROS(Node):
             self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
 
     def populate_camera_static_transforms(self,
-                                          image_data: image_pb2.ImageResponse,
+                                          image_data: ImageResponseProto,
                                           existing_transforms: List[TransformStamped]) -> List[TransformStamped]:
         """Check data received from one of the image tasks and use the transform snapshot to extract the camera frame
         transforms. These are the transforms from body->frontleft->frontleft_fisheye, for example. These transforms
@@ -876,9 +888,11 @@ class SpotROS(Node):
         self.create_service(Trigger, "~/power_off" , self.handle_safe_power_off, callback_group=srv_group)
 
         # EStop services (no exclusive callback group so estop can interrupt other actions)
-        self.create_service(Trigger, "~/estop/hard"   , self.handle_estop_hard)
-        self.create_service(Trigger, "~/estop/gentle" , self.handle_estop_soft)
-        self.create_service(Trigger, "~/estop/release", self.handle_estop_disengage, callback_group=srv_group)
+        self.create_service(Trigger, "~/estop/freeze"  , self.handle_estop_freeze)
+        self.create_service(Trigger, "~/estop/unfreeze", self.handle_estop_unfreeze)
+        self.create_service(Trigger, "~/estop/hard"    , self.handle_estop_hard)
+        self.create_service(Trigger, "~/estop/gentle"  , self.handle_estop_soft)
+        self.create_service(Trigger, "~/estop/release" , self.handle_estop_disengage, callback_group=srv_group)
 
         # Configuration services
         self.create_service(SetBool           , "~/stair_mode"          , self.handle_stair_mode,           callback_group=srv_group)

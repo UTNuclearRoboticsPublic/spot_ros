@@ -72,6 +72,7 @@ class SpotLeaseManager():
         self._robot = None
         self._lease = None
         self._hostname = None
+        self._is_frozen = False
 
         # Clients
         self._robot_state_client = None
@@ -180,6 +181,11 @@ class SpotLeaseManager():
         return self._is_connected
 
     @property
+    def frozen(self) -> bool:
+        """Return boolean indicating if the robot is currently allowed to move"""
+        return self._is_frozen
+
+    @property
     def ID(self):
         """Return robot's ID"""
         if not self._is_connected:
@@ -206,6 +212,11 @@ class SpotLeaseManager():
     def robot_time(self) -> PB2Timestamp:
         """Return the current time as a robot time protobuf timestamp"""
         return self._robot.time_sync.robot_timestamp_from_local_secs(time.time())
+    
+    @property
+    def is_frozen(self) -> bool:
+        """Return whether or not the robot is allowed to accept new command or move"""
+        return self._is_frozen
     
     def registerLeaseOwner(self, owner_id) -> Tuple[bool, Text]:
         if self.isRegisteredLeaseOwner(owner_id):
@@ -235,6 +246,18 @@ class SpotLeaseManager():
         if self._lease_task is not None:
             self._lease_task.update()
 
+    def freeze(self) -> Tuple[bool, Text]:
+        """Stop the robot and prevent it from making any further movements"""
+        self._is_frozen = True
+        try:
+            self._robot_command_client.robot_command(RobotCommandBuilder.stop_command())
+            return True, "Robot frozen"
+        except Exception as e:
+            return False, f"Error occured stopping the robot: {e}.\nHowever the robot is still disabled from accepting any new commands"
+        
+    def unfreeze(self) -> None:
+        self._is_frozen = False
+
     def robot_command(self, command_proto: PB2Message,
                        end_time_secs: float =None) -> Tuple[bool, Text, int]:
         """Generic non blocking function for sending commands to robots.
@@ -244,6 +267,10 @@ class SpotLeaseManager():
                            Usually made with RobotCommandBuilder
             end_time_secs: (optional) Time-to-live for the command in seconds
         """
+        if self._is_frozen:
+            message = "Cannot issue a command to the robot while frozen"
+            return message, False, None
+        
         try:
             id = self._robot_command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
             return True, "Success", id

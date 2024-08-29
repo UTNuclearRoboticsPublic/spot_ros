@@ -328,6 +328,15 @@ class SpotBodyWrapper():
         """Stop the robot's motion."""
         response = self._lease_manager.robot_command(RobotCommandBuilder.stop_command())
         return response[0], response[1]
+    
+    def freeze(self) -> Tuple[bool, Text]:
+        """Stop the robot's motion and prevent it from accepting any new commands"""
+        success, message = self._lease_manager.freeze()
+        return success, message
+    
+    def unfreeze(self) -> None:
+        """Allow the robot to accept motion commands"""
+        self._lease_manager.unfreeze()
 
     def self_right(self) -> Tuple[bool, Text]:
         """Have the robot self-right itself."""
