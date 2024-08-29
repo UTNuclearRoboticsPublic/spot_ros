@@ -328,6 +328,15 @@ class SpotBodyWrapper():
         """Stop the robot's motion."""
         response = self._lease_manager.robot_command(RobotCommandBuilder.stop_command())
         return response[0], response[1]
+    
+    def freeze(self) -> Tuple[bool, Text]:
+        """Stop the robot's motion and prevent it from accepting any new commands"""
+        success, message = self._lease_manager.freeze()
+        return success, message
+    
+    def unfreeze(self) -> None:
+        """Allow the robot to accept motion commands"""
+        self._lease_manager.unfreeze()
 
     def self_right(self) -> Tuple[bool, Text]:
         """Have the robot self-right itself."""
@@ -352,6 +361,9 @@ class SpotBodyWrapper():
 
     def dock(self, dock_id) -> Tuple[bool, Text]:
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
+        if self._lease_manager.frozen:
+            return False, "Cannot issue a command to the robot while frozen"
+        
         try:
             # Dock the robot
             self.last_docking_command = dock_id
@@ -368,6 +380,9 @@ class SpotBodyWrapper():
         undocking: bool = current_dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING
         if undocked or undocking:
             return True, 'Already undocked'
+        
+        elif self._lease_manager.frozen:
+            return False, "Cannot issue a command to the robot while frozen"
         
         try:
             # Undock the robot

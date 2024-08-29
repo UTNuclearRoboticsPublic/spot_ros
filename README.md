@@ -41,6 +41,7 @@ Refer to the table below for the button mappings to command the robot with a Log
 |-------------------------|------------------------|-----------------------------------------------------------------------------------|
 | Hard EStop              | A+B+X+Y+RB+LB          | This will drop the robot unceremoniously. Only use in emergencies                 |
 | Soft EStop              | B                      | The robot will stop whatever it is doing, sit down, and power off                 |
+| Freeze Estop            | A                      | The robot will stop whatever it is doing and refuse any futher commands           |
 | Claim Lease             | Start                  | This is required prior to any command which causes the robot to move              |
 | Release Lease           | Back                   | The robot will settle before releasing the lease                                  | 
 | Power On                | Y                      | ---                                                                               |
@@ -53,8 +54,8 @@ Refer to the table below for the button mappings to command the robot with a Log
 | Adjust Hand Orientation | Right Trigger + Sticks | Left stick is pitch and yaw, right stick is roll                                  | 
 | Unstow Arm              | D-Pad Up               | The arm unstows far in front of the robot, just pressing RB does a smaller unstow | 
 | Stow Arm                | D-Pad Down             | This can result in fairly erratic movements if the arm is at an awkward angle     | 
-| Sit Robot               | A                      | When the robot is standing                                                        | 
-| Stand Robot             | A                      | When the robot is sitting                                                         | 
+| Sit Robot               | D-Pad Left             | ---                                                                               | 
+| Stand Robot             | D-Pad Right            | ---                                                                               | 
 | Open Gripper            | X                      | When the gripper is closed                                                        | 
 | Close Gripper           | X                      | When the gripper is open                                                          |
 

@@ -31,6 +31,10 @@ from bosdyn.api import basic_command_pb2
 from bosdyn.client.async_tasks import AsyncPeriodicQuery
 from bosdyn.client import ResponseError, RpcError
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from spot_body_wrapper import SpotBodyWrapper
+
 class AsyncRobotState(AsyncPeriodicQuery):
     """Class to get robot state at regular intervals.  get_robot_state_async query sent to the robot at every tick.  Callback registered to defined callback function.
 
@@ -167,7 +171,7 @@ class AsyncIdle(AsyncPeriodicQuery):
         super(AsyncIdle, self).__init__("idle", client, logger,
                                            period_sec=1.0/rate)
 
-        self._spot_wrapper = spot_wrapper
+        self._spot_wrapper: SpotBodyWrapper = spot_wrapper
 
     def _start_query(self):
         if self._spot_wrapper._last_stand_command != None:
@@ -232,6 +236,7 @@ class AsyncIdle(AsyncPeriodicQuery):
         self._spot_wrapper._is_moving = is_moving
 
         if (self._spot_wrapper.is_standing and not self._spot_wrapper.is_moving
+                    and not self._spot_wrapper._lease_manager.frozen
                     and self._spot_wrapper._last_trajectory_command is not None
                     and self._spot_wrapper._last_stand_command is not None
                     and self._spot_wrapper._last_velocity_command_time is not None
