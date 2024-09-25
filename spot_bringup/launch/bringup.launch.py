@@ -72,7 +72,11 @@ def generate_launch_description():
         # Other configurations
         DeclareLaunchArgument('manipulation_action_namespace',
                             description='Namespace for the manipulation action servers. Temporary fix until remppaing is added to action servers (https://github.com/ros2/rcl/pull/1170)',
-                            default_value='')
+                            default_value=''),
+        DeclareLaunchArgument('controller_configuration',
+                            description='Name of the controller configuration to use for teleoperation',
+                            choices=['Logitech', 'Dualsense5'],
+                            default_value='Logitech')
     ]
 
     has_arm         = LaunchConfiguration('has_arm')
@@ -201,6 +205,7 @@ def generate_launch_description():
         package='spot_bringup',
         executable='spot_joy',
         name='spot_joy_node',
+        parameters=[{'controller': LaunchConfiguration('controller_configuration')}]
     )
 
     # Arm Teleop Commands

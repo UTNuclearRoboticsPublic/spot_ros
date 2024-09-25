@@ -2,6 +2,7 @@ from enum import Enum
 
 import time
 import rclpy
+import numpy as np
 from asyncio import Future
 
 import rclpy.duration
@@ -9,6 +10,8 @@ from rclpy.node import Node
 from rclpy.client import Client
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.parameter import ParameterType
+from rcl_interfaces.msg import ParameterDescriptor
 from sensor_msgs.msg import Joy
 from spot_msgs.srv import Dock
 from spot_msgs.msg import Feedback, ManipulatorStowState
@@ -32,6 +35,32 @@ class LogitechButtons(Enum):
     LEFT_STICK  = 10
     RIGHT_STICK = 11
 
+class Dualsense5Buttons(Enum):
+    CROSS = 1
+    SQUARE = 0
+    CIRCLE = 2
+    TRIANGLE = 3
+    L1 = 4
+    R1 = 5
+    L2 = 6
+    R2 = 7
+    SHARE = 8
+    OPTIONS = 9
+    LEFT_STICK = 10
+    RIGHT_STICK = 11
+    PLAYSTATION = 12
+    TOUCHPAD = 13
+
+class Dualsense5Axes(Enum):
+    LEFT_HORIZONTAL = 0
+    LEFT_VERTICAL = 1
+    RIGHT_HORIZONTAL = 2
+    RIGHT_VERTICAL = 5
+    LEFT_TRIGGER = 3
+    RIGHT_TRIGGER = 4
+    DPAD_HORIZONTAL = 6
+    DPAD_VERTICAL = 7
+
 class LogitechAxes(Enum):
     LEFT_HORIZONTAL  = 0
     LEFT_VERTICAL    = 1
@@ -39,6 +68,68 @@ class LogitechAxes(Enum):
     RIGHT_VERTICAL   = 3
     DPAD_HORIZONTAL  = 4
     DPAD_VERTICAL    = 5
+
+LogitechActions = {
+    "ButtonType": LogitechButtons,
+    "AxisType": LogitechAxes,
+    "HardEstop": [
+        LogitechButtons.A, 
+        LogitechButtons.B, 
+        LogitechButtons.X, 
+        LogitechButtons.Y, 
+        LogitechButtons.RB, 
+        LogitechButtons.LB
+    ],
+    "SoftEstop": [LogitechButtons.B],
+    "FreezeEstop": [LogitechButtons.A],
+    "Claim": [LogitechButtons.START],
+    "Release": [LogitechButtons.BACK],
+    "PowerOn": [LogitechButtons.Y],
+    "Undock": [LogitechButtons.RIGHT_STICK],
+    "Dock": [LogitechButtons.LEFT_STICK],
+    "BodyPoseControl": [
+        LogitechButtons.LT,
+        LogitechAxes.LEFT_VERTICAL, -1.0, 1.0,
+        LogitechAxes.RIGHT_VERTICAL, -1.0, 1.0,
+        LogitechAxes.RIGHT_HORIZONTAL, 1.0, -1.0],
+    "ArmUnstow": [LogitechAxes.DPAD_HORIZONTAL, -1.0],
+    "ArmStow": [LogitechAxes.DPAD_HORIZONTAL, 1.0],
+    "Sit": [LogitechAxes.DPAD_VERTICAL, 1.0],
+    "Stand": [LogitechAxes.DPAD_VERTICAL, -1.0],
+    "ToggleGripper": [LogitechButtons.X],
+}
+
+Dualsense5Actions = {
+    "ButtonType": Dualsense5Buttons,
+    "AxisType": Dualsense5Axes,
+    "HardEstop": [
+        Dualsense5Buttons.CROSS, 
+        Dualsense5Buttons.CIRCLE, 
+        Dualsense5Buttons.SQUARE, 
+        Dualsense5Buttons.TRIANGLE, 
+        Dualsense5Buttons.R1, 
+        Dualsense5Buttons.L1
+    ],
+    "SoftEstop": [Dualsense5Buttons.CIRCLE],
+    "FreezeEstop": [Dualsense5Buttons.CROSS],
+    "Claim": [Dualsense5Buttons.OPTIONS],
+    "Release": [Dualsense5Buttons.SHARE],
+    "PowerOn": [Dualsense5Buttons.TRIANGLE],
+    "Undock": [Dualsense5Buttons.RIGHT_STICK],
+    "Dock": [Dualsense5Buttons.LEFT_STICK],
+    "BodyPoseControl": [
+        Dualsense5Buttons.L2,
+        Dualsense5Axes.LEFT_VERTICAL, -1.0, 1.0,
+        Dualsense5Axes.RIGHT_VERTICAL, -1.0, 1.0,
+        Dualsense5Axes.RIGHT_HORIZONTAL, -1.0, 1.0],
+    "ArmUnstow": [Dualsense5Axes.DPAD_HORIZONTAL, -1.0],
+    "ArmStow": [Dualsense5Axes.DPAD_HORIZONTAL, 1.0],
+    "Sit": [Dualsense5Axes.DPAD_VERTICAL, -1.0],
+    "Stand": [Dualsense5Axes.DPAD_VERTICAL, 1.0],
+    "ToggleGripper": [Dualsense5Buttons.SQUARE],
+}
+
+ACTIONS = {'Logitech': LogitechActions, 'Dualsense5': Dualsense5Actions}
 
 def interpolate(val: float, input_range: list, output_range: list):
     return output_range[0] + (val - input_range[0])/(input_range[1] - input_range[0]) * (output_range[1] - output_range[0])
@@ -52,6 +143,21 @@ class SpotJoyUtils(Node):
         self._arm_stowed = True
         self._sitting = False
         self._gripper_closed = True
+
+        # Controller configuration parameter
+        self.controller_config = self.declare_parameter(name="controller", 
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_STRING,
+                description="Name of the controller configuration to load",
+                read_only=True,  
+            )
+        ).value
+
+        if self.controller_config not in ACTIONS.keys():
+            self.get_logger().error(f"Invalid controller configuration. Valid values are {ACTIONS.keys()}")
+            raise RuntimeError()
+
+        self.actions = ACTIONS[self.controller_config]
 
         # Subscribe to the feedback topic to monitor dock state
         self._feedback_sub = self.create_subscription(Feedback, '/spot_driver/status/feedback', self.updateState, 10)
@@ -102,7 +208,7 @@ class SpotJoyUtils(Node):
         self._gripper_closed = (msg.data < 70.0)
         
     def verifyServer(self, client) -> bool:
-        if not client.wait_for_service(1):
+        if not client.wait_for_service(5):
             self.get_logger().warn(f"Service for action \"{self.action}\" is not available, cancelling request")
             self.action = None
             return False
@@ -163,76 +269,50 @@ class SpotJoyUtils(Node):
                 client = self.unstow_client
 
             future = self.triggerClient(client)
-            self.waitForTriggerFuture(client, future)
+            if future is not None:
+                self.waitForTriggerFuture(client, future)
 
         self.action = None
 
+    def checkAction(self, buttons: list[int], axes: list[float], action_name: str):
+        action: dict[str: list[Enum]] = self.actions[action_name]
+
+        button_type = self.actions["ButtonType"]
+        axis_type = self.actions["AxisType"]
+
+        action_buttons = [buttons[controller_input.value] for controller_input in action if type(controller_input) == button_type]
+        action_axes = [axes[controller_input.value] for controller_input in action if type(controller_input) == axis_type]
+        action_axis_values = [controller_input for controller_input in action if type(controller_input) == float]
+        
+        return all(action_buttons) and all(np.array(action_axes) == np.array(action_axis_values))
 
     def joyCallback(self, data: Joy):
         buttons = data.buttons
         axes    = data.axes
 
-        # We need the controller in "D" mode, not "X" mode
-        if len(axes) != 6:
+        # When using Logitech, we need the controller in "D" mode, not "X" mode
+        if self.actions["ButtonType"] == LogitechButtons and len(axes) != 6:
             self.get_logger().warn("Logitech controller in wrong working mode. Please flip the switch on the back", throttle_duration_sec=1.0)
             return
 
-        # If both the start button is pressed, try to claim a lease
-        if buttons[LogitechButtons.START.value]:
-            self.action = "Claim"
-            return
+        # Handle actions with a simple trigger format
+        simple_actions = ["Claim", "Release", "Undock", "Dock", "Sit", "Stand", "PowerOn", "ArmUnstow", "ArmStow", "ToggleGripper"]
+        for action in simple_actions:
+            if self.checkAction(buttons, axes, action):
+                self.action = action
+                return
         
-        # If the back button is pressed, release the lease on the robot
-        if buttons[LogitechButtons.BACK.value]:
-            self.action = "Release"
-            return
-
-        # If both directional sticks are pressed, undock or dock the robot
-        if buttons[LogitechButtons.RIGHT_STICK.value]:
-            self.action = "Undock"
-            return
-        
-        if buttons[LogitechButtons.LEFT_STICK.value]:
-            self.action = "Dock"
-            return
-
-        # If the left trigger is pressed, command the robot to sit
-        if axes[LogitechAxes.DPAD_HORIZONTAL.value] == 1.0:
-            self.action = "Sit"
-            return
-
-        if axes[LogitechAxes.DPAD_HORIZONTAL.value] == -1.0:
-            self.action = "Stand"
-            return
-        
-        # If the Y button is pressed, command the robot to power on
-        if buttons[LogitechButtons.Y.value]:
-            self.action = "PowerOn"
-            return
-        
-        # Up on the DPad to unstow the arm
-        if axes[LogitechAxes.DPAD_VERTICAL.value] == 1.0:
-            self.action = "ArmUnstow"
-            return
-
-        # Down on the DPad to stow the arm
-        if axes[LogitechAxes.DPAD_VERTICAL.value] == -1.0:
-            self.action = "ArmStow"
-            return
-        
-        # X button to toggle the gripper
-        if buttons[LogitechButtons.X.value]:
-            self.action = "ToggleGripper"
-            return
-        
-        # LT button activates body pose control
-        if buttons[LogitechButtons.LT.value]:
+        # Handle the body pose control case
+        enable_body_pose_control = buttons[self.actions["BodyPoseControl"][0].value]
+        if enable_body_pose_control:
             self.action = "BodyPoseControl"
-            self._body_offset = interpolate(axes[LogitechAxes.LEFT_VERTICAL.value]   , [-1.0, 1.0], [-0.15, 0.15])
-            self._body_pitch  = interpolate(axes[LogitechAxes.RIGHT_VERTICAL.value]  , [-1.0, 1.0], [-20.0, 20.0])
-            self._body_yaw    = interpolate(axes[LogitechAxes.RIGHT_HORIZONTAL.value], [-1.0, 1.0], [-30.0, 30.0])
+            body_pose_axes = self.actions["BodyPoseControl"][1::3]
+            body_pose_mins = self.actions["BodyPoseControl"][2::3]
+            body_pose_maxs = self.actions["BodyPoseControl"][3::3]
+            self._body_offset = interpolate(axes[body_pose_axes[0].value], [body_pose_mins[0], body_pose_maxs[0]], [-0.15, 0.15])
+            self._body_pitch  = interpolate(axes[body_pose_axes[1].value], [body_pose_mins[1], body_pose_maxs[1]], [-20.0, 20.0])
+            self._body_yaw    = interpolate(axes[body_pose_axes[2].value], [body_pose_mins[2], body_pose_maxs[2]], [-30.0, 30.0])
             return
-
         self.action = None
 
     def estopJoyCallback(self, data: Joy):
@@ -240,28 +320,28 @@ class SpotJoyUtils(Node):
         axes    = data.axes
 
         # Even for EStop we need to do this check, since the EStop button changes depending on the mode
-        if len(axes) != 6:
+        if self.actions["ButtonType"] == LogitechButtons and len(axes) != 6:
             return
         
         # If all four letter buttons are pressed, as well as both bumpers, trigger the hard estop
-        if buttons[LogitechButtons.A.value] and buttons[LogitechButtons.B.value] and buttons[LogitechButtons.X.value] and buttons[LogitechButtons.Y.value] and buttons[LogitechButtons.RB.value] and buttons[LogitechButtons.LB.value]:
+        if self.checkAction(buttons, axes, "HardEstop"):
             self.TriggerEStop(hard=True)
             return
 
         # If the red button is pressed, trigger the soft estop
-        if buttons[LogitechButtons.B.value]:
+        if self.checkAction(buttons, axes, "SoftEstop"):
             self.TriggerEStop(hard=False)
             return
         
         # If the green button is pressed, trigger the freeze estop
-        if buttons[LogitechButtons.A.value]:
+        if self.checkAction(buttons, axes, "FreezeEstop"):
             self.get_logger().info("Freezing robot")
             self._estop_future = self.triggerClient(self.freeze_client)
             return
         
     def dockRobot(self):
         if self.dock_client is None or not self.verifyServer(self.dock_client):
-            self.get_logger.warn("Cannot dock robot, no available server")
+            self.get_logger().warn("Cannot dock robot, no available server")
             return
 
         self.get_logger().info("Docking robot")
@@ -308,7 +388,7 @@ class SpotJoyUtils(Node):
 
     def toggleStand(self):
         if not self.verifyServer(self.stand_client) or not self.verifyServer(self.sit_client):
-            self.get_logger.warn("Cannot stand/sit robot, no available server")
+            self.get_logger().warn("Cannot stand/sit robot, no available server")
             return
 
         if self._sitting:
@@ -323,7 +403,7 @@ class SpotJoyUtils(Node):
 
     def toggleGripper(self):
         if not self.verifyServer(self.gripper_open_client) or not self.verifyServer(self.gripper_close_client):
-            self.get_logger.warn("Cannot open/close gripper, no available server")
+            self.get_logger().warn("Cannot open/close gripper, no available server")
             return
 
         if self._gripper_closed:
