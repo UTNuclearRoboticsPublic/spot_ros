@@ -165,7 +165,8 @@ def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
         executable='joint_state_publisher',
         parameters=[
             {'robot_description':urdf},
-            *default_joint_vals
+            *default_joint_vals,
+            {'source_list':['/spot_extra_joint_states']}
         ],
         remappings=[
             ('/joint_states', '/spot_fake_joint_states')
