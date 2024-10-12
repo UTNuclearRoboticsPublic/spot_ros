@@ -30,7 +30,8 @@ def generate_launch_description():
         executable="octomap_server_node",
         name="octomap_server_node",
         parameters=[
-            LaunchConfiguration('config')
+            LaunchConfiguration('config'),
+            {'use_sim_time': LaunchConfiguration('use_sim_time')}
         ],
         remappings=[
             ('cloud_in', LaunchConfiguration('cloud_in'))
