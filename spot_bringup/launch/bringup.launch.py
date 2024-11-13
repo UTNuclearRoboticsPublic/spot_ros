@@ -48,7 +48,7 @@ def generate_launch_description():
         DeclareLaunchArgument('has_realsense',
                             description='A realsense camera is mounted on the Spot Arm',
                             default_value=spot_accessories_dict.get('has_realsense', 'False')),
-        
+
         # Startup actions
         DeclareLaunchArgument('auto_claim',
                             description='Claim ownership of the robot upon connection.',
@@ -76,7 +76,7 @@ def generate_launch_description():
         DeclareLaunchArgument('controller_configuration',
                             description='Name of the controller configuration to use for teleoperation',
                             choices=['Logitech', 'Dualsense5'],
-                            default_value='Logitech')
+                            default_value='Dualsense5')
     ]
 
     has_arm         = LaunchConfiguration('has_arm')
@@ -98,8 +98,8 @@ def generate_launch_description():
     driver_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('spot_driver'), 
-                'launch', 
+                FindPackageShare('spot_driver'),
+                'launch',
                 'driver.launch.py'
             ])
         ),
@@ -173,7 +173,7 @@ def generate_launch_description():
         }.items()
     )
 
-    # Teleop 
+    # Teleop
     joy_node = Node(
         package='joy_linux',
         executable='joy_linux_node',
@@ -212,8 +212,8 @@ def generate_launch_description():
     spot_arm_joy_include = IncludeLaunchDescription(
         launch_description_source = PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('spot_manipulation_driver'), 
-                'launch', 
+                FindPackageShare('spot_manipulation_driver'),
+                'launch',
                 'arm_teleop_joy.launch.py'
             ])
         ),
@@ -226,7 +226,7 @@ def generate_launch_description():
             OrSubstitution(
                 has_eap,
                 AndSubstitution(
-                    has_eap_2, 
+                    has_eap_2,
                     NotSubstitution(LaunchConfiguration('launch_pointcloud_service'))
                 )
             )
@@ -237,7 +237,7 @@ def generate_launch_description():
                 executable='velodyne_driver_node',
                 output='both',
                 parameters=[
-                    PathJoinSubstitution([FindPackageShare('velodyne_driver'), 'config', 'VLP16-velodyne_driver_node-params.yaml']), 
+                    PathJoinSubstitution([FindPackageShare('velodyne_driver'), 'config', 'VLP16-velodyne_driver_node-params.yaml']),
                     {'device_ip': LaunchConfiguration('velodyne_ip')}
                 ]
             ),
@@ -246,7 +246,7 @@ def generate_launch_description():
                 executable='velodyne_transform_node',
                 output='both',
                 parameters=[
-                    PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'config', 'VLP16-velodyne_transform_node-params.yaml']), 
+                    PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'config', 'VLP16-velodyne_transform_node-params.yaml']),
                     {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
                 ]
             )
