@@ -1,0 +1,68 @@
+cmake_minimum_required(VERSION 3.8)
+project(spot_behaviors)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra)
+endif()
+
+set(CMAKE_CXX_STANDARD 20)
+
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(spot_msgs REQUIRED)
+find_package(behaviortree_cpp REQUIRED)
+find_package(moveit_msgs REQUIRED)
+find_package(moveit_kinematics REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(tf2_kdl REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+
+include_directories(
+  include
+)
+
+add_library(${PROJECT_NAME} SHARED
+  src/check_battery.cpp
+  src/dock_robot.cpp
+  src/walk_to_pose.cpp
+  src/trigger_service.cpp
+  src/navigate_to_pose.cpp
+  src/check_arm_stowed.cpp
+  src/move_hand_to_pose.cpp
+  src/check_hand_collision.cpp
+  src/record_current_location.cpp
+  src/move_hand_through_poses.cpp
+)
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp
+  tf2_kdl
+  tf2_eigen
+  spot_msgs
+  nav2_msgs
+  moveit_msgs
+  behaviortree_cpp
+  tf2_geometry_msgs
+  moveit_kinematics
+)
+ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
+ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl)
+
+# Install include files
+install(
+  DIRECTORY include/
+  DESTINATION include
+)
+
+# Install libraries
+install(
+  TARGETS ${PROJECT_NAME}
+  EXPORT ${PROJECT_NAME}Targets
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+
+ament_package()

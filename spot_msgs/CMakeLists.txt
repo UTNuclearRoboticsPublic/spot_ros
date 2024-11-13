@@ -7,14 +7,18 @@ find_package(nav_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(tf2_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ArmImpedanceCommand.action"
   "action/ArmSurfaceContact.action"
+  "action/ArmCartesianCommand.action"
   "action/ClawGripperCommand.action"
   "action/NavigateTo.action"
-  "action/Trajectory.action"
+  "action/WalkTo.action"
+  "action/ImageToGrasp.action"
 
   "srv/ArmForceTrajectory.srv"
   "srv/ArmJointMovement.srv"
@@ -45,7 +49,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/LeaseArray.msg"
   "msg/LeaseOwner.msg"
   "msg/LeaseResource.msg"
+  "msg/ManipulatorCarryState.msg"
   "msg/ManipulatorState.msg"
+  "msg/ManipulatorStowState.msg"
   "msg/Metrics.msg"
   "msg/MobilityParams.msg"
   "msg/PowerState.msg"
@@ -56,8 +62,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SystemFault.msg"
   "msg/SystemFaultState.msg"
   "msg/WiFiState.msg"
-  
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs sensor_msgs
+
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

@@ -47,6 +47,9 @@ from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
+# Type hint helpers
+class EStopSystemStatusProto(type[estop_pb2.EstopSystemStatus]): pass
+
 class DefaultLogger():
     """Generic print logger to act as default logger for the lease manager"""
     def info(self, msg):
@@ -69,14 +72,17 @@ class SpotLeaseManager():
         self._robot = None
         self._lease = None
         self._hostname = None
+        self._is_frozen = False
 
         # Clients
         self._robot_state_client = None
         self._robot_command_client = None
         self._power_client = None
         self._lease_client = None
+        self._lease_keepalive = None
         self._estop_client = None
         self._estop_endpoint = None
+        self._estop_keepalive = None
 
         # Keep track of who is using the lease
         self._lease_owners = []
@@ -175,6 +181,11 @@ class SpotLeaseManager():
         return self._is_connected
 
     @property
+    def frozen(self) -> bool:
+        """Return boolean indicating if the robot is currently allowed to move"""
+        return self._is_frozen
+
+    @property
     def ID(self):
         """Return robot's ID"""
         if not self._is_connected:
@@ -202,6 +213,11 @@ class SpotLeaseManager():
         """Return the current time as a robot time protobuf timestamp"""
         return self._robot.time_sync.robot_timestamp_from_local_secs(time.time())
     
+    @property
+    def is_frozen(self) -> bool:
+        """Return whether or not the robot is allowed to accept new command or move"""
+        return self._is_frozen
+    
     def registerLeaseOwner(self, owner_id) -> Tuple[bool, Text]:
         if self.isRegisteredLeaseOwner(owner_id):
             self.logger.warn(f"Lease already owned for object with id {owner_id}")
@@ -224,6 +240,23 @@ class SpotLeaseManager():
             True if the object owns a lease, False otherwise 
         """
         return True if ID in self._lease_owners else False 
+    
+    def updateLeaseTask(self) -> None:
+        """Update and retrieve the latest lease information"""
+        if self._lease_task is not None:
+            self._lease_task.update()
+
+    def freeze(self) -> Tuple[bool, Text]:
+        """Stop the robot and prevent it from making any further movements"""
+        self._is_frozen = True
+        try:
+            self._robot_command_client.robot_command(RobotCommandBuilder.stop_command())
+            return True, "Robot frozen"
+        except Exception as e:
+            return False, f"Error occured commanding the robot to stop: {e}. However the robot is still disabled from accepting any new commands"
+        
+    def unfreeze(self) -> None:
+        self._is_frozen = False
 
     def robot_command(self, command_proto: PB2Message,
                        end_time_secs: float =None) -> Tuple[bool, Text, int]:
@@ -234,6 +267,10 @@ class SpotLeaseManager():
                            Usually made with RobotCommandBuilder
             end_time_secs: (optional) Time-to-live for the command in seconds
         """
+        if self._is_frozen:
+            message = "Cannot issue a command to the robot while frozen"
+            return False, message, None
+        
         try:
             id = self._robot_command_client.robot_command(lease=None, command=command_proto, end_time_secs=end_time_secs)
             return True, "Success", id
@@ -290,15 +327,19 @@ class SpotLeaseManager():
     def resetEStop(self) -> None:
         """Get keepalive for eStop"""
         self.logger.info("Creating EStop endpoint")
+        if self._estop_keepalive is not None:
+            self._estop_keepalive.shutdown()
+            self._estop_keepalive = None
+
         self._estop_endpoint = EstopEndpoint(self._estop_client, 'ros', 9.0)
         self._estop_endpoint.force_simple_setup()  # Set this endpoint as the robot's sole estop.
         self._estop_keepalive = EstopKeepAlive(self._estop_endpoint)
 
-    def eStopStatus(self) -> estop_pb2.EstopSystemStatus:
+    def eStopStatus(self) -> EStopSystemStatusProto:
         """Get the status for the EStop client"""
         return self._estop_client.get_status()
 
-    def assertEStop(self, severe=True) -> bool:
+    def assertEStop(self, severe=True) -> Tuple[bool, str]:
         """Forces the robot into eStop state.
 
         Args:
@@ -311,10 +352,10 @@ class SpotLeaseManager():
             else:
                 self._estop_endpoint.settle_then_cut()
                 self.logger.warn("EStop triggered")
-        except Exception:
-            return False
+        except Exception as e:
+            return False, f"{e}"
 
-        return True
+        return True, "Successfully triggered e-stop"
 
     def _releaseEStop(self) -> None:
         """Stop eStop keepalive"""
@@ -340,9 +381,11 @@ class SpotLeaseManager():
         """Return the lease on the body."""
         if self._lease:
             self._lease_client.return_lease(self._lease)
-            self._lease_task = None
-            self._lease_client = None
             self._lease = None
+            self.logger.info("Shutting down lease keepalive")
+            if self._lease_keepalive is not None:
+                self._lease_keepalive.shutdown()
+                self._lease_keepalive = None
 
     def safe_shut_down(self):
         if self.robot.has_arm():

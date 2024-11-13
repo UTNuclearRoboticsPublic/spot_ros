@@ -1,0 +1,6 @@
+# Stow State
+uint8 STOWSTATE_UNKNOWN = 0
+uint8 STOWSTATE_STOWED = 1
+uint8 STOWSTATE_DEPLOYED = 2
+
+uint8 state

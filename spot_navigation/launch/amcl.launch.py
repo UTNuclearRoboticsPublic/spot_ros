@@ -3,7 +3,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import Node
+from launch_ros.actions import Node, PushRosNamespace
 
 def generate_launch_description():
 
@@ -12,17 +12,26 @@ def generate_launch_description():
             description="Filepath for navigation configuration. See navigation2 package documentation.",
             default_value=PathJoinSubstitution([FindPackageShare('spot_navigation'), 'config', 'spot.yaml'])),
 
+        DeclareLaunchArgument('initial_pose_file',
+            description='An initial pose to pass to the AMCL which overwrites that in the config file',
+            default_value="{}"),
+
         DeclareLaunchArgument('map',
             default_value=PathJoinSubstitution([
                 FindPackageShare('spot_navigation'),
                 'map',
-                'ahg.yaml']),
+                'new_map.yaml']),
             description='Full path to map file to load'),
 
         DeclareLaunchArgument(
             'use_sim_time',
             default_value='false',
-            description='Use simulation (Gazebo) clock if true')
+            description='Use simulation (Gazebo) clock if true'),
+
+        DeclareLaunchArgument(
+            'cloud_in',
+            default_value='/velodyne_points',
+            description='Pointcloud to use for localization')
     ]
 
     laserscan_node = Node(
@@ -33,13 +42,12 @@ def generate_launch_description():
             {"angle_min": -math.pi},
             {"angle_max":  math.pi},
             {"angle_increment": math.radians(1.0)},
-            {"target_frame": "gpe"},
+            {"target_frame": "base_footprint"},
             {"min_height": 0.20},
             {"max_height": 1.5}
         ],
         remappings=[
-            ("cloud_in", "/velodyne_points"),
-            ("scan", "/spot/pointcloud_scan")
+            ("/spot_nav/cloud_in", LaunchConfiguration('cloud_in')),
         ]
     )
 
@@ -48,7 +56,7 @@ def generate_launch_description():
         executable='map_server',
         name='map_server',
         parameters=[
-            {'yaml_filename': PathJoinSubstitution([FindPackageShare('spot_navigation'), 'map', 'ahg.yaml'])}
+            {'yaml_filename': LaunchConfiguration('map')}
         ]
     )
 
@@ -57,7 +65,8 @@ def generate_launch_description():
         executable='amcl',
         name='amcl',
         parameters=[
-            LaunchConfiguration('config')
+            LaunchConfiguration('config'),
+            LaunchConfiguration('initial_pose_file')
         ]
     )
 
@@ -75,6 +84,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         *launch_args,
+        PushRosNamespace("spot_nav"),
         amcl,
         map_server,
         laserscan_node,

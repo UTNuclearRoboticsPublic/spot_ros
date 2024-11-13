@@ -1,32 +1,55 @@
+import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import SetParameter
 
 def generate_launch_description():
+
+    spot_accessories: str = os.getenv('SPOT_ACCESSORIES', '')
+    spot_accessories_dict: dict = {}
+    for accessory in spot_accessories.split(' '):
+        if accessory == 'ARM':
+            spot_accessories_dict['has_arm'] = 'True'
+        elif accessory == 'EAP':
+            spot_accessories_dict['has_eap'] = 'True'
+        elif accessory == 'EAP2':
+            spot_accessories_dict['has_eap_2'] = 'True'
+        elif accessory == 'CAM':
+            spot_accessories_dict['has_cam_payload'] = 'True'
+        elif accessory == 'REALSENSE':
+            spot_accessories_dict['has_realsense'] = 'True'
 
     launch_args = [
 
         # Robot-specific configuration
         DeclareLaunchArgument('hostname',
                             default_value='no_value'),
+        DeclareLaunchArgument('velodyne_ip',
+                            default_value='192.168.1.201'),
+
+        # Accessories
         DeclareLaunchArgument('has_eap',
-                            description="Robot includes the Extended Autonomy Package.",
-                            default_value="True"),
+                            description="Robot includes the Extended Autonomy Package",
+                            default_value=spot_accessories_dict.get('has_eap', 'False')),
         DeclareLaunchArgument('has_arm',
                             description='Robot includes the Spot Arm',
-                            default_value="True"),
+                            default_value=spot_accessories_dict.get('has_arm', 'False')),
         DeclareLaunchArgument('has_eap_2',
-                            description="Robot includes the Updated Extended Autonomy Package (EAP2).",
-                            default_value="True"),
+                            description="Robot includes the Updated Extended Autonomy Package (EAP2)",
+                            default_value=spot_accessories_dict.get('has_eap_2', 'False')),
+        DeclareLaunchArgument('has_cam_payload',
+                            description="Robot includes the CAM payload.",
+                            default_value=spot_accessories_dict.get('has_cam_payload', 'False')),
         DeclareLaunchArgument('has_realsense',
                             description='A realsense camera is mounted on the Spot Arm',
-                            default_value="False"),
-        
+                            default_value=spot_accessories_dict.get('has_realsense', 'False')),
 
+        # Startup actions
         DeclareLaunchArgument('auto_claim',
                             description='Claim ownership of the robot upon connection.',
                             default_value='False'),
@@ -35,16 +58,38 @@ def generate_launch_description():
                             default_value='False'),
         DeclareLaunchArgument('auto_stand',
                             description='Stand the robot upon connection.',
-                            default_value='False')
+                            default_value='False'),
+        DeclareLaunchArgument('publish_images',
+                              description='Specify whether to publish (colored) images',
+                              default_value='False'),
+        DeclareLaunchArgument('publish_depth_images',
+                              description='Specify whether to publish depth images',
+                              default_value='False'),
+        DeclareLaunchArgument('launch_pointcloud_service',
+                            description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
+                            default_value='False'),
+
+        # Other configurations
+        DeclareLaunchArgument('manipulation_action_namespace',
+                            description='Namespace for the manipulation action servers. Temporary fix until remppaing is added to action servers (https://github.com/ros2/rcl/pull/1170)',
+                            default_value=''),
+        DeclareLaunchArgument('controller_configuration',
+                            description='Name of the controller configuration to use for teleoperation',
+                            choices=['Logitech', 'Dualsense5'],
+                            default_value='Dualsense5')
     ]
 
-    has_arm       = LaunchConfiguration('has_arm')
-    has_eap       = LaunchConfiguration('has_eap')
-    has_eap_2     = LaunchConfiguration('has_eap_2')
-    has_realsense = LaunchConfiguration('has_realsense')
-    auto_claim    = LaunchConfiguration('auto_claim')
-    auto_power_on = LaunchConfiguration('auto_power_on')
-    auto_stand    = LaunchConfiguration('auto_stand')
+    has_arm         = LaunchConfiguration('has_arm')
+    has_eap         = LaunchConfiguration('has_eap')
+    has_eap_2       = LaunchConfiguration('has_eap_2')
+    has_realsense   = LaunchConfiguration('has_realsense')
+    has_cam_payload = LaunchConfiguration('has_cam_payload')
+    auto_claim      = LaunchConfiguration('auto_claim')
+    auto_power_on   = LaunchConfiguration('auto_power_on')
+    auto_stand      = LaunchConfiguration('auto_stand')
+    publish_images  = LaunchConfiguration('publish_images')
+    publish_depth_images = LaunchConfiguration('publish_depth_images')
+    launch_pointcloud_service = LaunchConfiguration('launch_pointcloud_service')
 
     body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
     arm_params  = PathJoinSubstitution([FindPackageShare('spot_manipulation_driver'), 'config', 'spot_arm.yaml'])
@@ -53,19 +98,23 @@ def generate_launch_description():
     driver_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('spot_driver'), 
-                'launch', 
+                FindPackageShare('spot_driver'),
+                'launch',
                 'driver.launch.py'
             ])
         ),
         launch_arguments=
             {'hostname':      LaunchConfiguration('hostname'),
-                'has_eap':       has_eap,
-                'has_arm':       has_arm,
-                'has_eap_2':     has_eap_2,
-                'auto_claim':    auto_claim,
-                'auto_power_on': auto_power_on,
-                'auto_stand':    auto_stand,
+                'has_eap':         has_eap,
+                'has_arm':         has_arm,
+                'has_eap_2':       has_eap_2,
+                'has_cam_payload': has_cam_payload,
+                'auto_claim':      auto_claim,
+                'auto_power_on':   auto_power_on,
+                'auto_stand':      auto_stand,
+                'publish_images':  publish_images,
+                'publish_depth_images': publish_depth_images,
+                'launch_pointcloud_service': launch_pointcloud_service
             }.items()
     )
 
@@ -75,7 +124,18 @@ def generate_launch_description():
         executable='combined_driver_node',
         parameters=[
             {'hostname': LaunchConfiguration('hostname'),
-            'has_eap_2': has_eap_2},
+            'has_eap':         has_eap,
+            'has_arm':         has_arm,
+            'has_eap_2':       has_eap_2,
+            'has_cam_payload': has_cam_payload,
+            'auto_claim':      auto_claim,
+            'auto_power_on':   auto_power_on,
+            'auto_stand':      auto_stand,
+            'publish_images':  publish_images,
+            'publish_depth_images': publish_depth_images,
+            'launch_pointcloud_service': launch_pointcloud_service,
+            'action_namespace': LaunchConfiguration('manipulation_action_namespace'),
+            },
             body_params,
             arm_params
         ]
@@ -113,7 +173,7 @@ def generate_launch_description():
         }.items()
     )
 
-    # Teleop 
+    # Teleop
     joy_node = Node(
         package='joy_linux',
         executable='joy_linux_node',
@@ -145,18 +205,52 @@ def generate_launch_description():
         package='spot_bringup',
         executable='spot_joy',
         name='spot_joy_node',
+        parameters=[{'controller': LaunchConfiguration('controller_configuration')}]
     )
 
     # Arm Teleop Commands
     spot_arm_joy_include = IncludeLaunchDescription(
         launch_description_source = PythonLaunchDescriptionSource(
             PathJoinSubstitution([
-                FindPackageShare('spot_manipulation_driver'), 
-                'launch', 
+                FindPackageShare('spot_manipulation_driver'),
+                'launch',
                 'arm_teleop_joy.launch.py'
             ])
         ),
         condition=IfCondition(has_arm)
+    )
+
+    velodyne_include = GroupAction(
+        # Only launch velodyne if we have the EAP or the EAP2 and we're not using the pointcloud service
+        condition=IfCondition(
+            OrSubstitution(
+                has_eap,
+                AndSubstitution(
+                    has_eap_2,
+                    NotSubstitution(LaunchConfiguration('launch_pointcloud_service'))
+                )
+            )
+        ),
+        # Run velodyne nodes manually so we have access to parameter reassignment
+        actions=[
+            Node(package='velodyne_driver',
+                executable='velodyne_driver_node',
+                output='both',
+                parameters=[
+                    PathJoinSubstitution([FindPackageShare('velodyne_driver'), 'config', 'VLP16-velodyne_driver_node-params.yaml']),
+                    {'device_ip': LaunchConfiguration('velodyne_ip')}
+                ]
+            ),
+
+            Node(package='velodyne_pointcloud',
+                executable='velodyne_transform_node',
+                output='both',
+                parameters=[
+                    PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'config', 'VLP16-velodyne_transform_node-params.yaml']),
+                    {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
+                ]
+            )
+        ]
     )
 
     ## Launch
@@ -169,5 +263,6 @@ def generate_launch_description():
         joy_node,
         teleop_twist_joy_node,
         spot_joy_node,
-        spot_arm_joy_include
+        spot_arm_joy_include,
+        velodyne_include
     ])

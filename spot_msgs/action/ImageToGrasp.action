@@ -1,0 +1,16 @@
+# spot_msgs/action/ImageToGrasp
+
+# Request
+sensor_msgs/Image image
+sensor_msgs/CameraInfo camera_info
+tf2_msgs/TFMessage tf_msg # transforms representing the frame snapshot tree for the associated camera
+int32[] pixel_coordinates
+int32 grasp_strategy
+---
+
+# Response
+bool success
+string message
+
+---
+# Feedback

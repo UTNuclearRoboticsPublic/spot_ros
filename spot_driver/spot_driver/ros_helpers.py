@@ -26,18 +26,17 @@
 ############################################################################################
 
 from typing import List, Text, Tuple
-import struct
-from numpy import float32
-from math import nan
+from numpy import linalg
 
 import rclpy.time
 
 from .spot_lease_manager import SpotLeaseManager
-from scipy import spatial
+from .type_hint_helpers import *
 
 from builtin_interfaces.msg import Time as ROSTime
 from builtin_interfaces.msg import Duration as ROSDuration
-from geometry_msgs.msg import PoseWithCovariance, TransformStamped, TwistWithCovarianceStamped
+from geometry_msgs.msg import (PoseWithCovariance, TransformStamped, TwistWithCovarianceStamped, 
+                               Vector3, Twist, Quaternion, Transform, Pose, Point)
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
@@ -54,10 +53,12 @@ from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 from spot_msgs.msg import ManipulatorState
 
+from google.protobuf import timestamp_pb2
+from bosdyn.api import geometry_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
-from bosdyn.client.math_helpers import SE3Pose
-from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body
+from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
+from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot
 
 """Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {
@@ -88,6 +89,66 @@ arm_joint_names = {
 
 friendly_joint_names = dict(body_joint_names, **arm_joint_names)
 
+def TimestampToMsg(timestamp: timestamp_pb2.Timestamp) -> ROSTime:
+    """Convert timestamp_pb2.Timestamp to rclpy.time.Time"""
+    return ROSTime(sec=timestamp.seconds, nanosec=timestamp.nanos)
+
+def MsgToTimestamp(timestamp_msg: ROSTime) -> timestamp_pb2.Timestamp:
+    """Convert rclpy.time.Time to timestamp_pb2.Timestamp"""
+    return timestamp_pb2.Timestamp(seconds=timestamp_msg.sec, nanos=timestamp_msg.nanosec)
+
+def Vec3ToMsg(vector3_proto: Vec3Proto) -> Vector3:
+    """Convert Vec3Proto to geometry_msgs.msg.Vector3"""
+    return Vector3(x=vector3_proto.x, y=vector3_proto.y, z=vector3_proto.z)
+
+def MsgToVec3(msg: Vector3 | Point) -> Vec3Proto:
+    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3Proto"""
+    return Vec3Proto(x = msg.x, y=msg.y, z=msg.z)
+
+def QuaternionToMsg(quat_proto: QuaternionProto) -> Quaternion:
+    """Converts QuaternionProto to geometry_msgs.msg.Quaternion"""
+    return Quaternion(x=quat_proto.x, y=quat_proto.y, z=quat_proto.z, w=quat_proto.w)
+
+def MsgToQuaternion(quat_msg: Quaternion) -> QuaternionProto:
+    """Converts geometry_msgs.msg.Quaternion to QuaternionProto"""
+    return QuaternionProto(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
+
+def SE3VelocityToMsg(se3_velocity: SE3VelocityProto) -> Twist:
+    """Converts SE3VelocityProto to geometry_msgs.msg.Twist"""
+    return Twist(
+        linear=Vec3ToMsg(se3_velocity.linear),
+        angular=Vec3ToMsg(se3_velocity.angular)
+    )
+
+def TransformToMsg(*, child_frame: str, parent_frame: str, transform: SE3Pose, timestamp: rclpy.time.Time):
+    """Converts bosdyn.client.math_helpers.SE3Pose with metadata to geometry_msgs.msg.TransformStamped"""
+    new_tf = TransformStamped()
+    new_tf.header.stamp = TimestampToMsg(timestamp)
+    new_tf.header.frame_id = parent_frame
+    new_tf.child_frame_id = child_frame
+
+    new_tf.transform.translation = Vec3ToMsg(transform.position)
+    new_tf.transform.rotation = QuaternionToMsg(transform.rotation.to_proto())
+
+    return new_tf
+
+def MsgToTransform(msg: Transform) -> SE3Pose:
+    """Converts geometry_msgs.msg.Transform to bosdyn.client.math_helpers.SE3Pose"""
+    return SE3Pose (
+        x = msg.translation.x,
+        y = msg.translation.y,
+        z = msg.translation.z,
+        rot = MsgToQuaternion(msg.rotation)
+    )
+
+def MsgToPose(msg: Pose) -> SE3Pose:
+    return SE3Pose (
+        x = msg.position.x,
+        y = msg.position.y,
+        z = msg.position.z,
+        rot = MsgToQuaternion(msg.orientation)
+    )
+
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: Text,
                              child_frame: Text,
@@ -117,7 +178,7 @@ def populateTransformStamped(time: rclpy.time.Time,
 
     return new_tf
 
-def getImageMsg(data: image_pb2.ImageResponse, lease_manager: SpotLeaseManager) -> Tuple[Image, CameraInfo, TFMessage]:
+def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tuple[Image, CameraInfo, TFMessage]:
     """Takes the image, camera, and TF data and populates the necessary ROS messages
 
     Args:
@@ -249,7 +310,7 @@ def getImageMsg(data: image_pb2.ImageResponse, lease_manager: SpotLeaseManager) 
 
     return image_msg, camera_info_msg, tf_msg
 
-def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
+def PointCloudToMsg(pointcloud_response: PointCloudResponseProto,
                     lease_manager: SpotLeaseManager) -> PointCloud2:
     """Converts a PointCloudResponse proto message to a sensor_msgs PointCloud2
 
@@ -259,16 +320,16 @@ def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
     Returns:
         sensor_msgs/msg/PointCloud2 ROS message
     """
-    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_SOURCE_DATA_ERROR):
+    if (pointcloud_response.status == PointCloudResponseProto.Status.STATUS_SOURCE_DATA_ERROR):
         lease_manager.logger.error("Error retrieving pointcloud source")
         return None
-    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_POINT_CLOUD_DATA_ERROR):
+    if (pointcloud_response.status == PointCloudResponseProto.Status.STATUS_POINT_CLOUD_DATA_ERROR):
         lease_manager.logger.error(f"Error retrieving pointcloud from {pointcloud_response.source.name}")
         return None
-    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_UNKNOWN_SOURCE):
+    if (pointcloud_response.status == PointCloudResponseProto.Status.STATUS_UNKNOWN_SOURCE):
         lease_manager.logger.error(f"Unknown pointcloud source: {pointcloud_response.source.name}")
         return None
-    if (pointcloud_response.status == point_cloud_pb2.PointCloudResponse.Status.STATUS_UNKNOWN):
+    if (pointcloud_response.status == PointCloudResponseProto.Status.STATUS_UNKNOWN):
         lease_manager.logger.error(f"Unknown error occured retrieving pointcloud")
         return None
     if (pointcloud_response.point_cloud.encoding != point_cloud_pb2.PointCloud.Encoding.ENCODING_XYZ_32F):
@@ -294,7 +355,7 @@ def PointCloudToMsg(pointcloud_response: point_cloud_pb2.PointCloudResponse,
 
     return ros_pc
 
-def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
+def JointStatesToMsg(kinematic_state: KinematicStateProto,
                      lease_manager: SpotLeaseManager) -> JointState:
     """Maps joint state data from robot state proto to ROS JointState message
 
@@ -327,7 +388,7 @@ def JointStatesToMsg(kinematic_state: robot_state_pb2.KinematicState,
 
     return joint_state_msg
 
-def EStopStatesToMsg(estop_states: robot_state_pb2.EStopState,
+def EStopStatesToMsg(estop_states: EStopStateProto,
                      lease_manager: SpotLeaseManager) -> EStopStateArray:
     """Maps EStop states data from robot state proto to ROS EStopArray message
 
@@ -349,7 +410,7 @@ def EStopStatesToMsg(estop_states: robot_state_pb2.EStopState,
 
     return estop_array_msg
 
-def FeetStateToMsg(foot_states: robot_state_pb2.FootState) -> FootStateArray:
+def FeetStateToMsg(foot_states: FootStateProto) -> FootStateArray:
     """Maps foot position state data from robot state proto to ROS FootStateArray message
 
     Args:
@@ -368,7 +429,7 @@ def FeetStateToMsg(foot_states: robot_state_pb2.FootState) -> FootStateArray:
 
     return foot_array_msg
 
-def GetOdomTwistFromState(kinematic_state: robot_state_pb2.KinematicState,
+def GetOdomTwistFromState(kinematic_state: KinematicStateProto,
                           lease_manager: SpotLeaseManager) -> TwistWithCovarianceStamped:
     """Maps odometry data from robot state proto to ROS TwistWithCovarianceStamped message
 
@@ -389,7 +450,7 @@ def GetOdomTwistFromState(kinematic_state: robot_state_pb2.KinematicState,
     twist_odom_msg.twist.twist.angular.z = kinematic_state.velocity_of_body_in_odom.angular.z
     return twist_odom_msg
 
-def GetOdomFromState(kinematic_state: robot_state_pb2.KinematicState,
+def GetOdomFromState(kinematic_state: KinematicStateProto,
                      lease_manager: SpotLeaseManager,
                      use_vision: bool) -> Odometry:
     """Maps odometry data from robot state proto to ROS Odometry message
@@ -425,7 +486,7 @@ def GetOdomFromState(kinematic_state: robot_state_pb2.KinematicState,
     odom_msg.twist = twist_odom_msg
     return odom_msg
 
-def DockStateToMsg(dock_state: docking_pb2.DockState) -> DockState:
+def DockStateToMsg(dock_state: DockStateProto) -> DockState:
     """Maps dock state data from robot state proto to ROS DockState message
     Args:
         dock_state: DockState proto
@@ -440,7 +501,7 @@ def DockStateToMsg(dock_state: docking_pb2.DockState) -> DockState:
     return dock_state_msg
 
 
-def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
+def GetWifiFromState(comms_states: CommsStateProto) -> WiFiState:
     """Maps wireless state data from robot state proto to ROS WiFiState message
 
     Args:
@@ -456,62 +517,7 @@ def GetWifiFromState(comms_states: robot_state_pb2.CommsState) -> WiFiState:
 
     return wifi_msg
 
-def invertTransform(transform: TransformStamped) -> TransformStamped:
-    """Calculates and return the inverse of a geometry_msgs/TransformStamped
-    The new transform will have the same time stamp, but the parent and
-    child frame ID's will be swapped and the transformtation inverted
-    
-    Args:
-        transform: TransformStamped
-    Returns:
-        TransformStamped
-    """
-    
-    # Extract the components of the transformation
-    rotation = spatial.transform.Rotation.from_quat([
-        transform.transform.rotation.x, 
-        transform.transform.rotation.y, 
-        transform.transform.rotation.z, 
-        transform.transform.rotation.w
-    ])
-    translation = [transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z]
-
-    # Invert the individual components
-    inv_rotation = rotation.inv()
-    inv_translation = -1.0*inv_rotation.apply(translation)
-
-    # Create the inverse transform
-    inverse = TransformStamped()
-    inverse.header.stamp    = transform.header.stamp
-    inverse.header.frame_id = transform.child_frame_id
-    inverse.child_frame_id  = transform.header.frame_id
-
-    inverse.transform.translation.x = inv_translation[0]
-    inverse.transform.translation.y = inv_translation[1]
-    inverse.transform.translation.z = inv_translation[2]
-
-    q_inv = inv_rotation.as_quat()
-    inverse.transform.rotation.x = q_inv[0]
-    inverse.transform.rotation.y = q_inv[1]
-    inverse.transform.rotation.z = q_inv[2]
-    inverse.transform.rotation.w = q_inv[3]
-
-    return inverse
-
-def createBaseFootprintTransform(transform_odom2body: TransformStamped, transform_odom2gpe: TransformStamped):
-    transform_body2basefootprint = TransformStamped()
-    transform_body2basefootprint.header.frame_id = "base_link"
-    transform_body2basefootprint.child_frame_id  = "base_footprint"
-    transform_body2basefootprint.header.stamp = transform_odom2body.header.stamp
-
-    transform_body2basefootprint.transform.translation.x = transform_odom2gpe.transform.translation.x - transform_odom2body.transform.translation.x
-    transform_body2basefootprint.transform.translation.y = transform_odom2gpe.transform.translation.y - transform_odom2body.transform.translation.y
-    transform_body2basefootprint.transform.translation.z = transform_odom2gpe.transform.translation.z - transform_odom2body.transform.translation.z
-    transform_body2basefootprint.transform.rotation.w = 1.0
-
-    return transform_body2basefootprint
-
-def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
+def GetTFFromState(kinematic_state: KinematicStateProto,
                    lease_manager: SpotLeaseManager) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
@@ -521,45 +527,97 @@ def GetTFFromState(kinematic_state: robot_state_pb2.KinematicState,
     Returns:
         tf2_msgs/TFMessage message
     """
+    timestamp = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
+
     tf_msg = TFMessage()
+    for child_frame in kinematic_state.transforms_snapshot.child_to_parent_edge_map:
+        # Make sure the frames are valid (empty frames are possible)
+        parent = kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(child_frame)
+        parent_frame = parent.parent_frame_name
+        # We also skip the body -> odom transform because we create that manually with virtual joints
+        if parent_frame == "" or child_frame == "odom": continue
 
-    transform_odom2body = None
-    transform_odom2gpe = None
+        # Convert to SE3Pose and convert that to ROS TF message
+        transform = SE3Pose.from_proto(parent.parent_tform_child)
+        new_tf = TransformToMsg(
+            child_frame=child_frame, 
+            parent_frame=parent_frame, 
+            transform=transform, 
+            timestamp=timestamp
+        )
+        tf_msg.transforms.append(new_tf)
 
-    for frame_name in kinematic_state.transforms_snapshot.child_to_parent_edge_map:
-        if kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
-            transform = kinematic_state.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
-            new_tf = TransformStamped()
-            local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
-            new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-            new_tf.header.frame_id = transform.parent_frame_name
-            new_tf.child_frame_id = frame_name
-            new_tf.transform.translation.x = transform.parent_tform_child.position.x
-            new_tf.transform.translation.y = transform.parent_tform_child.position.y
-            new_tf.transform.translation.z = transform.parent_tform_child.position.z
-            new_tf.transform.rotation.x = transform.parent_tform_child.rotation.x
-            new_tf.transform.rotation.y = transform.parent_tform_child.rotation.y
-            new_tf.transform.rotation.z = transform.parent_tform_child.rotation.z
-            new_tf.transform.rotation.w = transform.parent_tform_child.rotation.w
+    ## === TODO: Fix orientation when on slopes === ##
 
-            # Account for the fact that Spot publishes a body->odom transform but we want odom->body
-            if frame_name == "odom":
-                new_tf = invertTransform(new_tf)
-                transform_odom2body = new_tf
-
-            # Record the odom -> gpe transform for later use
-            if frame_name == "gpe":
-                transform_odom2gpe = new_tf
-
-            tf_msg.transforms.append(new_tf)
-
-    # Create a base_footprint transform from the gpe transform
-    if transform_odom2body is not None and transform_odom2gpe is not None:
-        tf_msg.transforms.append(createBaseFootprintTransform(transform_odom2body, transform_odom2gpe))
+    # Add the base footprint transform 
+    tform_odom_to_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("odom").parent_tform_child).inverse()
+    tform_body_to_flat_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("flat_body").parent_tform_child)
+    tform_gpe_to_base_footprint = tform_odom_to_body * tform_body_to_flat_body
+    tform_gpe_to_base_footprint.x = 0.0
+    tform_gpe_to_base_footprint.y = 0.0
+    tform_gpe_to_base_footprint.z = 0.0
+    tf_msg.transforms.append(TransformToMsg(
+        child_frame="base_footprint", 
+        parent_frame="gpe", 
+        transform=tform_gpe_to_base_footprint, 
+        timestamp=timestamp)
+    )
 
     return tf_msg
 
-def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
+def GetVirtualJointValues(kinematic_state: KinematicStateProto) -> JointState:
+    transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map 
+    tform_body_to_odom = SE3Pose.from_proto(transform_map.get("odom").parent_tform_child)
+    tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
+    tform_flat_body_to_body = SE3Pose.from_proto(transform_map.get("flat_body").parent_tform_child).inverse()
+    tform_gpe_to_body  = (tform_body_to_odom * tform_odom_to_gpe).inverse()
+
+    joint_state = JointState()
+
+    #TODO: Velocities
+
+    # base_footprint -> body_with_height
+    joint_state.name.append("body_height_joint")
+    joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
+    joint_state.name.append("body_yaw_joint")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    # body_with_yaw -> body_with_pitch_and_yaw
+    joint_state.name.append("body_pitch_joint")
+    joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    # body_with_pitch_and_yaw -> body
+    joint_state.name.append("body_roll_joint")
+    joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    joint_state.name.append("body_x")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    joint_state.name.append("body_y")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    joint_state.name.append("body_or")
+    joint_state.position.append(0)
+    joint_state.velocity.append(0)
+    joint_state.effort.append(0)
+
+    return joint_state
+
+def BatteryStatesToMsg(battery_states: BatteryStateProto,
                        lease_manager: SpotLeaseManager) -> BatteryStateArray:
     """Maps battery state data from robot state proto to ROS BatteryStateArray message
 
@@ -587,7 +645,7 @@ def BatteryStatesToMsg(battery_states: robot_state_pb2.BatteryState,
 
     return battery_states_array_msg
 
-def PowerStatesToMsg(power_state: robot_state_pb2.PowerState,
+def PowerStatesToMsg(power_state: PowerStateProto,
                      lease_manager: SpotLeaseManager) -> PowerState:
     """Maps power state data from robot state proto to ROS PowerState message
 
@@ -606,7 +664,7 @@ def PowerStatesToMsg(power_state: robot_state_pb2.PowerState,
     power_state_msg.locomotion_estimated_runtime = ROSDuration(sec=power_state.locomotion_estimated_runtime.seconds, nanosec=power_state.locomotion_estimated_runtime.nanos)
     return power_state_msg
 
-def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault,
+def getBehaviorFaults(behavior_faults: ServiceFaultProto,
                       lease_manager: SpotLeaseManager) -> List[BehaviorFault]:
     """Helper function to strip out behavior faults into a list
 
@@ -629,7 +687,7 @@ def getBehaviorFaults(behavior_faults: service_fault_pb2.ServiceFault,
 
     return faults
 
-def getSystemFaults(system_faults: service_fault_pb2.ServiceFault,
+def getSystemFaults(system_faults: ServiceFaultProto,
                     lease_manager: SpotLeaseManager) -> List[SystemFault]:
     """Helper function to strip out system faults into a list
 
@@ -659,7 +717,7 @@ def getSystemFaults(system_faults: service_fault_pb2.ServiceFault,
 
     return faults
 
-def SystemFaultsToMsg(system_fault_state: robot_state_pb2.SystemFaultState,
+def SystemFaultsToMsg(system_fault_state: SystemFaultStateProto,
                       lease_manager: SpotLeaseManager) -> SystemFaultState:
     """Maps system fault data from robot state proto to ROS SystemFaultState message
 
@@ -674,7 +732,7 @@ def SystemFaultsToMsg(system_fault_state: robot_state_pb2.SystemFaultState,
     system_fault_state_msg.historical_faults = getSystemFaults(system_fault_state.historical_faults, lease_manager)
     return system_fault_state_msg
 
-def BehaviorFaultsToMsg(behavior_fault_state: robot_state_pb2.BehaviorFaultState,
+def BehaviorFaultsToMsg(behavior_fault_state: BehaviorFaultStateProto,
                         lease_manager: SpotLeaseManager) -> BehaviorFaultState:
     """Maps behavior fault data from robot state proto to ROS BehaviorFaultState message
 
@@ -688,26 +746,3 @@ def BehaviorFaultsToMsg(behavior_fault_state: robot_state_pb2.BehaviorFaultState
     behavior_fault_state_msg.faults = getBehaviorFaults(behavior_fault_state.faults, lease_manager)
     return behavior_fault_state_msg
 
-def ManipulatorStatesToMsg(manipulator_state: robot_state_pb2.ManipulatorState,
-                           lease_manager: SpotLeaseManager) -> ManipulatorState:
-    """Maps manipulator state data from robot state proto to ROS ManipulatorState message
-
-    Args:
-        manipulator_state: ManipulatorState proto
-        lease_manager: A SpotWrapper object
-    Returns:
-        spot_msgs/ManipulatorState ROS message
-    """
-    if manipulator_state is None:
-        return ManipulatorState()
-    manipulator_state_msg = ManipulatorState()
-    manipulator_state_msg.gripper_open_percentage = manipulator_state.gripper_open_percentage
-    manipulator_state_msg.is_gripper_holding_item = manipulator_state.is_gripper_holding_item
-    manipulator_state_msg.estimated_end_effector_force_in_hand.x = manipulator_state.estimated_end_effector_force_in_hand.x
-    manipulator_state_msg.estimated_end_effector_force_in_hand.y = manipulator_state.estimated_end_effector_force_in_hand.y
-    manipulator_state_msg.estimated_end_effector_force_in_hand.z = manipulator_state.estimated_end_effector_force_in_hand.z
-    manipulator_state_msg.stow_state = manipulator_state.stow_state
-    # manipulator_state_msg.velocity_of_hand_in_vision = manipulator_state.velocity_of_hand_in_vision
-    # manipulator_state_msg.velocity_of_hand_in_odom = manipulator_state.velocity_of_hand_in_odom
-    manipulator_state_msg.carry_state = manipulator_state.carry_state
-    return manipulator_state_msg

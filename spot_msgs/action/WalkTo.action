@@ -1,0 +1,35 @@
+# spot_msgs/action/walk_to
+
+# Request
+geometry_msgs/PoseStamped target_pose
+float64 maximum_movement_time
+
+---
+
+# Response
+bool success
+string message
+
+---
+
+uint8 STATUS_UNKNOWN       = 0
+uint8 STATUS_STOPPED       = 1
+uint8 STATUS_IN_PROGRESS   = 2
+uint8 STATUS_STOPPING      = 3
+
+uint8 BODY_STATUS_UNKNOWN = 0
+uint8 BODY_STATUS_MOVING  = 1
+uint8 BODY_STATUS_SETTLED = 2
+
+uint8 FINAL_GOAL_STATUS_UNKNOWN     = 0
+uint8 FINAL_GOAL_STATUS_IN_PROGRESS = 1
+uint8 FINAL_GOAL_STATUS_ACHIEVABLE  = 2
+uint8 FINAL_GOAL_STATUS_BLOCKED     = 3
+
+# Status
+uint8 status_enum
+string status_string
+uint8 body_status_enum
+string body_status_string
+uint8 final_goal_status_enum
+string final_goal_status_string

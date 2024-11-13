@@ -28,11 +28,10 @@
 from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import image_pb2, header_pb2
+from bosdyn.api import image_pb2, header_pb2, geometry_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
-from bosdyn.api import mobility_command_pb2
 
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
@@ -47,16 +46,19 @@ from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
 
 from .spot_lease_manager import SpotLeaseManager
+from .type_hint_helpers import *
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
-    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
+    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False, publish_images: bool = False, publish_depth_images: bool = False):
         self._logger = logger
         self._hostname = hostname
 
         self._is_connected = False
         self._has_eap_2 = has_eap_2
         self._has_cam_payload = has_cam_payload
+        self._publish_images = publish_images
+        self._publish_depth_images = publish_depth_images
         self._lease_manager = None
 
         self._robot_id = None
@@ -84,8 +86,8 @@ class SpotBodyWrapper():
             rates    : The rates at which to call each of the callbacks
 
         Note:
-            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'status.robot_state'] 
-            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'robot_state']
+            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'sensors.front_depth_image', 'sensors.side_depth_image', 'sensors.rear_depth_image', 'status.robot_state'] 
+            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'front_depth_image', 'side_depth_image', 'rear_depth_image', 'robot_state']
 
         Returns:
             Bool describing whether connection was successful
@@ -103,26 +105,6 @@ class SpotBodyWrapper():
                 return False
 
         self._robot_id = self._lease_manager.ID
-        front_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image', 'frontleft_depth', 'frontright_depth'}
-        side_image_sources = {'left_fisheye_image', 'right_fisheye_image', 'left_depth', 'right_depth'}
-        rear_image_sources = {'back_fisheye_image', 'back_depth'}
-        point_cloud_sources = {'velodyne-point-cloud'}
-
-        front_image_requests = []
-        for source in front_image_sources:
-            front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-        side_image_requests = []
-        for source in side_image_sources:
-            side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-        rear_image_requests = []
-        for source in rear_image_sources:
-            rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-        point_cloud_requests = []
-        for source in point_cloud_sources:
-            point_cloud_requests.append(build_pc_request(source))
 
         # Spot service clients
         try:
@@ -131,6 +113,8 @@ class SpotBodyWrapper():
 
             if self._has_eap_2:
                 self._pointcloud_client = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
+
+
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
@@ -142,14 +126,68 @@ class SpotBodyWrapper():
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
 
-        # Async Tasks
-        self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-        self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-        self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-        sensor_tasks = [self._front_image_task, self._side_image_task, self._rear_image_task]
-        if self._has_eap_2:
+        sensor_tasks = []
+
+        # Request images asynchronously 
+        if self._publish_images:
+            front_visual_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image'}
+            side_visual_image_sources = {'left_fisheye_image', 'right_fisheye_image'}
+            rear_visual_image_sources = {'back_fisheye_image'}
+
+            # Create visual image requests
+            front_image_requests = []
+            side_image_requests = []
+            rear_image_requests = []
+            for source in front_visual_image_sources:
+                front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+            for source in side_visual_image_sources:
+                side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+            for source in rear_visual_image_sources:
+                rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
+
+            # Call async service for visual images
+            self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
+            self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
+            self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
+            sensor_tasks.extend([self._front_image_task, self._side_image_task, self._rear_image_task])
+
+        if self._publish_depth_images:
+            front_depth_image_sources = {'frontleft_depth', 'frontright_depth'}
+            side_depth_image_sources = {'left_depth', 'right_depth'}
+            rear_depth_image_sources = {'back_depth'}
+
+            # Create depth image requests
+            front_depth_image_requests = []
+            side_depth_image_requests = []
+            rear_depth_image_requests = []
+
+            for source in front_depth_image_sources:
+                front_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+            for source in side_depth_image_sources:
+                side_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+            for source in rear_depth_image_sources:
+                rear_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
+
+            # Call async service for depth images
+            self._front_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_depth_image", 1.0), callbacks.get("front_depth_image", lambda:None), front_depth_image_requests)
+            self._side_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_depth_image", 1.0), callbacks.get("side_depth_image", lambda:None), side_depth_image_requests)
+            self._rear_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_depth_image", 1.0), callbacks.get("rear_depth_image", lambda:None), rear_depth_image_requests)
+            sensor_tasks.extend([self._front_depth_image_task, self._side_depth_image_task, self._rear_depth_image_task])
+
+        # Optionally populate pointcloud data asynchronously
+        if self._has_eap_2 and 'point_cloud' in callbacks:
+            # Create point cloud requests
+            point_cloud_requests = []
+            point_cloud_sources = {'velodyne-point-cloud'}
+            for source in point_cloud_sources:
+                point_cloud_requests.append(build_pc_request(source))
             self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
             sensor_tasks.append(self._pointcloud_task)
+
         self._async_sensor_tasks = AsyncTasks(sensor_tasks)
         
         self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
@@ -200,6 +238,21 @@ class SpotBodyWrapper():
     def rear_images(self):
         """Return latest proto from the _rear_image_task"""
         return self._rear_image_task.proto
+
+    @property
+    def front_depth_images(self):
+        """Return latest proto from the _front_depth_image_task"""
+        return self._front_depth_image_task.proto
+
+    @property
+    def side_depth_images(self):
+        """Return latest proto from the _side_depth_image_task"""
+        return self._side_depth_image_task.proto
+
+    @property
+    def rear_depth_images(self):
+        """Return latest proto from the _rear_depth_image_task"""
+        return self._rear_depth_image_task.proto
 
     @property
     def point_clouds(self):
@@ -275,6 +328,15 @@ class SpotBodyWrapper():
         """Stop the robot's motion."""
         response = self._lease_manager.robot_command(RobotCommandBuilder.stop_command())
         return response[0], response[1]
+    
+    def freeze(self) -> Tuple[bool, Text]:
+        """Stop the robot's motion and prevent it from accepting any new commands"""
+        success, message = self._lease_manager.freeze()
+        return success, message
+    
+    def unfreeze(self) -> None:
+        """Allow the robot to accept motion commands"""
+        self._lease_manager.unfreeze()
 
     def self_right(self) -> Tuple[bool, Text]:
         """Have the robot self-right itself."""
@@ -299,10 +361,10 @@ class SpotBodyWrapper():
 
     def dock(self, dock_id) -> Tuple[bool, Text]:
         """Dock the robot to the docking station with fiducial ID [dock_id]."""
+        if self._lease_manager.frozen:
+            return False, "Cannot issue a command to the robot while frozen"
+        
         try:
-            # Make sure we're powered on and standing
-            self._lease_manager.robot.power_on()
-            self.stand()
             # Dock the robot
             self.last_docking_command = dock_id
             blocking_dock_robot(self._lease_manager.robot, dock_id)
@@ -313,17 +375,32 @@ class SpotBodyWrapper():
 
     def undock(self, timeout: float = 20.0) -> Tuple[bool, Text]:
         """Power motors on and undock the robot from the station."""
+        current_dock_state = self.get_docking_state()
+        undocked: bool = current_dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKED
+        undocking: bool = current_dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING
+        if undocked or undocking:
+            return True, 'Already undocked'
+        
+        elif self._lease_manager.frozen:
+            return False, "Cannot issue a command to the robot while frozen"
+        
         try:
-            # Make sure we're powered on
-            self._lease_manager.robot.power_on()
-
             # Undock the robot
             blocking_undock(self._lease_manager.robot, timeout)
         except Exception as e:
             return False, Text(e)
         return True, 'Success'
+    
+    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_duration: float) -> Tuple[bool, Text]:
+        navigate_command = RobotCommandBuilder.synchro_se2_trajectory_command(
+            goal_se2=target_pose_in_odom,
+            frame_name=ODOM_FRAME_NAME
+        )
 
-    def get_docking_state(self, **kwargs) -> docking_pb2.DockState:
+        success, message, command_id = self._lease_manager.robot_command(navigate_command, end_time_secs=time.time() + max_duration)
+        return success, message, command_id
+
+    def get_docking_state(self, **kwargs) -> DockStateProto:
         """Get docking state of robot."""
         state = self._docking_client.get_docking_state(**kwargs)
         return state
@@ -333,7 +410,7 @@ class SpotBodyWrapper():
                             footprint_R_body: EulerZXY = EulerZXY(),
                             locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
-                            external_force_params: robot_command_pb2.BodyExternalForceParams = None) -> None:
+                            external_force_params: BodyExternalParamsProto = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -344,7 +421,7 @@ class SpotBodyWrapper():
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
 
-    def get_mobility_params(self) -> robot_command_pb2.MobilityParams:
+    def get_mobility_params(self) -> MobilityParamsProto:
         """Get mobility params
         """
         return self._mobility_params

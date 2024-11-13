@@ -29,6 +29,11 @@ def generate_launch_description():
         DeclareLaunchArgument('has_realsense',
             description='Boolean. Include an arm mounted Realsense D435',
             choices=['True', 'False'],
+            default_value='False'),
+
+        DeclareLaunchArgument('has_cam_payload',
+            description='Boolean. Include the CAM payload',
+            choices=['True', 'False'],
             default_value='False')
     ]
 
@@ -36,13 +41,14 @@ def generate_launch_description():
     has_eap = LaunchConfiguration('has_eap')
     has_eap_2 = LaunchConfiguration('has_eap_2')
     has_realsense = LaunchConfiguration('has_realsense')
+    has_cam_payload = LaunchConfiguration('has_cam_payload')
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     this_pkg_share = FindPackageShare('spot_description')
     
     # Build the URDF from the xacro, applying specified hardware accessories.
     xacro_path = PathJoinSubstitution([this_pkg_share, 'urdf', 'spot.urdf.xacro'])
     urdf_param = ParameterValue(
-        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap, ' has_eap_2:=',has_eap_2, ' has_realsense:=',has_realsense]),
+        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap, ' has_eap_2:=',has_eap_2, ' has_realsense:=',has_realsense, ' has_cam_payload:=',has_cam_payload]),
         value_type=str)
 
     return launch.LaunchDescription([

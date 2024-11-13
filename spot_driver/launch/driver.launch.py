@@ -24,12 +24,15 @@ def generate_launch_description():
     DeclareLaunchArgument('has_eap',
                           description="Robot includes the Extended Autonomy Package.",
                           default_value="False"),
-    DeclareLaunchArgument('has_eap',
+    DeclareLaunchArgument('has_eap_2',
                           description="Robot includes the Updated Extended Autonomy Package(EAP2).",
                           default_value="False"),
     DeclareLaunchArgument('has_arm',
                           description='Robot includes the Spot Arm',
-                          default_value="True"),
+                          default_value="False"),
+    DeclareLaunchArgument('has_cam_payload',
+                          description='Robot includes the CAM payload',
+                          default_value='False'),
     DeclareLaunchArgument('auto_claim',
                           description='Claim ownership of the robot upon connection.',
                           default_value='False'),
@@ -39,6 +42,15 @@ def generate_launch_description():
     DeclareLaunchArgument('auto_stand',
                           description='Stand the robot upon connection.',
                           default_value='False'),
+    DeclareLaunchArgument('publish_images',
+                          description='Specify whether to publish (colored) images',
+                          default_value='False'),
+    DeclareLaunchArgument('publish_depth_images',
+                          description='Specify whether to publish depth images',
+                          default_value='False'),
+    DeclareLaunchArgument('launch_pointcloud_service',
+                        description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
+                        default_value='False'),
     DeclareLaunchArgument('robot_state_update_rate',
                           description='The update rate of the robot state (including TF) in Hz',
                           default_value='10.0')
@@ -46,7 +58,6 @@ def generate_launch_description():
 
   has_arm = LaunchConfiguration('has_arm')
   has_eap = LaunchConfiguration('has_eap')
-  has_eap_2 = LaunchConfiguration('has_eap_2')
 
   body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
 
@@ -67,7 +78,10 @@ def generate_launch_description():
                              value=has_eap,
                              value_type=bool),
         ParameterDescription(name='has_eap_2',
-                             value=has_eap_2,
+                             value=LaunchConfiguration('has_eap_2'),
+                             value_type=bool),
+        ParameterDescription(name='has_cam_payload',
+                             value=LaunchConfiguration('has_cam_payload'),
                              value_type=bool),
         ParameterDescription(name='auto_claim',
                              value=LaunchConfiguration('auto_claim'),
@@ -78,6 +92,15 @@ def generate_launch_description():
         ParameterDescription(name='auto_stand',
                              value=LaunchConfiguration('auto_stand'),
                              value_type=bool),
+        ParameterDescription(name='publish_images',
+                             value=LaunchConfiguration('publish_images'),
+                             value_type=bool),
+        ParameterDescription(name='publish_depth_images',
+                             value=LaunchConfiguration('publish_depth_images'),
+                             value_type=bool),
+        ParameterDescription(name='launch_pointcloud_service',
+                             value=LaunchConfiguration('launch_pointcloud_service'),
+                             value_type=bool),
         ParameterDescription(name='rates.status.robot_state',
                              value=LaunchConfiguration('robot_state_update_rate'),
                              value_type=float)
@@ -87,17 +110,7 @@ def generate_launch_description():
     )
   ]
 
-  includes = [
-    IncludeLaunchDescription(
-      condition=IfCondition(has_eap),
-      launch_description_source = PythonLaunchDescriptionSource(
-        PathJoinSubstitution([FindPackageShare('velodyne'), 'launch',
-                              'velodyne-all-nodes-VLP16-composed-launch.py'])
-      ))
-  ]
-
   return LaunchDescription([
       *launch_args,
       *nodes,
-      *includes
   ])
