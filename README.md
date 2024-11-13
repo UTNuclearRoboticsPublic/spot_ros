@@ -20,7 +20,7 @@ export SPOT_ACCESSORIES="ARM EAP" # in any order
 To launch the driver for Spot, execute the following command in a terminal:
 
 ```bash
-ros2 launch spot_bringup bringup.launch.py hostname:=192.168.50.3
+ros2 launch spot_bringup bringup.launch.py hostname:=192.168.50.3 controller_configuration:=Dualsense5
 ```
 
 This launch file accepts a number of launch arguments, including those for nested launch files such as the realsense launch file. To see all available options, run
@@ -32,8 +32,33 @@ Some common arguments are summarized here:
 - `publish_images`, possible values: `True`, `False`
 - `publish_depth_images`, possible values: `True`, `False`
 - `launch_pointcloud_service`, possible values: `True`, `False`
+- `controller_configuration`, possible values: `Dualsense5`, `Logitech`
+## Gamepad Mapping for Dualsense5
 
-## Gamepad Mapping
+Refer to the table below for the button mappings to command the robot with a Logitech gamepad. The driver must be launched with the bringup launch file for these to have any effect.
+
+| Command                 | Button(s)              | Notes                                                                             |
+|-------------------------|------------------------|-----------------------------------------------------------------------------------|
+| Hard EStop              | X+O+◻+△+R1+L1          | This will drop the robot unceremoniously. Only use in emergencies                 |
+| Soft EStop              | O                      | The robot will stop whatever it is doing, sit down, and power off                 |
+| Freeze Estop            | X                      | The robot will stop whatever it is doing and refuse any futher commands           |
+| Claim Lease             | Start/Options          | This is required prior to any command which causes the robot to move              |
+| Release Lease           | Select/Share           | The robot will settle before releasing the lease                                  | 
+| Power On                | △                      | ---                                                                               |
+| Power Off               | ---                    | This effect can be achieved by triggering the soft estop                          |
+| Undock                  | Right Stick            | The right stick is pressable as a button - that's what this means                 |
+| Dock                    | Left Stick             | Hard coded to Dock ID 520                                                         |
+| Move Robot              | L1 + Sticks            | Left stick is position, right stick is yaw rotation                               |
+| Adjust Body Pose        | L2 + Sticks            | Left stick is body height, right stick is body orientation                        |
+| Move Arm                | R1 + Sticks            | Left stick moves in the XY plane, right stick moves up and down                   | 
+| Adjust Hand Orientation | R2 + Sticks            | Left stick is pitch and yaw, right stick is roll                                  | 
+| Unstow Arm              | D-Pad Right            | The arm unstows far in front of the robot, just pressing RB does a smaller unstow | 
+| Stow Arm                | D-Pad Left             | This can result in fairly erratic movements if the arm is at an awkward angle     | 
+| Sit Robot               | D-Pad Down             | ---                                                                               | 
+| Stand Robot             | D-Pad Up               | ---                                                                               | 
+| Gripper Toggle          |  ◻                     | Toggle gripper open and close                                                     | 
+
+## Gamepad Mapping for Logitech
 
 Refer to the table below for the button mappings to command the robot with a Logitech gamepad. The driver must be launched with the bringup launch file for these to have any effect.
 
@@ -52,12 +77,11 @@ Refer to the table below for the button mappings to command the robot with a Log
 | Adjust Body Pose        | Left Trigger + Sticks  | Left stick is body height, right stick is body orientation                        |
 | Move Arm                | RB + Sticks            | Left stick moves in the XY plane, right stick moves up and down                   | 
 | Adjust Hand Orientation | Right Trigger + Sticks | Left stick is pitch and yaw, right stick is roll                                  | 
-| Unstow Arm              | D-Pad Up               | The arm unstows far in front of the robot, just pressing RB does a smaller unstow | 
-| Stow Arm                | D-Pad Down             | This can result in fairly erratic movements if the arm is at an awkward angle     | 
-| Sit Robot               | D-Pad Left             | ---                                                                               | 
-| Stand Robot             | D-Pad Right            | ---                                                                               | 
-| Open Gripper            | X                      | When the gripper is closed                                                        | 
-| Close Gripper           | X                      | When the gripper is open                                                          |
+| Unstow Arm              | D-Pad Right            | The arm unstows far in front of the robot, just pressing RB does a smaller unstow | 
+| Stow Arm                | D-Pad Left             | This can result in fairly erratic movements if the arm is at an awkward angle     | 
+| Sit Robot               | D-Pad Down             | ---                                                                               | 
+| Stand Robot             | D-Pad Up               | ---                                                                               | 
+| Gripper Toggle          |  X                     | Toggle gripper open and close                                                     | 
 
 # Running ROS Navigation 
 
