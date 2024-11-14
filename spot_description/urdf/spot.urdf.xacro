@@ -8,6 +8,7 @@
     <xacro:arg name="has_arm" default="False"/>
     <xacro:arg name="has_eap" default="False"/>
     <xacro:arg name="has_eap_2" default="False"/>
+    <xacro:arg name="has_rl_kit" default="False"/>
     <xacro:arg name="has_realsense" default="False"/>
     <xacro:arg name="kinematic_model" default="body_assist"/>
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
@@ -122,6 +123,13 @@
         <origin xyz="-0.223 0 0.0805" rpy="0 0 0" />
         <parent link="body" />
         <child link="rear_rail" />
+    </joint>
+
+    <link name="payload_mount_reference_frame"/>
+    <joint name="payload_mount_reference_frame_joint" type="fixed">
+        <parent link = "base_link"/>
+        <child  link = "payload_mount_reference_frame"/>
+        <origin xyz = "0.2075 0.0 0.0805"/>
     </joint>
 
     <!-- Front Left -->
@@ -665,6 +673,12 @@
             <!-- These values were found by trial and error and may be slightly inaccurate -->
             <origin xyz="0 0.035 0.11" rpy="0 0 -0.95"/>
         </joint>
+    </xacro:if>
+
+    <!-- Spot Reinforcement Learning Research Kit Mount with Nvidia Jetson Orin AGX -->
+    <xacro:if value="$(arg has_rl_kit)">
+        <xacro:include filename="$(find spot_description)/urdf/accessories/rl_kit.xacro"/>
+        <xacro:rl_kit/>
     </xacro:if>
 
     <!-- Optional custom includes. -->

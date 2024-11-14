@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+<robot name="rl_kit_velodyne_mount" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:include filename="$(find velodyne_description)/urdf/VLP-16.urdf.xacro"/>
+
+    <link name="rl_kit_velodyne_mounting_plate">
+        <visual>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/accessories/rl_kit_velodyne_mount.dae"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <box size="0.19 0.18 0.013"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <link name="velodyne_cage">
+        <visual>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/accessories/velodyne_cage.dae"/>
+            </geometry>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder length="0.08" radius="0.08"/>
+            </geometry>
+            <origin xyz="0 0 0.04"/>
+        </collision>
+    </link>
+    <joint name="velodyne_cage_link" type="fixed">
+        <parent link = "rl_kit_velodyne_mounting_plate"/>
+        <child  link = "velodyne_cage"/>
+        <origin xyz = "0 0 ${0.5*0.013}"/>
+    </joint>
+
+    <xacro:VLP-16 parent="rl_kit_velodyne_mounting_plate" name="velodyne">
+        <origin xyz="0 0 0.008" rpy="0 0 0" />
+    </xacro:VLP-16>
+
+    <joint name="rl_kit_velodyne_mount_joint" type="fixed">
+        <parent link = "rl_kit_jetson_housing_box"/>
+        <child  link = "rl_kit_velodyne_mounting_plate"/>
+        <origin xyz="-0.045 0.0 0.056"/>
+    </joint>
+</robot>
