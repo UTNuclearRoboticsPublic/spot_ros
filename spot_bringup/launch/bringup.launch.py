@@ -73,6 +73,9 @@ def generate_launch_description():
         DeclareLaunchArgument('launch_pointcloud_service',
                             description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
                             default_value='False'),
+        DeclareLaunchArgument('launch_velodyne',
+                            description='Launch the velodyne driver regardless of accessory settings',
+                            default_value='True'),
 
         # Other configurations
         DeclareLaunchArgument('manipulation_action_namespace',
@@ -233,10 +236,13 @@ def generate_launch_description():
         # Only launch velodyne if we have the EAP or the EAP2 and we're not using the pointcloud service
         condition=IfCondition(
             OrSubstitution(
-                has_eap,
-                AndSubstitution(
-                    has_eap_2,
-                    NotSubstitution(LaunchConfiguration('launch_pointcloud_service'))
+                LaunchConfiguration('launch_velodyne'),
+                OrSubstitution(
+                    has_eap,
+                    AndSubstitution(
+                        has_eap_2,
+                        NotSubstitution(LaunchConfiguration('launch_pointcloud_service'))
+                    )
                 )
             )
         ),
