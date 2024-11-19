@@ -46,7 +46,7 @@ ament_target_dependencies(${PROJECT_NAME}
   moveit_kinematics
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl)
+ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl moveit_msgs moveit_kinematics)
 
 # Install include files
 install(
