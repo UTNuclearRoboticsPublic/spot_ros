@@ -193,6 +193,11 @@ def generate_launch_description():
             choices=['True', 'False'],
             default_value='False'),
 
+        DeclareLaunchArgument('has_rl_kit',
+            description='Boolean. Include the RL Research Kit mounting set',
+            choices=['True', 'False'],
+            default_value='False'),
+
         DeclareLaunchArgument('has_realsense',
             description='Boolean. Include an arm mounted Realsense D435',
             choices=['True', 'False'],
@@ -210,17 +215,12 @@ def generate_launch_description():
         )
     ]
 
-    has_arm = LaunchConfiguration('has_arm')
-    has_eap = LaunchConfiguration('has_eap')
-    has_eap_2 = LaunchConfiguration('has_eap_2')
-    has_realsense = LaunchConfiguration('has_realsense')
-    has_cam_payload = LaunchConfiguration('has_cam_payload')
+    launch_arg_names = ['has_arm', 'has_eap', 'has_eap_2', 'has_rl_kit', 'has_realsense', 'has_cam_payload']
+    xacro_command_args = [elem for arg_name in launch_arg_names for elem in (f' {arg_name}:=', LaunchConfiguration(arg_name))]
     
     # Build the URDF from the xacro, applying specified hardware accessories.
     xacro_path = PathJoinSubstitution([FindPackageShare('spot_description'), 'urdf', 'spot.urdf.xacro'])
-    urdf_param = ParameterValue(
-        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap, ' has_eap_2:=',has_eap_2, ' has_realsense:=',has_realsense, ' has_cam_payload:=',has_cam_payload]),
-        value_type=str)
+    urdf_param = ParameterValue(Command(['xacro ', xacro_path, *xacro_command_args]), value_type=str)
 
     return launch.LaunchDescription([
         *launch_args,

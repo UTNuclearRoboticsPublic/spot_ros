@@ -27,7 +27,6 @@ add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
   src/walk_to_pose.cpp
-  src/trigger_service.cpp
   src/navigate_to_pose.cpp
   src/check_arm_stowed.cpp
   src/move_hand_to_pose.cpp

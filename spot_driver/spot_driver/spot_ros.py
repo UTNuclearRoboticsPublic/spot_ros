@@ -621,7 +621,7 @@ class SpotROS(Node):
 
     def cmdVelCallback(self, data: Twist) -> None:
         """Callback for cmd_vel command"""
-        self.spot_wrapper.velocity_cmd(data.linear.x, data.linear.y, data.angular.z)
+        self.spot_wrapper.velocity_cmd(data.linear.x, data.linear.y, data.angular.z, cmd_duration=0.2)
 
     def bodyPoseCallback(self, data: Pose) -> None:
         """Callback for cmd_vel command"""
