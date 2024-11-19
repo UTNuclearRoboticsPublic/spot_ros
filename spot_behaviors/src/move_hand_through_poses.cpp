@@ -353,8 +353,8 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
-    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
     // Removed for now while Humble is still the main Distro at NRG
+    // req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
     // req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
     // req->max_cartesian_speed = max_end_effector_velocity_;
 
