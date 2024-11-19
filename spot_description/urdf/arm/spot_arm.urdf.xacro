@@ -10,7 +10,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.dae"/>
         </geometry>
         <material name="arm0.link_sh0">
             <color rgba="0.2 0.2 0.2 1"/>
@@ -66,7 +66,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.dae"/>
         </geometry>
             <material name="arm0.link_hr0">
             <color rgba="0.2 0.2 0.2 1"/>
@@ -94,7 +94,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.dae"/>
         </geometry>
             <material name="arm0.link_el0">
             <color rgba="0.2 0.2 0.2 1"/>
@@ -122,7 +122,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.dae"/>
         </geometry>
             <material name="arm0.link_el1">
             <color rgba="0.2 0.2 0.2 1"/>
@@ -150,7 +150,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.dae"/>
         </geometry>
             <material name="arm0.link_wr0">
             <color rgba="0.2 0.2 0.2 1"/>
@@ -178,7 +178,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.dae"/>
         </geometry>
             <material name="arm0.link_wr1">
             <color rgba="0.2 0.2 0.2 1"/>
@@ -215,7 +215,7 @@
         <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.obj"/>
+            <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.dae"/>
         </geometry>
         <material name="arm0.link_fngr">
             <color rgba="0.2 0.2 0.2 1"/>
