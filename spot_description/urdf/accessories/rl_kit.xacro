@@ -49,5 +49,18 @@
             <child  link = "rl_kit_jetson_housing_box"/>
             <origin xyz = "-0.078 0.0 0.0"/>
         </joint>
+
+        <link name="rl_kit_gxp_interface">
+            <visual>
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/gxp.dae"/>
+                </geometry>
+            </visual>
+        </link>
+        <joint name="rl_kit_gxp_joint" type="fixed">
+            <parent link = "rl_kit_reference_frame"/>
+            <child  link = "rl_kit_gxp_interface"/>
+            <origin xyz = "0.13 0.0 -0.056"/>
+        </joint>
     </xacro:macro>
 </robot>
