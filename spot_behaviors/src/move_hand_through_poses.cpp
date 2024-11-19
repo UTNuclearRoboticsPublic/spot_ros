@@ -16,7 +16,7 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     max_cartesian_planning_time_ = this->declare_parameter<double>("manipulation.max_cartesian_planning_time", 5.0);
     planning_group_              = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.05);
-    max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
+    // max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -354,8 +354,9 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->max_step = 0.01;
     req->avoid_collisions = true;
     req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
-    req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
-    req->max_cartesian_speed = max_end_effector_velocity_;
+    // Removed for now while Humble is still the main Distro at NRG
+    // req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
+    // req->max_cartesian_speed = max_end_effector_velocity_;
 
     path_computation_response_timestamp_ = now();
     path_computation_response_future_ = path_computation_client_->async_send_request(req);
