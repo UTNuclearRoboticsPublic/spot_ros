@@ -138,16 +138,16 @@ spot_nav/controller_server:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.50
-      yaw_goal_tolerance: 1.57
+      yaw_goal_tolerance: 0.1
 
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: True
       min_vel_x: -0.50
-      min_vel_y: -0.50
+      min_vel_y: -0.10
       max_vel_x: 0.50
-      max_vel_y: 0.50
+      max_vel_y: 0.10
       max_vel_theta: 1.0
       min_speed_xy: 0.2 # Testing this out
       max_speed_xy: 0.50
