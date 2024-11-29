@@ -4,7 +4,21 @@
 
     <xacro:arg name="has_realsense" default="False" />
 
-    <link name="${name}_base_link"/>
+    <link name="${name}_base_link">
+        <visual>
+            <geometry>
+                <!-- Add a small scale increase to cover up body mesh imperfections -->
+                <mesh filename="package://spot_description/meshes/arm/arm0.base_link.dae" scale="1.02 1.02 1.02"/>
+            </geometry>
+            <origin xyz="-0.001 0.0002 -0.116" rpy="0 0.03 0"/>
+        </visual>
+        <collision>
+            <geometry>
+                <cylinder radius="0.08" length="0.05"/>
+            </geometry>
+            <origin xyz="-0.02 0 -0.08"/>
+        </collision>
+    </link>
 
     <link name="${name}_shoulder_yaw">
         <visual>
