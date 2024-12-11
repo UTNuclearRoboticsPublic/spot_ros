@@ -44,7 +44,7 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
 
 BT::PortsList MoveHandToPose::providedPorts(){
     return {
-        BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose"),
+        BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose"),
         BT::InputPort<std::string>("target_link"),
         BT::InputPort<std::string>("planning_group")
     };
@@ -60,7 +60,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
     }
 
     // Retrieve the target pose from blackboard
-    BT::Expected<geometry_msgs::msg::PoseStamped> target_pose_expected = getInput<geometry_msgs::msg::PoseStamped>("target_pose");
+    auto target_pose_expected = getInput<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose");
     if (!target_pose_expected.has_value()){
         RCLCPP_ERROR(
             get_logger(), 
@@ -69,7 +69,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
         );
         return BT::NodeStatus::FAILURE;
     }
-    const geometry_msgs::msg::PoseStamped& target_pose = target_pose_expected.value();
+    const geometry_msgs::msg::PoseStamped& target_pose = *target_pose_expected.value();
 
     // Check to see what frame we want to define the pose for
     const std::string target_link = getInput<std::string>("target_link").value_or("arm0_hand");
