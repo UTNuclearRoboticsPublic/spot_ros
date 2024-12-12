@@ -41,6 +41,6 @@
     <joint name="rl_kit_velodyne_mount_joint" type="fixed">
         <parent link = "rl_kit_jetson_housing_box"/>
         <child  link = "rl_kit_velodyne_mounting_plate"/>
-        <origin xyz="-0.045 0.0 0.056"/>
+        <origin xyz="-0.03 0.0 0.06"/>
     </joint>
 </robot>

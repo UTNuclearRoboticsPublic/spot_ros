@@ -11,11 +11,9 @@
         <link name="rl_kit_wire_housing_box">
             <visual>
                 <geometry>
-                    <box size="${2*0.076} ${2*0.103} ${2*0.033}"/>
+                    <mesh filename="package://spot_description/meshes/accessories/rl_kit_wire_housing_box.dae"/>
                 </geometry>
-                <material name="black_color">
-                    <color rgba="0.1 0.1 0.1 1"/>
-                </material>
+                <origin xyz="-0.025 0 -0.03" rpy="0 0 ${pi/2}"/>
             </visual>
             <collision>
                 <geometry>
@@ -30,13 +28,17 @@
         </joint>
 
         <link name="rl_kit_jetson_housing_box">
-            <visual>
+            <visual name="housing">
                 <geometry>
-                    <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
+                    <mesh filename="package://spot_description/meshes/accessories/rl_kit_jetson_housing_box.dae"/>
                 </geometry>
-                <material name="black_color">
-                    <color rgba="0.1 0.1 0.1 1"/>
-                </material>
+                <origin xyz="0.02 0 -0.056"/>
+            </visual>
+            <visual name="jetson">
+                <geometry>
+                    <mesh filename="package://spot_description/meshes/accessories/jetson_orin_dev_kit.dae"/>
+                </geometry>
+                <origin xyz="0 0 -0.056" rpy="0 0 ${pi/2}"/>
             </visual>
             <collision>
                 <geometry>
