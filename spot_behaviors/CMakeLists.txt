@@ -64,4 +64,9 @@ install(
   INCLUDES DESTINATION include
 )
 
+install(
+  DIRECTORY behavior_trees
+  DESTINATION share/${PROJECT_NAME}
+)
+
 ament_package()

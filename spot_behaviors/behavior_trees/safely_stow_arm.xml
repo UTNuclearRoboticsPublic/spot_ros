@@ -1,0 +1,18 @@
+<root BTCPP_format="4">
+    <!-- Use MoveIt to move the arm to a safe configuration prior to stowing -->
+    <!-- Requires: TriggerService - A behavior to trigger ROS2 services of type std_srvs::srv::Trigger -->
+    <!-- Blackboard entries: None -->
+    <BehaviorTree ID = "SafelyStowArm">
+        <Fallback>
+            <CheckArmStowed/>
+            <Sequence>
+                <RetryUntilSuccessful num_attempts="5">
+                    <MoveHandToPose target_pose="x:0.65 ; z:0.37 ; frame_id:body" target_link="arm0_hand" planning_group="arm"/>
+                </RetryUntilSuccessful>
+                <TriggerService service_name="/spot_manipulation_driver/close_gripper"/>
+                <TriggerService service_name="/spot_manipulation_driver/stow_arm"/>
+            </Sequence>
+            <TriggerService service_name="/spot_manipulation_driver/stow_arm"/>
+        </Fallback>
+    </BehaviorTree>
+</root>

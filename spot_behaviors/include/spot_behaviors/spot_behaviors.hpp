@@ -27,6 +27,9 @@
 
 #pragma once
 
+#include <filesystem>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+
 #include <spot_behaviors/check_arm_stowed.hpp>
 #include <spot_behaviors/check_battery.hpp>
 #include <spot_behaviors/check_hand_collision.hpp>
@@ -46,4 +49,7 @@
     factory.registerNodeType<spot_behaviors::MoveHandToPose>("MoveHandToPose", tf_buffer);\
     factory.registerNodeType<spot_behaviors::NavigateToPose>("NavigateToPose", tf_buffer);\
     factory.registerNodeType<spot_behaviors::RecordCurrentLocation>("RecordCurrentLocation", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::WalkToPose>("WalkToPose", tf_buffer);
+    factory.registerNodeType<spot_behaviors::WalkToPose>("WalkToPose", tf_buffer); \
+    \ 
+    factory.registerBehaviorTreeFromFile(std::filesystem::path(ament_index_cpp::get_package_share_directory("spot_behaviors")).append("behavior_trees").append("safely_stow_arm.xml")); \
+    factory.registerBehaviorTreeFromFile(std::filesystem::path(ament_index_cpp::get_package_share_directory("spot_behaviors")).append("behavior_trees").append("move_to.xml"));
