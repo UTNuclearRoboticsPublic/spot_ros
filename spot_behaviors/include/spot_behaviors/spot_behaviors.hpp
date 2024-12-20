@@ -50,6 +50,8 @@
     factory.registerNodeType<spot_behaviors::NavigateToPose>("NavigateToPose", tf_buffer);\
     factory.registerNodeType<spot_behaviors::RecordCurrentLocation>("RecordCurrentLocation", tf_buffer);\
     factory.registerNodeType<spot_behaviors::WalkToPose>("WalkToPose", tf_buffer); \
-    \ 
-    factory.registerBehaviorTreeFromFile(std::filesystem::path(ament_index_cpp::get_package_share_directory("spot_behaviors")).append("behavior_trees").append("safely_stow_arm.xml")); \
-    factory.registerBehaviorTreeFromFile(std::filesystem::path(ament_index_cpp::get_package_share_directory("spot_behaviors")).append("behavior_trees").append("move_to.xml"));
+    { \
+    const std::filesystem::path share_path = ament_index_cpp::get_package_share_directory("spot_behaviors"); \
+    factory.registerBehaviorTreeFromFile(share_path/"behavior_trees"/"safely_stow_arm.xml"); \
+    factory.registerBehaviorTreeFromFile(share_path/"behavior_trees"/"move_to.xml"); \
+    }
