@@ -27,31 +27,68 @@
 
 #pragma once
 
+#include <map>
 #include <filesystem>
+#include <rclcpp/logging.hpp>
+#include <behaviortree_cpp/bt_factory.h>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
-#include <spot_behaviors/check_arm_stowed.hpp>
-#include <spot_behaviors/check_battery.hpp>
-#include <spot_behaviors/check_hand_collision.hpp>
-#include <spot_behaviors/dock_robot.hpp>
-#include <spot_behaviors/move_hand_through_poses.hpp>
-#include <spot_behaviors/move_hand_to_pose.hpp>
-#include <spot_behaviors/navigate_to_pose.hpp>
-#include <spot_behaviors/record_current_location.hpp>
-#include <spot_behaviors/walk_to_pose.hpp>
+#include <nrg_utility_behaviors/trigger_service.hpp>
 
-#define REGISTER_SPOT_BEHAVIORS(factory, tf_buffer) \
-    factory.registerNodeType<spot_behaviors::CheckArmStowed>("CheckArmStowed", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::CheckBattery>("CheckBattery", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::CheckHandCollision>("CheckHandCollision", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::DockRobot>("DockRobot", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::MoveHandThroughPoses>("MoveHandThroughPoses", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::MoveHandToPose>("MoveHandToPose", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::NavigateToPose>("NavigateToPose", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::RecordCurrentLocation>("RecordCurrentLocation", tf_buffer);\
-    factory.registerNodeType<spot_behaviors::WalkToPose>("WalkToPose", tf_buffer); \
-    { \
-    const std::filesystem::path share_path = ament_index_cpp::get_package_share_directory("spot_behaviors"); \
-    factory.registerBehaviorTreeFromFile(share_path/"behavior_trees"/"safely_stow_arm.xml"); \
-    factory.registerBehaviorTreeFromFile(share_path/"behavior_trees"/"move_to.xml"); \
+#include "spot_behaviors/check_arm_stowed.hpp"
+#include "spot_behaviors/check_battery.hpp"
+#include "spot_behaviors/check_hand_collision.hpp"
+#include "spot_behaviors/dock_robot.hpp"
+#include "spot_behaviors/move_hand_through_poses.hpp"
+#include "spot_behaviors/move_hand_to_pose.hpp"
+#include "spot_behaviors/navigate_to_pose.hpp"
+#include "spot_behaviors/record_current_location.hpp"
+#include "spot_behaviors/walk_to_pose.hpp"
+
+namespace spot_behaviors {
+
+void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::SharedPtr tf_buffer) {
+    if (!tf_buffer) {
+        throw std::runtime_error("Cannot register spot behaviors will a null pointer to tf_buffer!");
     }
+
+    // Register all of the behaviors in the package
+    #define REGSITER_SPOT_BEHAVIOR(name) factory.registerNodeType<name>(#name, tf_buffer)
+    REGSITER_SPOT_BEHAVIOR(CheckArmStowed);
+    REGSITER_SPOT_BEHAVIOR(CheckBattery);
+    REGSITER_SPOT_BEHAVIOR(CheckHandCollision);
+    REGSITER_SPOT_BEHAVIOR(DockRobot);
+    REGSITER_SPOT_BEHAVIOR(MoveHandThroughPoses);
+    REGSITER_SPOT_BEHAVIOR(MoveHandToPose);
+    REGSITER_SPOT_BEHAVIOR(NavigateToPose);
+    REGSITER_SPOT_BEHAVIOR(RecordCurrentLocation);
+    REGSITER_SPOT_BEHAVIOR(WalkToPose);
+
+    // A manifest of subtrees and their requirements
+    static const std::map<std::string, std::vector<std::string>> subtree_requirements{
+        {"safely_stow_arm.xml", {"MoveHandToPose", "TriggerService", "CheckArmStowed"}},
+        {"move_to.xml"        , {"NavigateToPose", "WalkToPose"}}
+    };
+
+    // Register all the sub-trees in the package
+    const std::filesystem::path share_path = ament_index_cpp::get_package_share_directory("spot_behaviors");
+    for (const auto& [tree_file, requirements] : subtree_requirements) {
+        // Check to make sure the requirements are satisfied
+        bool has_all_requirements = true;
+        for (const std::string& requirement : requirements) {
+            if (!factory.manifests().contains(requirement)) {
+                has_all_requirements = false;
+                RCLCPP_WARN(
+                    rclcpp::get_logger("registerSpotBehaviors"), 
+                    "Missing requirement \"%s\" for package subtree \"%s\". Subtree not registered", 
+                    requirement.c_str(), tree_file.c_str()
+                );
+            }
+        }
+
+        // We can only register if all requirements are satisfied, otherwise we get a runtime error
+        if (has_all_requirements) factory.registerBehaviorTreeFromFile(share_path/"behavior_trees"/tree_file);
+    }
+}
+
+} // namespace spot_behaviors
