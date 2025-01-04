@@ -1,8 +1,17 @@
+#include <type_traits>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <moveit/kinematic_constraints/utils.h>
 #include "spot_behaviors/move_hand_through_poses.hpp"
 
 namespace spot_behaviors{
+
+// Compiler magic to check if we can include max_end_effectory_velocity, which was added in RO2 Iron
+// Reference: https://stackoverflow.com/questions/1005476/how-to-detect-whether-there-is-a-specific-member-variable-in-class
+template<typename T, typename = int>
+struct has_end_effector_velocity : std::false_type {};
+
+template<typename T>
+struct has_end_effector_velocity<T, decltype((void) T::max_cartesian_speed, 0)> : std::true_type {};
 
 MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
@@ -16,7 +25,10 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     max_cartesian_planning_time_ = this->declare_parameter<double>("manipulation.max_cartesian_planning_time", 5.0);
     planning_group_              = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.05);
-    // max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
+
+    if constexpr (has_end_effector_velocity<moveit_msgs::srv::GetCartesianPath::Request>::value) {
+        max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -353,10 +365,13 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
-    // Removed for now while Humble is still the main Distro at NRG
-    // req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
-    // req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
-    // req->max_cartesian_speed = max_end_effector_velocity_;
+    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
+
+    // Only set these parts if we're in a compatible ROS version
+    if constexpr (has_end_effector_velocity<moveit_msgs::srv::GetCartesianPath::Request>::value) {
+        req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
+        req->max_cartesian_speed = max_end_effector_velocity_;
+    }
 
     path_computation_response_timestamp_ = now();
     path_computation_response_future_ = path_computation_client_->async_send_request(req);
