@@ -7,11 +7,11 @@ namespace spot_behaviors{
 
 // Compiler magic to check if we can include max_end_effectory_velocity, which was added in RO2 Iron
 // Reference: https://stackoverflow.com/questions/1005476/how-to-detect-whether-there-is-a-specific-member-variable-in-class
-template<typename T, typename = int>
+template<typename T, typename = void>
 struct has_end_effector_velocity : std::false_type {};
 
 template<typename T>
-struct has_end_effector_velocity<T, decltype((void) T::max_cartesian_speed, 0)> : std::true_type {};
+struct has_end_effector_velocity<T, std::void_t<decltype(std::declval<T>().max_cartesian_speed)>> : std::true_type {};
 
 MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
@@ -365,10 +365,10 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
-    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
 
     // Only set these parts if we're in a compatible ROS version
     if constexpr (has_end_effector_velocity<moveit_msgs::srv::GetCartesianPath::Request>::value) {
+        req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
         req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
         req->max_cartesian_speed = max_end_effector_velocity_;
     }
