@@ -5,14 +5,6 @@
 
 namespace spot_behaviors{
 
-// Compiler magic to check if we can include max_end_effectory_velocity, which was added in RO2 Iron
-// Reference: https://stackoverflow.com/questions/1005476/how-to-detect-whether-there-is-a-specific-member-variable-in-class
-template<typename T, typename = void>
-struct has_end_effector_velocity : std::false_type {};
-
-template<typename T>
-struct has_end_effector_velocity<T, std::void_t<decltype(std::declval<T>().max_cartesian_speed)>> : std::true_type {};
-
 MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
@@ -25,10 +17,7 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     max_cartesian_planning_time_ = this->declare_parameter<double>("manipulation.max_cartesian_planning_time", 5.0);
     planning_group_              = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.05);
-
-    if constexpr (has_end_effector_velocity<moveit_msgs::srv::GetCartesianPath::Request>::value) {
-        max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
-    }
+    max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -355,6 +344,16 @@ void MoveHandThroughPoses::cancelOngoingMoveGroupRequest() {
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
+template<typename T> requires (!HasNewFeatures<T>)
+void MoveHandThroughPoses::setIronVals(typename T::SharedPtr) {}
+
+template<typename T> requires (HasNewFeatures<T>)
+void MoveHandThroughPoses::setIronVals(typename T::SharedPtr req) {
+    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
+    req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
+    req->max_cartesian_speed = max_end_effector_velocity_;
+}
+
 bool MoveHandThroughPoses::makeNewPathRequest() {
     auto req = std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>();
     auto next_poses = waypoints_.poses | std::views::drop(next_idx_);
@@ -367,12 +366,8 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->avoid_collisions = true;
 
     // Only set these parts if we're in a compatible ROS version
-    if constexpr (has_end_effector_velocity<moveit_msgs::srv::GetCartesianPath::Request>::value) {
-        req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
-        req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
-        req->max_cartesian_speed = max_end_effector_velocity_;
-    }
-
+    setIronVals<moveit_msgs::srv::GetCartesianPath::Request>(req);
+    
     path_computation_response_timestamp_ = now();
     path_computation_response_future_ = path_computation_client_->async_send_request(req);
     RCLCPP_INFO(get_logger(), "Making request to calculate cartesian path through %zd waypoints", req->waypoints.size());
