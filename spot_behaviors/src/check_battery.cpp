@@ -33,23 +33,31 @@ CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration&
     BT::SyncActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
     {
-        battery_sub_ = this->create_subscription<spot_msgs::msg::BatteryStateArray>(
-            "/spot_driver/status/battery_states",
-            rclcpp::ParametersQoS{},
-            std::bind(&CheckBattery::batteryCallback, this, std::placeholders::_1)
-        );
         spin_thread_ = std::thread([this](){rclcpp::spin(this->get_node_base_interface());});
     }
 
 BT::PortsList CheckBattery::providedPorts() {
     return {
-        BT::InputPort<float>("battery_threshold")
+        BT::InputPort<float>("battery_threshold"),
+        BT::InputPort<float>("timeout")
     };
 }
 
 BT::NodeStatus CheckBattery::tick() {
+    // Start up the subscription
+    battery_sub_ = this->create_subscription<spot_msgs::msg::BatteryStateArray>(
+        "/spot_driver/status/battery_states",
+        rclcpp::SensorDataQoS{},
+        std::bind(&CheckBattery::batteryCallback, this, std::placeholders::_1)
+    );
+
     // Wait a little for messages to come through
-    rclcpp::sleep_for(std::chrono::milliseconds(1000));
+    const float timeout_seconds = getInput<float>("timeout").value_or(2.0);
+    std::mutex mtx;
+    {
+        std::unique_lock<std::mutex> lock(mtx);
+        message_condition_.wait_for(lock, std::chrono::duration<float>(timeout_seconds), [this]{return battery_percentage_.has_value();});
+    }
 
     if (!battery_percentage_.has_value()){
         RCLCPP_ERROR(get_logger(), "No messages received on topic %s", battery_sub_->get_topic_name());
@@ -74,6 +82,7 @@ BT::NodeStatus CheckBattery::tick() {
 
 void CheckBattery::batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg){
     battery_percentage_ = msg->battery_states.at(0).charge_percentage;
+    message_condition_.notify_one();
 }
 
 } // namespace spot_behaviors

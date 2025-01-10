@@ -55,6 +55,9 @@ private:
     // A thread to spin the node and look for messages
     std::thread spin_thread_;
 
+    // A condition variable to notify the main thread when a message has been received
+    std::condition_variable message_condition_;
+
     // Record the battery state obtained from the message
     void batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg);
 };
