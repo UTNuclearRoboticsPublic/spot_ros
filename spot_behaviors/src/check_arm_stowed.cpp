@@ -41,12 +41,6 @@ CheckArmStowed::CheckArmStowed(const std::string& name, const BT::NodeConfigurat
         spin_thread_ = std::thread([this](){rclcpp::spin(this->get_node_base_interface());});
     }
 
-BT::PortsList CheckArmStowed::providedPorts() {
-    return {
-        BT::InputPort<float>("battery_threshold")
-    };
-}
-
 BT::NodeStatus CheckArmStowed::tick() {
     // Wait a little for messages to come through
     rclcpp::sleep_for(std::chrono::milliseconds(1000));
