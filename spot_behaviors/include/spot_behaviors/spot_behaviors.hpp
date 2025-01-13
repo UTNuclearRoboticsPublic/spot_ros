@@ -41,7 +41,7 @@
 #include "spot_behaviors/dock_robot.hpp"
 #include "spot_behaviors/move_hand_through_poses.hpp"
 #include "spot_behaviors/move_hand_to_pose.hpp"
-#include "spot_behaviors/navigate_to_pose.hpp"
+// #include "spot_behaviors/navigate_to_pose.hpp" // Scheduled for deletion; moved to nrg_navigation_behaviors
 #include "spot_behaviors/record_current_location.hpp"
 #include "spot_behaviors/walk_to_pose.hpp"
 
@@ -60,7 +60,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(DockRobot);
     REGSITER_SPOT_BEHAVIOR(MoveHandThroughPoses);
     REGSITER_SPOT_BEHAVIOR(MoveHandToPose);
-    REGSITER_SPOT_BEHAVIOR(NavigateToPose);
+    // REGSITER_SPOT_BEHAVIOR(NavigateToPose);
     REGSITER_SPOT_BEHAVIOR(RecordCurrentLocation);
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
 
