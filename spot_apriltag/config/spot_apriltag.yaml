@@ -1,4 +1,4 @@
-# This is an example config for a certain tag. Edit for your specific needs
+# This is an example config for a certain tag. Create a copy of this file and edit it for your specific needs; do not delete this template.
 /**:                 # node name
   ros__parameters:
     # setup (defaults)
