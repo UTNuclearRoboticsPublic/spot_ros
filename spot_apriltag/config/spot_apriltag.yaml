@@ -1,0 +1,26 @@
+# This is an example config for a certain tag. Create a copy of this file and edit it for your specific needs; do not delete this template.
+/**:                 # node name
+  ros__parameters:
+    # setup (defaults)
+    image_transport: raw  # image format: "raw" or "compressed"
+    family: 'Standard52h13'         # tag family name: 16h5, 25h9, 36h11
+    size: 0.057             # default tag edge size in meter
+    # profile: false        # print profiling information to stdout
+    z_up: false
+
+    # tuning of detection (defaults)
+    max_hamming: 2        # maximum allowed hamming distance (corrected bits)
+    detector:
+      threads: 1          # number of threads
+      decimate: 2.0       # decimate resolution for quad detection
+      blur: 0.0           # sigma of Gaussian blur for quad detection
+      # refine: 1           # snap to strong gradients
+      sharpening: 0.25    # sharpening of decoded images
+      # debug: 0            # write additional debugging images to current working directory
+
+    # (optional) list of tags
+    # If defined, 'frames' and 'sizes' must have the same length as 'ids'.
+    tag:
+      ids:    [7]         # tag IDs for which to publish transform
+      frames: [affordance_frame]   # frame names
+      sizes:  [0.057]     # tag-specific edge size, overrides the default 'size'
