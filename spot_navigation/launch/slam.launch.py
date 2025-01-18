@@ -30,6 +30,12 @@ def generate_launch_description():
         *launch_args,
 
         Node(
+            package="spot_navigation",
+            executable="publish_dock_for_slam.py",
+            name="slam_dock_frame_publisher"
+        ),
+
+        Node(
             package="pointcloud_to_laserscan",
             executable="pointcloud_to_laserscan_node",
             name="pointcloud_to_laserscan_node",

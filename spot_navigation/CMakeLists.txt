@@ -17,6 +17,11 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(
+  PROGRAMS scripts/publish_dock_for_slam.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ################################################################################
 # Macro for ament package
 ################################################################################
