@@ -70,7 +70,8 @@ def generate_launch_description():
                     'use_sim_time': use_sim_time
                }],
                remappings=[
-                   ('joint_states', '/spot_driver/joint_states')
+                   ('joint_states', '/spot_driver/joint_states'),
+                   ('robot_description', '/spot_driver/robot_description')
                ]
             )
     ])

@@ -7,7 +7,7 @@
     <BehaviorTree ID = "MoveTo">
         <RetryUntilSuccessful num_attempts="2">
             <Sequence>
-                <NavigateToPose target_pose="{target_pose}"/>
+                <NavigateToPose target_pose="{target_pose}" robot_nav_namespace="spot_nav"/>
                 <RetryUntilSuccessful num_attempts="2">
                     <WalkToPose target_pose="{target_pose}"/>
                 </RetryUntilSuccessful>

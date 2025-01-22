@@ -56,7 +56,8 @@ def generate_launch_description():
         executable='map_server',
         name='map_server',
         parameters=[
-            {'yaml_filename': LaunchConfiguration('map')}
+            {'yaml_filename': LaunchConfiguration('map')},
+            {'frame_id': 'spot_nav/map'}
         ]
     )
 
