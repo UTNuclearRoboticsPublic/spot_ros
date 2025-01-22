@@ -37,13 +37,19 @@ def generate_launch_description():
         DeclareLaunchArgument('has_cam_payload',
             description='Boolean. Include the CAM payload',
             choices=['True', 'False'],
-            default_value='False')
+            default_value='False'),
+
+        DeclareLaunchArgument('kinematic_model',
+            description='The kinematic model to use for the Spot description',
+            choices=['none', 'body_assist', 'mobile_manipulation'],
+            default_value='none'
+        )
     ]
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     
     # Build the URDF from the xacro, applying specified hardware accessories.
-    launch_arg_names = ['has_arm', 'has_eap', 'has_eap_2', 'has_rl_kit', 'has_realsense', 'has_cam_payload']
+    launch_arg_names = ['has_arm', 'has_eap', 'has_eap_2', 'has_rl_kit', 'has_realsense', 'has_cam_payload', 'kinematic_model']
     xacro_command_args = [elem for arg_name in launch_arg_names for elem in (f' {arg_name}:=', LaunchConfiguration(arg_name))]
     xacro_path = PathJoinSubstitution([FindPackageShare('spot_description'), 'urdf', 'spot.urdf.xacro'])
     urdf_param = ParameterValue(Command(['xacro ', xacro_path, *xacro_command_args]), value_type=str)
