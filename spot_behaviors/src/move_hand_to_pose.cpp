@@ -84,7 +84,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
         kinematic_constraints::constructGoalConstraints(target_link, target_pose)
     );
     move_group_goal.request.group_name = getInput<std::string>("planning_group").value_or("arm");
-    move_group_goal.request.workspace_parameters.header.frame_id = "base_link";
+    move_group_goal.request.workspace_parameters.header.frame_id = target_pose.header.frame_id;
     move_group_goal.request.workspace_parameters.header.stamp = now();
     move_group_goal.request.workspace_parameters.min_corner.x = -1e9;
     move_group_goal.request.workspace_parameters.min_corner.y = -1e9;
