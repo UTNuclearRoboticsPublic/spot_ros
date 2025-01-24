@@ -223,7 +223,6 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
         case action_msgs::msg::GoalStatus::STATUS_ABORTED:
         case action_msgs::msg::GoalStatus::STATUS_CANCELED:
             RCLCPP_WARN(get_logger(), "TrajectoryExecution action failed");
-            abortPoseIncrement();
             traj_execution_goal_handle_.reset();
             return next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
             
