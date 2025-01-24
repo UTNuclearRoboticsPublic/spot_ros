@@ -45,14 +45,12 @@ public:
         std::string snake_str;
         auto isUpper = [](char c) {return c >= 'A' && c <= 'Z';};
         
-        bool front = true;
         for (const char& c : str) {
             const char& c_next = *std::next(&c); 
-            if (isUpper(c) && !isUpper(c_next) && (!front)) {
+            snake_str.push_back(std::tolower((unsigned char)(c)));
+            if (!isUpper(c) && isUpper(c_next)) {
                 snake_str.push_back('_');
             }
-            snake_str.push_back(std::tolower((unsigned char)(c)));
-            front = false;
         }
 
         return snake_str;
