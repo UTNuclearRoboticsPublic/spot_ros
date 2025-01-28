@@ -6,7 +6,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Grou
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import SetParameter
+from launch_ros.actions import PushRosNamespace
 
 def generate_launch_description():
 
@@ -33,6 +33,8 @@ def generate_launch_description():
                             default_value='no_value'),
         DeclareLaunchArgument('velodyne_ip',
                             default_value='192.168.1.201'),
+        DeclareLaunchArgument('spot_namespace',
+                            default_value=''),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -248,11 +250,12 @@ def generate_launch_description():
         ),
         # Run velodyne nodes manually so we have access to parameter reassignment
         actions=[
+            PushRosNamespace(LaunchConfiguration('spot_namespace')),
             Node(package='velodyne_driver',
                 executable='velodyne_driver_node',
                 output='both',
                 parameters=[
-                    PathJoinSubstitution([FindPackageShare('velodyne_driver'), 'config', 'VLP16-velodyne_driver_node-params.yaml']),
+                    PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                     {'device_ip': LaunchConfiguration('velodyne_ip')}
                 ]
             ),
@@ -261,7 +264,7 @@ def generate_launch_description():
                 executable='velodyne_transform_node',
                 output='both',
                 parameters=[
-                    PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'config', 'VLP16-velodyne_transform_node-params.yaml']),
+                    PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                     {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
                 ]
             )
