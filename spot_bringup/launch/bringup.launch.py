@@ -86,7 +86,10 @@ def generate_launch_description():
         DeclareLaunchArgument('controller_configuration',
                             description='Name of the controller configuration to use for teleoperation',
                             choices=['Logitech', 'Dualsense5'],
-                            default_value='Dualsense5')
+                            default_value='Dualsense5'),
+        DeclareLaunchArgument('data_capture_mode',
+                            description='Whether to published received joint trajectories on corresponding action server goal topics',
+                            default_value='False'),
     ]
 
     has_arm         = LaunchConfiguration('has_arm')
@@ -148,6 +151,7 @@ def generate_launch_description():
             'publish_depth_images': publish_depth_images,
             'launch_pointcloud_service': launch_pointcloud_service,
             'action_namespace': LaunchConfiguration('manipulation_action_namespace'),
+            'data_capture_mode': LaunchConfiguration('data_capture_mode'),
             },
             body_params,
             arm_params
