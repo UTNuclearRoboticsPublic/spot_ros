@@ -13,7 +13,7 @@ def main():
     tf_listener = TransformListener(tf_buffer, node)
     tf_broadcaster = StaticTransformBroadcaster(node)
 
-    dock_frame = 'vision'
+    dock_frame = 'base_footprint'
     odom_frame = 'odom'
 
     def publish_transform():
