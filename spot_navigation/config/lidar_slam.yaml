@@ -11,7 +11,7 @@ slam_toolbox:
 
     # ROS Parameters
     odom_frame: dock
-    map_frame: map
+    map_frame: spot_nav/map
     base_frame: base_footprint
     scan_topic: /spot/pointcloud_scan
     mode: mapping #localization

@@ -6,7 +6,7 @@ from launch.actions import IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import Node
+from launch_ros.actions import Node, SetRemap
 
 def generate_launch_description():
 
@@ -28,6 +28,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         *launch_args,
+
+        SetRemap(src="/map", dst="/spot_nav/map"),
 
         Node(
             package="spot_navigation",
