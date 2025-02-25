@@ -208,10 +208,10 @@ def generate_launch_description():
             {'enable_button': 4},
             {'axis_linear.x': 1},
             {'axis_linear.y': 0},
-            {'scale_linear.x': 0.5},
+            {'scale_linear.x': 0.85},
             {'scale_linear.y': 0.5},
             {'axis_angular.yaw': 2},
-            {'scale_angular.yaw': 0.5}
+            {'scale_angular.yaw': 1.0}
         ],
         remappings=[
             ('cmd_vel', '/spot_driver/cmd_vel')
