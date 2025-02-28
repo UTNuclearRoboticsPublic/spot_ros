@@ -35,7 +35,7 @@ This repository houses the collection of packages required to run the Spot robot
    Depending on your desired communication configuration, you may want to set a DDS middleware configuration like `cyclonedds`. To do this, create your configuration file and set the required environment variables to your `~/.bashrc`.
 
 
-### Driver Launch Commmands
+### Driver Launch Commands
 To launch the driver for Spot, execute the following command in a terminal:
 
 ```bash
