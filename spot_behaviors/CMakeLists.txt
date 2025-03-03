@@ -18,6 +18,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(tf2_kdl REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(eigen_stl_containers REQUIRED)
 
 include_directories(
   include
@@ -44,9 +45,10 @@ ament_target_dependencies(${PROJECT_NAME}
   behaviortree_cpp
   tf2_geometry_msgs
   moveit_kinematics
+  eigen_stl_containers
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl moveit_msgs moveit_kinematics)
+ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl moveit_msgs moveit_kinematics )
 
 # Install include files
 install(
