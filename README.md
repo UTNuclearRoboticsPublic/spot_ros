@@ -3,20 +3,39 @@ This repository houses the collection of packages required to run the Spot robot
 
 # Launching the Spot Driver
 
-Spot can have many different attachments and accesories, and this configuration is managed with environment variables. Set the environment variable `SPOT_ACCESSORIES` to a string of space-separated identifiers for each accessory. Currently supported accessories are:
+### Set Environment Variables
+1. **Set Robot Configuration State**
+   
+    Spot can have many different attachments and accesories, and this configuration is managed with environment variables. Set the environment variable `SPOT_ACCESSORIES` to a string of space-separated identifiers for each accessory. Currently supported accessories are:
+    
+    | Accessory                         | Identifier  |
+    |-----------------------------------|-------------|
+    | Spot Arm                          | `ARM`       |
+    | Extended Autonomy Package         | `EAP`       |
+    | Updated Extended Autonomy Package | `EAP2`      |
+    | Wrist Mounted Realsense Camera    | `REALSENSE` |
+    
+    For example, using the Spot at NRG, you would add the following to your `~/.bashrc`
+    ```bash
+    export SPOT_ACCESSORIES="ARM EAP" # in any order
+    ```
 
-| Accessory                         | Identifier  |
-|-----------------------------------|-------------|
-| Spot Arm                          | `ARM`       |
-| Extended Autonomy Package         | `EAP`       |
-| Updated Extended Autonomy Package | `EAP2`      |
-| Wrist Mounted Realsense Camera    | `REALSENSE` |
+2. **Set Login Credentials**
+   
+    Add your Boston Dynamics login credentials to your `~/.bashrc` as environment variables.
+    > NRG Users can find these credentials on [Stache](https://stache.utexas.edu/)
+    
+    ```bash
+    export BOSDYN_CLIENT_USERNAME=
+    export BOSDYN_CLIENT_PASSWORD=
+    ```
 
-For example, using the Spot at NRG, you would add the following to your `~/.bashrc`
-```bash
-export SPOT_ACCESSORIES="ARM EAP" # in any order
-```
+3. **Set & Configure DDS Middleware**
 
+   Depending on your desired communication configuration, you may want to set a DDS middleware configuration like `cyclonedds`. To do this, create your configuration file and set the required environment variables to your `~/.bashrc`.
+
+
+### Driver Launch Commands
 To launch the driver for Spot, execute the following command in a terminal:
 
 ```bash

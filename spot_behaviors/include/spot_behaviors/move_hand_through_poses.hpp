@@ -40,6 +40,14 @@
 
 namespace spot_behaviors{
 
+// Fix issue where some requests member are only available in newer versions of moveit
+template<typename T> 
+concept HasNewFeatures = requires {
+    T::max_velocity_scaling_factor;
+    T::max_cartesian_speed;
+    T::cartesian_speed_limited_link;
+};
+
 class MoveHandThroughPoses : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
     MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
@@ -127,6 +135,13 @@ protected:
     bool makeNewPathRequest();
     bool makeNewTrajectoryExecutionRequest(moveit_msgs::srv::GetCartesianPath::Response::SharedPtr path);
     bool makeNewMoveGroupRequest();
+
+    // Fix issue where some request members are only available in newer versions of moveit
+    template<typename T> requires (!HasNewFeatures<T>)
+    void setIronVals(typename T::SharedPtr req);
+
+    template<typename T> requires (HasNewFeatures<T>)
+    void setIronVals(typename T::SharedPtr req);
 
     // Functions for managing the current pose index
     void incrementPoseIndex(std::ptrdiff_t offset);

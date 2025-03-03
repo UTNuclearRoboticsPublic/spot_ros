@@ -3,7 +3,7 @@ octomap_server_node:
     base_frame_id: "gpe"
     filter_ground_plane: false
     filter_speckles: true
-    frame_id: "map"
+    frame_id: "spot_nav/map"
     ground_filter:
       angle: 7.5
       distance: 0.05

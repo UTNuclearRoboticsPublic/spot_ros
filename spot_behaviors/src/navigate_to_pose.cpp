@@ -38,7 +38,7 @@ NavigateToPose::NavigateToPose(const std::string& name, const BT::NodeConfig& co
 
 BT::PortsList NavigateToPose::providedPorts() {
     return {
-        BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose")
+        BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose")
     };
 }
 
@@ -49,8 +49,8 @@ BT::NodeStatus NavigateToPose::onStart() {
         return BT::NodeStatus::FAILURE;
     }
 
-    BT::Expected<geometry_msgs::msg::PoseStamped> target_pose_expected = getInput<geometry_msgs::msg::PoseStamped>("target_pose");
-    if (!target_pose_expected.has_value()){
+    auto target_pose_expected = getInput<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose");
+    if (!target_pose_expected.has_value() || !target_pose_expected.value()){
         RCLCPP_ERROR(get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
         RCLCPP_ERROR(get_logger(), "Error message: %s", target_pose_expected.error().c_str());
         return BT::NodeStatus::FAILURE;
@@ -58,8 +58,7 @@ BT::NodeStatus NavigateToPose::onStart() {
 
     // Generate the action request
     nav2_msgs::action::NavigateToPose::Goal navigation_goal;
-    navigation_goal.behavior_tree = ""; // To be tested, I want to see if this just uses the default
-    navigation_goal.pose = target_pose_expected.value();
+    navigation_goal.pose = *target_pose_expected.value();
 
     goal_handle_future_ = navigation_action_client_->async_send_goal(navigation_goal);
     request_time_point_ = now();

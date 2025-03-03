@@ -10,7 +10,7 @@
     <xacro:arg name="has_eap_2" default="False"/>
     <xacro:arg name="has_rl_kit" default="False"/>
     <xacro:arg name="has_realsense" default="False"/>
-    <xacro:arg name="kinematic_model" default="body_assist"/>
+    <xacro:arg name="kinematic_model" default="none"/>
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
 
     <link name="base_footprint"/>
@@ -84,6 +84,14 @@
             <origin xyz="0 0 0.52"/>
         </joint>
         <!-- EOF Virtual Base Movement Links-->
+    </xacro:if>
+
+    <xacro:if value="${kinematic_model == 'none'}">
+        <joint name="ground_to_body" type="fixed">
+            <parent link = "base_footprint"/>
+            <child  link = "body"/>
+            <origin xyz="0 0 0.52"/>
+        </joint>
     </xacro:if>
 
     <!-- Fixed links -->

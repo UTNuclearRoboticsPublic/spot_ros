@@ -1,0 +1,17 @@
+<root BTCPP_format="4">
+    <!-- Move the robot to any pose in it's environment uing a combination of long horizon navigation and BD precision movement -->
+    <!-- Requires: NavigateToPose - A behavior to trigger autonomous navigation to a given pose. ROS2 Nav2 is one such framework -->
+    
+    <!-- Blackboard entries: -->
+    <!-- target_pose (input) : geometry_msgs::PoseStamped::SharedPtr -->
+    <BehaviorTree ID = "MoveTo">
+        <RetryUntilSuccessful num_attempts="2">
+            <Sequence>
+                <NavigateToPose target_pose="{target_pose}" robot_nav_namespace="spot_nav"/>
+                <RetryUntilSuccessful num_attempts="2">
+                    <WalkToPose target_pose="{target_pose}"/>
+                </RetryUntilSuccessful>
+            </Sequence>
+        </RetryUntilSuccessful>
+    </BehaviorTree>
+</root>

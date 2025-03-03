@@ -13,6 +13,7 @@ find_package(rclcpp REQUIRED)
 find_package(spot_msgs REQUIRED)
 find_package(behaviortree_cpp REQUIRED)
 find_package(moveit_msgs REQUIRED)
+find_package(moveit_core REQUIRED)
 find_package(moveit_kinematics REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(tf2_kdl REQUIRED)
@@ -32,7 +33,6 @@ add_library(${PROJECT_NAME} SHARED
   src/check_arm_stowed.cpp
   src/move_hand_to_pose.cpp
   src/check_hand_collision.cpp
-  src/record_current_location.cpp
   src/move_hand_through_poses.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
@@ -64,6 +64,11 @@ install(
   ARCHIVE DESTINATION lib
   RUNTIME DESTINATION bin
   INCLUDES DESTINATION include
+)
+
+install(
+  DIRECTORY behavior_trees
+  DESTINATION share/${PROJECT_NAME}
 )
 
 ament_package()

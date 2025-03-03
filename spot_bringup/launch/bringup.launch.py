@@ -6,7 +6,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Grou
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import SetParameter
+from launch_ros.actions import PushRosNamespace
 
 def generate_launch_description():
 
@@ -33,6 +33,8 @@ def generate_launch_description():
                             default_value='no_value'),
         DeclareLaunchArgument('velodyne_ip',
                             default_value='192.168.1.201'),
+        DeclareLaunchArgument('spot_namespace',
+                            default_value=''),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -84,7 +86,10 @@ def generate_launch_description():
         DeclareLaunchArgument('controller_configuration',
                             description='Name of the controller configuration to use for teleoperation',
                             choices=['Logitech', 'Dualsense5'],
-                            default_value='Dualsense5')
+                            default_value='Dualsense5'),
+        DeclareLaunchArgument('data_capture_mode',
+                            description='Whether to published received joint trajectories on corresponding action server goal topics',
+                            default_value='False'),
     ]
 
     has_arm         = LaunchConfiguration('has_arm')
@@ -146,6 +151,7 @@ def generate_launch_description():
             'publish_depth_images': publish_depth_images,
             'launch_pointcloud_service': launch_pointcloud_service,
             'action_namespace': LaunchConfiguration('manipulation_action_namespace'),
+            'data_capture_mode': LaunchConfiguration('data_capture_mode'),
             },
             body_params,
             arm_params
@@ -202,10 +208,10 @@ def generate_launch_description():
             {'enable_button': 4},
             {'axis_linear.x': 1},
             {'axis_linear.y': 0},
-            {'scale_linear.x': 0.5},
+            {'scale_linear.x': 0.85},
             {'scale_linear.y': 0.5},
             {'axis_angular.yaw': 2},
-            {'scale_angular.yaw': 0.5}
+            {'scale_angular.yaw': 1.0}
         ],
         remappings=[
             ('cmd_vel', '/spot_driver/cmd_vel')
@@ -248,11 +254,12 @@ def generate_launch_description():
         ),
         # Run velodyne nodes manually so we have access to parameter reassignment
         actions=[
+            PushRosNamespace(LaunchConfiguration('spot_namespace')),
             Node(package='velodyne_driver',
                 executable='velodyne_driver_node',
                 output='both',
                 parameters=[
-                    PathJoinSubstitution([FindPackageShare('velodyne_driver'), 'config', 'VLP16-velodyne_driver_node-params.yaml']),
+                    PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                     {'device_ip': LaunchConfiguration('velodyne_ip')}
                 ]
             ),
@@ -261,7 +268,7 @@ def generate_launch_description():
                 executable='velodyne_transform_node',
                 output='both',
                 parameters=[
-                    PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'config', 'VLP16-velodyne_transform_node-params.yaml']),
+                    PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                     {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
                 ]
             )

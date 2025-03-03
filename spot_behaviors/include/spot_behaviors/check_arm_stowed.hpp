@@ -40,7 +40,7 @@ class CheckArmStowed : public BT::SyncActionNode, public NodeBehaviorBase {
 public:
     CheckArmStowed(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
-    static BT::PortsList providedPorts();
+    static inline BT::PortsList providedPorts() { return {}; };
 
     // Returns SUCCESS if the arm is stowed, FAILURE otherwise
     BT::NodeStatus tick() override;

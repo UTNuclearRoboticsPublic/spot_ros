@@ -41,7 +41,7 @@ WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config, tf
 
 BT::PortsList WalkToPose::providedPorts() {
     return {
-        BT::InputPort<geometry_msgs::msg::PoseStamped>("target_pose")
+        BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose")
     };
 }
 
@@ -52,15 +52,15 @@ BT::NodeStatus WalkToPose::onStart() {
         return BT::NodeStatus::FAILURE;
     }
 
-    BT::Expected<geometry_msgs::msg::PoseStamped> target_pose_expected = getInput<geometry_msgs::msg::PoseStamped>("target_pose");
-    if (!target_pose_expected.has_value()){
+    auto target_pose_expected = getInput<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose");
+    if (!target_pose_expected.has_value() || !target_pose_expected.value()){
         RCLCPP_ERROR(get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
         RCLCPP_ERROR(get_logger(), "Error message: %s", target_pose_expected.error().c_str());
         return BT::NodeStatus::FAILURE;
     }
 
     // Record the target for goal checking later
-    target_pose_ = target_pose_expected.value();
+    target_pose_ = *target_pose_expected.value();
 
     // Generate the action request
     spot_msgs::action::WalkTo::Goal navigation_goal;
