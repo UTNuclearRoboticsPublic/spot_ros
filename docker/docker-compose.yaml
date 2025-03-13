@@ -1,0 +1,33 @@
+services:
+  spot_bringup:
+    container_name: spot_bringup
+    image: nrg/spot_bringup:${TARGET_ROS_DISTRO}
+    build:
+      platforms:
+        # - linux/arm64
+        - linux/amd64
+      args:
+        SPOT_VERSION: $SPOT_VERSION
+        ROS_DISTRO: $TARGET_ROS_DISTRO
+      ssh:
+        - default
+      target: bringup
+    environment:
+      # Enable colored output on ros2 launch
+      - RCUTILS_COLORIZED_OUTPUT=1
+      # Spot configuration
+      - BOSDYN_CLIENT_USERNAME
+      - BOSDYN_CLIENT_PASSWORD
+      - SPOT_URDF_EXTRAS
+      - SPOT_ACCESSORIES
+    # Enable host compatibiltiy for as much as possible to make usage seamless
+    network_mode: host
+    ipc: host
+    pid: host
+    stdin_open: true
+    tty: true
+
+  spot_bringup_teleop:
+    extends: spot_bringup
+    devices:
+      - /dev/input/js0
