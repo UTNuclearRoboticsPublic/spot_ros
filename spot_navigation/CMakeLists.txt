@@ -18,7 +18,7 @@ install(
 )
 
 install(
-  PROGRAMS scripts/publish_dock_for_slam.py
+  PROGRAMS scripts/publish_initial_pose_for_slam.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

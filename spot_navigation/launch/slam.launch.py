@@ -33,8 +33,8 @@ def generate_launch_description():
 
         Node(
             package="spot_navigation",
-            executable="publish_dock_for_slam.py",
-            name="slam_dock_frame_publisher"
+            executable="publish_initial_pose_for_slam.py",
+            name="slam_initial_poses_publisher"
         ),
 
         Node(
