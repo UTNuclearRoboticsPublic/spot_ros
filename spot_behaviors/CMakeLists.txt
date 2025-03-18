@@ -15,7 +15,6 @@ find_package(behaviortree_cpp REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(moveit_core REQUIRED)
 find_package(moveit_kinematics REQUIRED)
-find_package(nav2_msgs REQUIRED)
 find_package(tf2_kdl REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -29,7 +28,6 @@ add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
   src/walk_to_pose.cpp
-  src/navigate_to_pose.cpp
   src/check_arm_stowed.cpp
   src/move_hand_to_pose.cpp
   src/check_hand_collision.cpp
@@ -40,7 +38,6 @@ ament_target_dependencies(${PROJECT_NAME}
   tf2_kdl
   tf2_eigen
   spot_msgs
-  nav2_msgs
   moveit_msgs
   behaviortree_cpp
   tf2_geometry_msgs
@@ -48,7 +45,7 @@ ament_target_dependencies(${PROJECT_NAME}
   eigen_stl_containers
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_export_dependencies(spot_msgs behaviortree_cpp nav2_msgs tf2_kdl moveit_msgs moveit_kinematics )
+ament_export_dependencies(spot_msgs behaviortree_cpp tf2_kdl moveit_msgs moveit_kinematics )
 
 # Install include files
 install(
