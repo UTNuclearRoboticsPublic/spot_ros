@@ -5,6 +5,15 @@
 
 namespace spot_behaviors{
 
+template<typename T> requires (!HasNewFeatures<T>) 
+void printWarningOnHumble() {
+    RCLCPP_WARN(rclcpp::get_logger("MoveHandThroughPoses"), "The parameters 'max_velocity_scaling_factor', 'cartesian_speed_limited_link' and 'max_cartesian_speed' were added in MoveIt for ROS2 Iron, and so are not going to be respected!");
+}
+
+template<typename T> requires(HasNewFeatures<T>)
+void printWarningOnHumble() {}
+
+
 MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
@@ -18,6 +27,8 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     planning_group_              = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.05);
     max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
+
+    printWarningOnHumble<moveit_msgs::srv::GetCartesianPath::Request>();
 }
 
 // ------------------------------------------------------------------------------------------------
