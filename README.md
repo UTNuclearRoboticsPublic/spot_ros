@@ -13,14 +13,22 @@ This repository houses the collection of packages required to run the Spot robot
     | Spot Arm                          | `ARM`       |
     | Extended Autonomy Package         | `EAP`       |
     | Updated Extended Autonomy Package | `EAP2`      |
+    | Reinforcement Learning Kit        | `RL_KIT`    |
     | Wrist Mounted Realsense Camera    | `REALSENSE` |
     
     For example, using the Spot at NRG, you would add the following to your `~/.bashrc`
     ```bash
-    export SPOT_ACCESSORIES="ARM EAP" # in any order
+    export SPOT_ACCESSORIES="ARM RL_KIT" # in any order
     ```
 
-2. **Set Login Credentials**
+    Additional components can be attached to spot via the `SPOT_URDF_EXTRAS` environment variable. This is a full path to a xacro file which is imported into the robot xacro, and so it must attach to a known link on the robot.
+    At NRG, this would be set as
+
+   ```bash
+   export SPOT_URDF_EXTRAS=$(ros2 pkg prefix --share spot_description)/urdf/accessories/rl_kit_velodyne_mount.xacro
+   ```
+
+3. **Set Login Credentials**
    
     Add your Boston Dynamics login credentials to your `~/.bashrc` as environment variables.
     > NRG Users can find these credentials on [Stache](https://stache.utexas.edu/)
@@ -30,7 +38,7 @@ This repository houses the collection of packages required to run the Spot robot
     export BOSDYN_CLIENT_PASSWORD=
     ```
 
-3. **Set & Configure DDS Middleware**
+4. **Set & Configure DDS Middleware**
 
    Depending on your desired communication configuration, you may want to set a DDS middleware configuration like `cyclonedds`. To do this, create your configuration file and set the required environment variables to your `~/.bashrc`.
 
@@ -71,7 +79,7 @@ Refer to the table below for the button mappings to command the robot with a Log
 | Adjust Body Pose        | L2 + Sticks            | Left stick is body height, right stick is body orientation                        |
 | Move Arm                | R1 + Sticks            | Left stick moves in the XY plane, right stick moves up and down                   | 
 | Adjust Hand Orientation | R2 + Sticks            | Left stick is pitch and yaw, right stick is roll                                  | 
-| Unstow Arm              | D-Pad Right            | The arm unstows far in front of the robot, just pressing RB does a smaller unstow | 
+| Unstow Arm              | D-Pad Right            | The arm unstows far in front of the robot, just pressing R2 does a smaller unstow | 
 | Stow Arm                | D-Pad Left             | This can result in fairly erratic movements if the arm is at an awkward angle     | 
 | Sit Robot               | D-Pad Down             | ---                                                                               | 
 | Stand Robot             | D-Pad Up               | ---                                                                               | 
@@ -122,10 +130,8 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `CheckArmStowed` | --- | --- | Returns `SUCCESS` if the arm is stowed and `FAILURE` otherwise | 
 | `CheckBattery` | `battery_threshold` | --- | Returns `SUCCESS` if the battery percentage is above the mandatory `battery_threshold` input port, and `FAILURE` otherwise |
 | `DockRobot` | `dock_id` | --- | Triggers the robot to dock, and return `SUCCESS` if the dock action was successful |
-| `MoveHandThroughPoses` | `waypoints` `position_tolerance` `angular_tolerance` | --- | Uses MoveIt to command the hand to perform cartesian motions through a set a wayposes. If cartesian motions are not possible, a non-cartesian reconfiguration motion will be commanded to the next pose. If even that is not possible, the node is skipped and tries again with the next one. Always returns `SUCCESS` |
 | `MoveHandToPose` | `target_pose` `target_frame` `planning_group` | --- |  Commands a general non-cartesian motion to the target pose using MoveIt |
-| `NavigateToPose` | `target_pose` | --- | Commands spot through Nav2 to navigate to the given pose | 
-| `RecordCurrentLocation` | `global_frame` `robot_frame` | `recorded_pose` | Records the pose of the robot frame in the global frame. Useful for returning to the dock |
+| `MoveHandThroughPoses` | `waypoints` `position_tolerance` `angular_tolerance` | --- | Uses MoveIt to command the hand to perform cartesian motions through a set a wayposes. If cartesian motions are not possible, a non-cartesian reconfiguration motion will be commanded to the next pose. If even that is not possible, the node is skipped and tries again with the next one. Always returns `SUCCESS` |
 | `TriggerService` | `service_name` `timeout` `empty` | --- | Calls a service with `std_srvs/Trigger` (or `std_srvs/Empty` if `empty` is True) and waits for `timeout` seconds for a response. Returns the success value of the response (always `SUCCESS` for Empty), or `FAILURE` if no response is received |
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
 
