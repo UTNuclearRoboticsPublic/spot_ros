@@ -28,6 +28,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ForceTrajectory.srv"
   "srv/GripperAngleMove.srv"
   "srv/HandPose.srv"
+  "srv/InverseKinematics.srv"
   "srv/ListGraph.srv"
   "srv/NonContactTrajectory.srv"
   "srv/SetLocomotion.srv"

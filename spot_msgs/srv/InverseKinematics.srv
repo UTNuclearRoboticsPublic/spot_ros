@@ -1,0 +1,29 @@
+# spot_msgs/InverseKinematics.srv
+#
+# Determine the robot state required to either reach a target
+# pose or to point at a target pose
+
+# The name of the frame for which we are calculating IK
+string tool_frame
+
+# If this is true, then the orientation of the target pose will be
+# overridden to instead point at the gaze target
+bool use_gaze_target false
+
+# The target point that we want to point at
+geometry_msgs/PointStamped gaze_target
+
+# The desired pose of the tool. If use_gaze_target is set, then
+# only the position component of this pose will be used
+geometry_msgs/PoseStamped target_pose
+
+---
+
+# Whether a solution was found
+bool solution_found
+
+# The robot base footprint pose in the solution state
+geometry_msgs/PoseStamped footprint_pose
+
+# The robot joint angles in the solution state
+sensor_msgs/JointState solution_state
