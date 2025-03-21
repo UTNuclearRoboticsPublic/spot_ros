@@ -111,6 +111,7 @@ Refer to the table below for the button mappings to command the robot with a Log
 | Gripper Toggle          |  X                     | Toggle gripper open and close                                                     | 
 
 # Running ROS Navigation 
+Requirement: Ensure the environment variable `SPOT_ACCESSORIES` includes `RL_KIT`, and `SPOT_URDF_EXTRAS` is set to the Velodyne mount, as discussed in the [Set Environment Variables](#set-environment-variables) section.
 
 Spot is configured to use the ROS2 navigation stack, Nav2. Official documentation for Nav2 can be found [here](https://docs.nav2.org/). To localize spot within NRG's AHG labspace, make sure the robot is docked (to match the initial location) an execute
 ```bash
