@@ -8,6 +8,7 @@ class SE2PoseProto(type[geometry_pb2.SE2Pose]): pass
 class QuaternionProto(type[geometry_pb2.Quaternion]): pass
 class SE3VelocityProto(type[geometry_pb2.SE3Velocity]): pass
 class ImageResponseProto(type[image_pb2.ImageResponse]): pass
+class ImageRequestProto(type[image_pb2.ImageRequest]): pass
 class PointCloudResponseProto(type[point_cloud_pb2.PointCloudResponse]): pass
 class KinematicStateProto(type[robot_state_pb2.KinematicState]): pass
 class EStopStateProto(type[robot_state_pb2.EStopState]): pass

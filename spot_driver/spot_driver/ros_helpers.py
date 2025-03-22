@@ -58,7 +58,7 @@ from bosdyn.api import geometry_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
-from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot
+from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot, get_a_tform_b, BODY_FRAME_NAME
 
 """Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {
@@ -149,7 +149,7 @@ def MsgToPose(msg: Pose) -> SE3Pose:
         rot = MsgToQuaternion(msg.orientation)
     )
 
-def populateTransformStamped(time: rclpy.time.Time,
+def populateTransformStamped(time: rclpy.time.Time | ROSTime,
                              parent_frame: Text,
                              child_frame: Text,
                              transform: SE3Pose) -> TransformStamped:
@@ -165,7 +165,10 @@ def populateTransformStamped(time: rclpy.time.Time,
         TransformStamped message
     """
     new_tf = TransformStamped()
-    new_tf.header.stamp = time.to_msg()
+    if hasattr(time, 'to_msg'):
+        new_tf.header.stamp = time.to_msg()
+    else:
+        new_tf.header.stamp = time
     new_tf.header.frame_id = parent_frame
     new_tf.child_frame_id = child_frame
     new_tf.transform.translation.x = transform.position.x
@@ -190,23 +193,16 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
             * CameraInfo: message to define the state and config of the camera that took the image
             * TFMessage: with the transforms necessary to locate the image frames
     """
-    tf_msg = TFMessage()
-    for frame_name in data.shot.transforms_snapshot.child_to_parent_edge_map:
-        if data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
-            transform = data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
-            new_tf = TransformStamped()
-            local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
-            new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-            new_tf.header.frame_id = transform.parent_frame_name
-            new_tf.child_frame_id = frame_name
-            new_tf.transform.translation.x = transform.parent_tform_child.position.x
-            new_tf.transform.translation.y = transform.parent_tform_child.position.y
-            new_tf.transform.translation.z = transform.parent_tform_child.position.z
-            new_tf.transform.rotation.x = transform.parent_tform_child.rotation.x
-            new_tf.transform.rotation.y = transform.parent_tform_child.rotation.y
-            new_tf.transform.rotation.z = transform.parent_tform_child.rotation.z
-            new_tf.transform.rotation.w = transform.parent_tform_child.rotation.w
-            tf_msg.transforms.append(new_tf)
+    base_frame_name = BODY_FRAME_NAME
+    child_frame_name = data.shot.frame_name_image_sensor
+    transform = get_a_tform_b(data.shot.transforms_snapshot, base_frame_name, child_frame_name)
+    transform_stamped = populateTransformStamped(
+        time=TimestampToMsg(lease_manager.robotToLocalTime(data.shot.acquisition_time)),
+        parent_frame=base_frame_name,
+        child_frame=child_frame_name,
+        transform=transform
+    )
+    tf_msg = TFMessage(transforms=[transform_stamped])
 
     image_msg = Image()
     local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
@@ -260,27 +256,6 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
             image_msg.is_bigendian = False
             image_msg.step = 2 * data.shot.image.cols
             image_msg.data = data.shot.image.data
-
-            # image_msg.encoding = '32FC1'
-            # image_msg.is_bigendian = False
-            # image_msg.step = 2 * data.shot.image.cols
-
-            # # convert the uint16's into 32-bit floats
-            # # depth zero in OpenNI format is converted to NaN
-            # assert data.shot.image.data, 'No camera data received for 32FC1 encoding.'
-            # assert len(data.shot.image.data) % 2 == 0, 'Received odd number of bytes for  32FC1 encoding.'
-            # image_msg.data = []
-
-            # # iterate over the list two bytes at a time
-            # for i,j in zip(data.shot.image.data[::2], data.shot.image.data[1::2]):
-            #     pixel = int(i * 256 + j)
-            #     value_in_meters = float32(nan)
-
-            #     if pixel != 0:
-            #         value_in_meters = float32(pixel / data.source.depth_scale)
-                
-            #     bytes = list(struct.pack('<f', value_in_meters))
-            #     image_msg.data.extend(bytes)
 
     elif data.shot.image.format == image_pb2.Image.PIXEL_FORMAT_UNKNOWN:
         lease_manager.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)

@@ -1,0 +1,7 @@
+string[] sources
+
+---
+
+bool success
+sensor_msgs/CameraInfo[] camera_infos
+sensor_msgs/Image[] images

@@ -48,12 +48,11 @@ from rcl_interfaces.msg import SetParametersResult
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CameraInfo, PointCloud2
+from sensor_msgs.msg import PointCloud2
 from std_srvs.srv import Trigger, SetBool
 
-from google.protobuf import duration_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
-from bosdyn.api import image_pb2, geometry_pb2, trajectory_pb2
+from bosdyn.api import geometry_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.client import math_helpers
 from bosdyn.geometry import to_euler_zxy
@@ -85,19 +84,6 @@ from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
 
-    """ Inner class for managing camera publishing """
-    class CameraPubs():
-        def __init__(self, parent: Node, namespace: str):
-            self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
-            self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
-            self.spot_wrapper = parent.spot_wrapper
-
-        def process_data(self, data):
-            if self.image_pub.get_subscription_count() > 0:
-                image_msg, camera_info_msg, _ = getImageMsg(data, self.spot_wrapper)
-                self.image_pub.publish(image_msg)
-                self.info_pub.publish(camera_info_msg)
-
     def __init__(self):
         super().__init__('spot_driver')
 
@@ -115,7 +101,7 @@ class SpotROS(Node):
 
         """ ROS Parameters """
         status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease'}}
-        sensor_rate_params = {f'rates.sensors.{param}' for param in {'front_image', 'side_image', 'rear_image', 'point_cloud'}}
+        sensor_rate_params = {f'rates.sensors.{param}' for param in {'point_cloud'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -189,16 +175,6 @@ class SpotROS(Node):
         
         self.declare_parameter('launch_pointcloud_service', False,
             ParameterDescriptor(description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
-                                type=ParameterType.PARAMETER_BOOL,
-                                read_only=True))
-
-        self.declare_parameter('publish_images', False,
-            ParameterDescriptor(description='Specify whether to publish (colored) images',
-                                type=ParameterType.PARAMETER_BOOL,
-                                read_only=True))
-
-        self.declare_parameter('publish_depth_images', False,
-            ParameterDescriptor(description='Specify whether to publish depth images',
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
 
@@ -310,66 +286,6 @@ class SpotROS(Node):
             lease_array_msg.resources.append(new_resource)
 
         self.lease_pub.publish(lease_array_msg)
-
-    def FrontImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new front image data."""
-        if self.spot_wrapper.front_images is None:
-            return
-
-        for image in self.spot_wrapper.front_images:
-            if image.source.name == "frontleft_fisheye_image":
-                self.front_left_rgb_pub.process_data(image)
-            elif image.source.name == "frontright_fisheye_image":
-                self.front_right_rgb_pub.process_data(image)
-
-    def SideImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new side image data."""
-        if self.spot_wrapper.side_images is None:
-            return
-        
-        for image in self.spot_wrapper.side_images:
-            if image.source.name == "left_fisheye_image":
-                self.left_rgb_pub.process_data(image)
-            elif image.source.name == "right_fisheye_image":
-                self.right_rgb_pub.process_data(image)
-
-    def RearImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new rear image data."""
-        if self.spot_wrapper.rear_images is None:
-            return
-        
-        for image in self.spot_wrapper.rear_images:
-            self.back_rgb_pub.process_data(image)
-
-    def FrontDepthImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new front depth image data."""
-        if self.spot_wrapper.front_depth_images is None:
-            return
-
-        for image in self.spot_wrapper.front_depth_images:
-            if image.source.name == "frontleft_depth":
-                self.front_left_depth_pub.process_data(image)
-            elif image.source.name == "frontright_depth":
-                self.front_right_depth_pub.process_data(image)
-
-    def SideDepthImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new side depth image data."""
-        if self.spot_wrapper.side_depth_images is None:
-            return
-        
-        for image in self.spot_wrapper.side_depth_images:
-            if image.source.name == "left_depth":
-                self.left_depth_pub.process_data(image)
-            elif image.source.name == "right_depth":
-                self.right_depth_pub.process_data(image)
-
-    def RearDepthImageCB(self, _) -> None:
-        """Callback for when the Spot Wrapper gets new rear depth image data."""
-        if self.spot_wrapper.rear_depth_images is None:
-            return
-        
-        for image in self.spot_wrapper.rear_depth_images:
-            self.back_depth_pub.process_data(image)
 
     def PointCloudCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new pointcloud data."""
@@ -667,46 +583,6 @@ class SpotROS(Node):
         else:
             self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
 
-    def populate_camera_static_transforms(self,
-                                          image_data: ImageResponseProto,
-                                          existing_transforms: List[TransformStamped]) -> List[TransformStamped]:
-        """Check data received from one of the image tasks and use the transform snapshot to extract the camera frame
-        transforms. These are the transforms from body->frontleft->frontleft_fisheye, for example. These transforms
-        never change, but they may be calibrated slightly differently for each robot so we need to generate the
-        transforms at runtime.
-
-        Args:
-            image_data: ImageResponse protobuf data from the wrapper
-        """
-
-        # We exclude the odometry frames from static transforms since they are not static. We can ignore the body
-        # frame because it is a child of odom or vision depending on the odom_mode, and will be published
-        # by the non-static transform publishing that is done by the state callback
-        excluded_child_frames = {'odom', 'vision', 'arm0.link_wr1', 'hand_color_image_sensor'}
-        all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
-        existing_pairs = [(transform.header.frame_id, transform.child_frame_id) for transform in existing_transforms]
-
-        tfs_to_add = {k:v for (k,v) in all_tfs_from_data.items()
-            if k not in excluded_child_frames and (v.parent_frame_name, k) not in existing_pairs
-            and len(v.parent_frame_name) != 0}
-
-        # tf: FrameTreeSnapshot.ChildToParentEdgeMapEntry
-        #    key: Text
-        #    value: FrameTreeSnapshot.ParentEdge
-        #       parent_frame_name: Text
-        #       parent_tform_child: bosdyn.client.math_helpers.SE3Pose
-        output = existing_transforms
-        for k,v in tfs_to_add.items():
-            local_time = self.spot_wrapper.robotToLocalTime(image_data.shot.acquisition_time)
-            tf_time = Time(seconds=local_time.seconds, nanoseconds=local_time.nanos)
-            static_tf = populateTransformStamped(tf_time,
-                                                 v.parent_frame_name,
-                                                 k,
-                                                 v.parent_tform_child)
-            output.append(static_tf)
-
-        return output
-
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
 
         for p in params:
@@ -729,35 +605,6 @@ class SpotROS(Node):
         
         return SetParametersResult(successful=True)
 
-    def populate_static_transforms(self, publish_images: bool = False, publish_depth_images: bool = False) -> None:
-        self.get_logger().info("Populating camera static transforms")
-
-        static_tfs = []
-        image_set = []
-
-        if publish_images:
-            while not (self.spot_wrapper.front_images and len(self.spot_wrapper.front_images) == 2) or\
-                    not (self.spot_wrapper.side_images and len(self.spot_wrapper.side_images) == 2) or\
-                    not (self.spot_wrapper.rear_images and len(self.spot_wrapper.rear_images) == 1) and\
-                    rclpy.utilities.ok():
-                self.spot_wrapper.updateSensorTasks()
-            image_set.extend([self.spot_wrapper.front_images, self.spot_wrapper.side_images, self.spot_wrapper.rear_images])
-
-        if publish_depth_images:
-            while not (self.spot_wrapper.front_depth_images and len(self.spot_wrapper.front_depth_images) == 2) or\
-                    not (self.spot_wrapper.side_depth_images and len(self.spot_wrapper.side_depth_images) == 2) or\
-                    not (self.spot_wrapper.rear_depth_images and len(self.spot_wrapper.rear_depth_images) == 1) and\
-                    rclpy.utilities.ok():
-                self.spot_wrapper.updateSensorTasks()
-            image_set.extend([self.spot_wrapper.front_depth_images, self.spot_wrapper.side_depth_images, self.spot_wrapper.rear_depth_images])
-
-        for image_list in image_set: 
-            for image in image_list:
-                static_tfs = self.populate_camera_static_transforms(image, static_tfs)
-
-
-        self.static_broadcaster.sendTransform(static_tfs) 
-
     def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
             Main function for the SpotROS class.
@@ -765,41 +612,16 @@ class SpotROS(Node):
             Holds lease from wrapper and updates all async tasks at the ROS rate
         """
 
-        ### --- Setup image publishers and callbacks as requested --- ###
+        ### --- Setup publishers and callbacks as requested --- ###
         self.get_logger().info("Setting sensor callbacks")
         callbacks = {}
 
         # Optional arguments
         has_cam_payload = self.get_parameter('has_cam_payload').value
         has_eap_2 = self.get_parameter('has_eap_2').value
-        publish_images = self.get_parameter('publish_images').value
-        publish_depth_images = self.get_parameter('publish_depth_images').value
 
         # Connect to the robot
-        self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload, publish_images, publish_depth_images)
-
-        ## --- Setup camera publishers --- ##
-        # RGB Images
-        if self.get_parameter('publish_images').value:
-            self.front_left_rgb_pub = self.CameraPubs(self, 'rgb/frontleft')
-            self.front_right_rgb_pub = self.CameraPubs(self, 'rgb/frontright')
-            self.left_rgb_pub = self.CameraPubs(self, 'rgb/left')
-            self.right_rgb_pub = self.CameraPubs(self, 'rgb/right')
-            self.back_rgb_pub = self.CameraPubs(self, 'rgb/back')
-            callbacks["front_image"] = self.FrontImageCB
-            callbacks["side_image"]  = self.SideImageCB
-            callbacks["rear_image"]  = self.RearImageCB
-
-        # Depth Images
-        if self.get_parameter('publish_depth_images').value:
-            self.front_left_depth_pub = self.CameraPubs(self, 'depth/frontleft')
-            self.front_right_depth_pub = self.CameraPubs(self, 'depth/frontright')
-            self.left_depth_pub = self.CameraPubs(self, 'depth/left')
-            self.right_depth_pub = self.CameraPubs(self, 'depth/right')
-            self.back_depth_pub = self.CameraPubs(self, 'depth/back')
-            callbacks["front_depth_image"] = self.FrontDepthImageCB
-            callbacks["side_depth_image"]  = self.SideDepthImageCB
-            callbacks["rear_depth_image"]  = self.RearDepthImageCB
+        self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
         # Pointcloud
         if self.get_parameter('launch_pointcloud_service').value:
@@ -817,7 +639,6 @@ class SpotROS(Node):
 
         callbacks["robot_state"] = self.RobotStateCB
         callbacks["lease"]       = self.LeaseCB
-
 
         # Dictionary of all param values in the 'rates' namespace
         rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
@@ -925,10 +746,6 @@ class SpotROS(Node):
             execute_callback=self.handle_walk_to,
             callback_group=srv_group
         )
-
-        # Populate the static transforms for the various robot cameras               
-        if publish_images or publish_depth_images:
-            self.populate_static_transforms(publish_images, publish_depth_images)
 
         # Publish initial dock state. Wait for first response
         while self.spot_wrapper.get_docking_state().status == DockState.DOCK_STATUS_UNKNOWN:

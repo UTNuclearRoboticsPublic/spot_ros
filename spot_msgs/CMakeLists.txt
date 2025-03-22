@@ -32,6 +32,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/NonContactTrajectory.srv"
   "srv/SetLocomotion.srv"
   "srv/SetVelocity.srv"
+  "srv/GetImages.srv"
 
   "msg/ArmJointPosition.msg"
   "msg/BatteryState.msg"

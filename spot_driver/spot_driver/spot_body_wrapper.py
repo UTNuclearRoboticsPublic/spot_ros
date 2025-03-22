@@ -28,7 +28,7 @@
 from typing import Text, Tuple
 from .async_queries import *
 
-from bosdyn.api import image_pb2, header_pb2, geometry_pb2
+from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
@@ -36,7 +36,6 @@ from bosdyn.geometry import EulerZXY
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
-from bosdyn.client.image import ImageClient, build_image_request
 from bosdyn.client.point_cloud import build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
@@ -50,15 +49,13 @@ from .type_hint_helpers import *
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
-    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False, publish_images: bool = False, publish_depth_images: bool = False):
+    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
         self._logger = logger
         self._hostname = hostname
 
         self._is_connected = False
         self._has_eap_2 = has_eap_2
         self._has_cam_payload = has_cam_payload
-        self._publish_images = publish_images
-        self._publish_depth_images = publish_depth_images
         self._lease_manager = None
 
         self._robot_id = None
@@ -86,8 +83,8 @@ class SpotBodyWrapper():
             rates    : The rates at which to call each of the callbacks
 
         Note:
-            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'sensors.front_depth_image', 'sensors.side_depth_image', 'sensors.rear_depth_image', 'status.robot_state'] 
-            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'front_depth_image', 'side_depth_image', 'rear_depth_image', 'robot_state']
+            Valid keys for rates are ['status.robot_state'] 
+            and valid keys for callbacks are ['robot_state']
 
         Returns:
             Bool describing whether connection was successful
@@ -108,7 +105,6 @@ class SpotBodyWrapper():
 
         # Spot service clients
         try:
-            self._image_client = self._lease_manager.robot.ensure_client(ImageClient.default_service_name)
             self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
 
             if self._has_eap_2:
@@ -126,57 +122,7 @@ class SpotBodyWrapper():
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
 
-        sensor_tasks = []
-
-        # Request images asynchronously 
-        if self._publish_images:
-            front_visual_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image'}
-            side_visual_image_sources = {'left_fisheye_image', 'right_fisheye_image'}
-            rear_visual_image_sources = {'back_fisheye_image'}
-
-            # Create visual image requests
-            front_image_requests = []
-            side_image_requests = []
-            rear_image_requests = []
-            for source in front_visual_image_sources:
-                front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-            for source in side_visual_image_sources:
-                side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-            for source in rear_visual_image_sources:
-                rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-            # Call async service for visual images
-            self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-            self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-            self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-            sensor_tasks.extend([self._front_image_task, self._side_image_task, self._rear_image_task])
-
-        if self._publish_depth_images:
-            front_depth_image_sources = {'frontleft_depth', 'frontright_depth'}
-            side_depth_image_sources = {'left_depth', 'right_depth'}
-            rear_depth_image_sources = {'back_depth'}
-
-            # Create depth image requests
-            front_depth_image_requests = []
-            side_depth_image_requests = []
-            rear_depth_image_requests = []
-
-            for source in front_depth_image_sources:
-                front_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-            for source in side_depth_image_sources:
-                side_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-            for source in rear_depth_image_sources:
-                rear_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-            # Call async service for depth images
-            self._front_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_depth_image", 1.0), callbacks.get("front_depth_image", lambda:None), front_depth_image_requests)
-            self._side_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_depth_image", 1.0), callbacks.get("side_depth_image", lambda:None), side_depth_image_requests)
-            self._rear_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_depth_image", 1.0), callbacks.get("rear_depth_image", lambda:None), rear_depth_image_requests)
-            sensor_tasks.extend([self._front_depth_image_task, self._side_depth_image_task, self._rear_depth_image_task])
+        sensor_tasks = []        
 
         # Optionally populate pointcloud data asynchronously
         if self._has_eap_2 and 'point_cloud' in callbacks:
@@ -223,36 +169,6 @@ class SpotBodyWrapper():
     def lease(self):
         """Return latest proto from the _lease_task"""
         return self._lease_manager.lease
-
-    @property
-    def front_images(self):
-        """Return latest proto from the _front_image_task"""
-        return self._front_image_task.proto
-
-    @property
-    def side_images(self):
-        """Return latest proto from the _side_image_task"""
-        return self._side_image_task.proto
-
-    @property
-    def rear_images(self):
-        """Return latest proto from the _rear_image_task"""
-        return self._rear_image_task.proto
-
-    @property
-    def front_depth_images(self):
-        """Return latest proto from the _front_depth_image_task"""
-        return self._front_depth_image_task.proto
-
-    @property
-    def side_depth_images(self):
-        """Return latest proto from the _side_depth_image_task"""
-        return self._side_depth_image_task.proto
-
-    @property
-    def rear_depth_images(self):
-        """Return latest proto from the _rear_depth_image_task"""
-        return self._rear_depth_image_task.proto
 
     @property
     def point_clouds(self):
