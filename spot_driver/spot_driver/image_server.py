@@ -79,7 +79,8 @@ class SpotImageServer(Node):
 
             rgb_source, depth_source = self.resolve_source_name(image_source)
 
-            self.image_requests[rgb_source] = build_image_request(rgb_source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8)
+            rgb_pixel_format = image_pb2.Image.PIXEL_FORMAT_RGB_U8 if image_source != 'hand_tof' else None
+            self.image_requests[rgb_source] = build_image_request(rgb_source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=rgb_pixel_format)
             self.image_requests[depth_source] = build_image_request(depth_source, image_format=image_pb2.Image.FORMAT_RAW)
 
             rgb_rate = self.params.rates.get_entry(image_source).rgb
