@@ -1,3 +1,16 @@
+# Building
+
+The following environment variables are used during the build process:
+
+ - TARGET_ROS_DISTRO - The ROS distro for which you want the driver built. This driver has been mainly tested on ROS2 Humble, but later version should also work.
+ - SPOT_VERSION - The version number of the Boston Dyanmics Spot API to install with the driver. This should match the firmware version of your robot. Leave this blank to install the most recent version.
+
+```bash
+export TARGET_ROS_DISTRO=humble
+export SPOT_VERSION=4.1.0
+docker compose build
+```
+
 # Running Spot with Docker
 
 Please make sure you have the following before attempting to run Spot with Docker:
@@ -26,3 +39,11 @@ In general, these will use the standard robot hostname of `192.168.50.3`. Howeve
 ```bash
 docker compose run --rm spot_bringup --show-args
 ```
+
+## Navigation with Nav2
+
+[Coming Soon]
+
+## Manipulation with MoveIt
+
+[Coming Soon]

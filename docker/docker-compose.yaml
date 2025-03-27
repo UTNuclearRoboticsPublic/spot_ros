@@ -31,3 +31,17 @@ services:
     extends: spot_bringup
     devices:
       - /dev/input/js0
+
+  navigation:
+    extends: spot_bringup
+    image: nrg/spot_navigation:${TARGET_ROS_DISTRO}
+    # For autonomous modes we require an attached controller
+    devices:
+      - /dev/input/js0
+    build:
+      target: navigation
+    environment:
+      - SPOT_NAV_MAP
+    volumes:
+      - ${SPOT_NAV_MAP}.yaml:/maps/user_map.yaml
+      - ${SPOT_NAV_MAP}.pgm:/maps/user_map.pgm

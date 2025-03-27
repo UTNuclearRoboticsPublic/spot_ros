@@ -51,6 +51,9 @@ SHELL ["/bin/bash", "-l", "-c"]
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
 
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
+ENV ROS_DISTRO ${ROS_DISTRO}
+
 ADD entrypoints /entrypoints
 RUN chmod +x /entrypoints/*
 
@@ -59,3 +62,11 @@ RUN chmod +x /entrypoints/*
 
 FROM spot_ros AS bringup
 ENTRYPOINT [ "/entrypoints/bringup.bash" ]
+
+# -------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------------
+
+FROM spot_ros AS navigation
+RUN apt update && apt install -y jq && rm -rf /var/lib/apt/lists/*
+RUN python3 -m pip install yq 
+ENTRYPOINT [ "/entrypoints/navigation.bash" ]
