@@ -31,6 +31,7 @@ FROM spot_sdk AS spot_ros
 RUN apt update && apt install -y \
         ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
         git \
+        jq \
         openssh-client
 
 # Add GitHub's key to known_hosts to prevent interactive prompt
@@ -40,7 +41,7 @@ WORKDIR /colcon_ws/src
 RUN --mount=type=ssh git clone git@github.com:UTNuclearRobotics/nrg_spot_manipulation.git -b devel
 RUN --mount=type=ssh git clone git@github.com:UTNuclearRobotics/spot_ros.git -b devel
 
-RUN python3 -m pip install -r spot_ros/requirements.txt 
+RUN python3 -m pip install -r spot_ros/requirements.txt yq
 
 WORKDIR /colcon_ws
 RUN rosdep update \
@@ -57,16 +58,4 @@ ENV ROS_DISTRO ${ROS_DISTRO}
 ADD entrypoints /entrypoints
 RUN chmod +x /entrypoints/*
 
-# -------------------------------------------------------------------------------------------------
-# -------------------------------------------------------------------------------------------------
-
-FROM spot_ros AS bringup
-ENTRYPOINT [ "/entrypoints/bringup.bash" ]
-
-# -------------------------------------------------------------------------------------------------
-# -------------------------------------------------------------------------------------------------
-
-FROM spot_ros AS navigation
-RUN apt update && apt install -y jq && rm -rf /var/lib/apt/lists/*
-RUN python3 -m pip install yq 
-ENTRYPOINT [ "/entrypoints/navigation.bash" ]
+CMD ["bash"]
