@@ -26,23 +26,36 @@ Please make sure you have the following before attempting to run Spot with Docke
  To bring up the main spot driver, you can use the following services
 
 ```bash
-# no controller attached to host
-docker compose run --rm spot_bringup 
-
-# or with a controller attached to the host
+# with a controller attached to the host
 # controller_configuration options are [Logitech, Dualsense]
-docker compose run --rm spot_bringup_teleop controller_configuration:=Dualsense
+docker compose run --rm bringup controller_configuration:=Dualsense
+
+# or with no controller attached to host
+docker compose up bringup_autonomous 
 ```
 
 In general, these will use the standard robot hostname of `192.168.50.3`. However, if you are on the robot's wifi, you should add `hostname:=192.168.80.3` and if you are connected directly to the robot via ethernet, you can also use `hostname:=10.0.0.3`. For a more detailed view of the available options which include namespace options and lidar networking options, run 
 
 ```bash
-docker compose run --rm spot_bringup --show-args
+docker compose run --rm bringup_autonomous --show-args
 ```
 
 ## Navigation with Nav2
 
-[Coming Soon]
+The main thing that you need to run navigation is an up-to-date map of Spot's environment. We do our best to keep the default map of the AHG lab current, but things get moved around frequenntly so even so you may still need to remap. To create a new map, you can run the `slam` service.
+
+```bash
+docker compose up slam
+```
+
+Walk the robot around to create map, and remember to keep yourself moving relative to the map so that mapping algorithm can ignore you properly. Once the map is created, run the `save_map` service to save the map as `/tmp/spot_nav_map.pgm` alongside the config file `/tmp/spot_nav_map.yaml`. You are then free to copy these files to wherever you wish and rename them however you want. Keep in mind when renaming that you also need to edit the name of the PGM file in the `image` header in the general config file, otherwise the map will fail to load. 
+
+```bash
+docker compose up save_map
+cp /tmp/spot_nav_map.yaml colcon_ws/src/my_awesome_project/maps/my_place.yaml
+cp /tmp/spot_nav_map.pgm colcon_ws/src/my_awesome_project/maps/my_place.pgm
+# Don't forget to now change the first line of my_place.yaml from 'image: spot_nav_map.pgm' to 'image: my_place.pgm'
+```
 
 ## Manipulation with MoveIt
 

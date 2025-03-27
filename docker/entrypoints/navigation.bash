@@ -7,6 +7,7 @@ source /colcon_ws/install/local_setup.bash
 # Check to see if a custom map path has been provided
 if [[ ! -z "$SPOT_NAV_MAP" ]]; then
     # Replace the original image name with the mounted version
+    MAP_PATH=/maps/user_map.yaml
     yq -yi '.image = "user_map.pgm"' $MAP_PATH
 else
     # Otherwise we use the default AHG map
