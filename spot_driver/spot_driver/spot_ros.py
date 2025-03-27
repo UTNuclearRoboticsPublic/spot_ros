@@ -305,6 +305,11 @@ class SpotROS(Node):
         """ROS service handler for the release service"""
         res.success, res.message = self.spot_wrapper.release()
         return res
+    
+    def handle_force_claim(self, _, res: Trigger.Response) -> Trigger.Response:
+        """ROS service handler for the force_claim service"""
+        res.success = self.spot_wrapper.claim(force=True)
+        return res
 
     def handle_stop(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the stop service"""
@@ -699,14 +704,15 @@ class SpotROS(Node):
         srv_group = rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
 
         # Status change services
-        self.create_service(Trigger, "~/claim"     , self.handle_claim,          callback_group=srv_group)
-        self.create_service(Trigger, "~/release"   , self.handle_release,        callback_group=srv_group)
-        self.create_service(Trigger, "~/stop"      , self.handle_stop,           callback_group=srv_group)
-        self.create_service(Trigger, "~/self_right", self.handle_self_right,     callback_group=srv_group)
-        self.create_service(Trigger, "~/sit"       , self.handle_sit,            callback_group=srv_group)
-        self.create_service(Trigger, "~/stand"     , self.handle_stand,          callback_group=srv_group)
-        self.create_service(Trigger, "~/power_on"  , self.handle_power_on,       callback_group=srv_group)
-        self.create_service(Trigger, "~/power_off" , self.handle_safe_power_off, callback_group=srv_group)
+        self.create_service(Trigger, "~/claim"      , self.handle_claim,          callback_group=srv_group)
+        self.create_service(Trigger, "~/release"    , self.handle_release,        callback_group=srv_group)
+        self.create_service(Trigger, "~/force_claim", self.handle_force_claim,    callback_group=srv_group)
+        self.create_service(Trigger, "~/stop"       , self.handle_stop,           callback_group=srv_group)
+        self.create_service(Trigger, "~/self_right" , self.handle_self_right,     callback_group=srv_group)
+        self.create_service(Trigger, "~/sit"        , self.handle_sit,            callback_group=srv_group)
+        self.create_service(Trigger, "~/stand"      , self.handle_stand,          callback_group=srv_group)
+        self.create_service(Trigger, "~/power_on"   , self.handle_power_on,       callback_group=srv_group)
+        self.create_service(Trigger, "~/power_off"  , self.handle_safe_power_off, callback_group=srv_group)
 
         # EStop services (no exclusive callback group so estop can interrupt other actions)
         self.create_service(Trigger, "~/estop/freeze"  , self.handle_estop_freeze)

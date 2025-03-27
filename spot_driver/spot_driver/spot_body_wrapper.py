@@ -211,13 +211,13 @@ class SpotBodyWrapper():
         """Loop through the sensor query periodic tasks and update their data if needed."""
         self._async_sensor_tasks.update()
 
-    def claim(self) -> bool:
+    def claim(self, force: bool = False) -> bool:
         """Add this driver as an EStop and Lease owner of the lease manager"""
         if self._lease_manager is None:
             self.logger.warn("Cannot claim a lease without first connecting to a LeaseManager!")
             return False
         
-        self._lease_manager.registerLeaseOwner(id(self))
+        self._lease_manager.registerLeaseOwner(id(self), force)
         return True        
     
     def release(self) -> None:
