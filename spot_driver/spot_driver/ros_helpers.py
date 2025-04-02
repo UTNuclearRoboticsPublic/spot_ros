@@ -149,6 +149,21 @@ def MsgToPose(msg: Pose) -> SE3Pose:
         rot = MsgToQuaternion(msg.orientation)
     )
 
+def PoseToMsg(pose: SE3Pose):
+    return Pose(
+        position = Point(
+            x = pose.x,
+            y = pose.y,
+            z = pose.z
+        ),
+        orientation = Quaternion(
+            w = pose.rot.w,
+            x = pose.rot.x,
+            y = pose.rot.y,
+            z = pose.rot.z
+        )
+    )
+
 def populateTransformStamped(time: rclpy.time.Time,
                              parent_frame: Text,
                              child_frame: Text,
