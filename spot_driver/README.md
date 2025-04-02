@@ -18,3 +18,51 @@ As a convenience, the ```ros_helpers.py``` library provides one-line conversions
 ### Launch
 
 This package contains a single launch file ```driver.launch.py``` which runs the ```driver``` executable with all provided arguments, and additionally brings up the Velodyne LiDAR in Spot's payload. See the documentation for the Velodyne ROS interface [here](https://index.ros.org/p/velodyne/github-ros-drivers-velodyne/). 
+
+## Creating and executing a Spot Gesture
+Spot currently has three gestures it can execute. They can be called in the form of a ROS2 service call. The first two are predefined gestures, while the third allows anyone to create their own gesture called a gesture sequence. The ROS2 call looks like `/spot_driver/gesture_sequence`
+
+### Gesture Modes
+1. sassy_confused
+2. no_nod
+3. gesture_sequence
+4. water_shakeoff
+5. serious_stance
+
+### Executing Gestures
+To execute the predefined gestures, run the following commands, and the gesture mode field changes based on the gesture you want to run
+```bash
+ros2 service call /spot_driver/gesture_sequence spot_msgs/srv/GestureSequence "{gesture_mode: '<desired_gesture>'}"
+
+```
+
+For example...
+```bash
+ros2 service call /spot_driver/gesture_sequence spot_msgs/srv/GestureSequence "{gesture_mode: 'sassy_confused'}"
+
+```
+
+### Creating your own Gesture Sequence
+To create your own sequence you need to understand the service type.
+The service type takes in a list of lists, where each nested list contains 5 float32 values. So the list is called a gesture_sequence, and within this we have N lists called gestures.  Each gesture contains 5 parameters describing the gesture Spot will perform. Don't forget to change the gesture mode to `gesture_sequence`
+
+![Gesture_sequence](gesture_sequence.jpg)
+
+Keep in mind that each parameter for a gesture has limits
+- yaw: (-0.6, 0.6) {in units of radians}
+- roll: (-0.6, 0.6) {in units of radians}
+- pitch: (-0.6, 0.6) {in units of radians}
+- body height: (-0.2, 0.2) {in units of meters}
+- pose duration: [0, infinity] (in units of seconds) 
+
+Finally to execute the gesture sequence either call it through the terminal such as...
+```bash
+ros2 service call /spot_driver/gesture_sequence spot_msgs/srv/GestureSequence "{
+  gesture_mode: 'gesture_sequence',
+  gesture_sequence: [
+    {roll: 0.0, pitch: 0.1, yaw: 0.0, body_height: 0.05, pose_duration: 2.0},
+    {roll: 0.0, pitch: -0.1, yaw: 0.0, body_height: 0.05, pose_duration: 2.0}
+  ]
+}"
+```
+or create a ROS2 client

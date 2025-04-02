@@ -80,6 +80,7 @@ from spot_msgs.action import NavigateTo, WalkTo
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
 from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
+from spot_msgs.srv import GestureSequence
 
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
@@ -731,9 +732,11 @@ class SpotROS(Node):
         self.create_service(ListGraph, "~/list_graph", self.handle_list_graph, callback_group=srv_group)
 
         # Docking services
-        self.create_service(Dock, '~/dock', self.handle_dock, callback_group=srv_group)
+        self.create_service(Dock,    '~/dock',   self.handle_dock,   callback_group=srv_group)
         self.create_service(Trigger, '~/undock', self.handle_undock, callback_group=srv_group)
 
+        # Gesture Services
+        self.create_service(GestureSequence, "~/gesture_sequence",  self.handle_gesture_sequence,     callback_group=srv_group)
 
         ## --- Action Servers --- ##
 
@@ -854,3 +857,32 @@ class SpotROS(Node):
             self.get_logger().error('Error:{}'.format(e))
             pass
         self.mobility_params_pub.publish(mobility_params_msg)
+    
+    def handle_gesture_sequence(self, request: GestureSequence.Request, response: GestureSequence.Response) -> GestureSequence.Response:
+        """ROS service handler for spot to execute gesture sequence"""
+        if self.spot_wrapper is None:
+            response.success = False
+            response.message = "Spot wrapper is not initialized"
+            return response
+
+        # Dispatch table with *callables*, not immediate results
+        MODE_HANDLERS = {
+            "gesture_sequence": lambda req: self.spot_wrapper.perform_gesture(req.gesture_sequence),
+            "sassy_confused": lambda req: self.spot_wrapper.sassy_confused(),
+            "no_nod": lambda req: self.spot_wrapper.no_nod(),
+            "water_shakeoff": lambda req: self.spot_wrapper.water_shakeoff(),
+            "serious_stance": lambda req: self.spot_wrapper.serious_stance(),
+            # Add more modes here...
+        }
+
+        handler = MODE_HANDLERS.get(request.gesture_mode)
+        if handler is None:
+            response.success = False
+            response.message = f"Unknown mode: {request.gesture_mode}"
+            return response
+
+        success, message = handler(request)
+        pyTime.sleep(1.0)
+        response.success = success
+        response.message = message
+        return response

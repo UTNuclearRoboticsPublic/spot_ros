@@ -137,4 +137,4 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
 
 ## Authors
-Janak Panthi (aka Crasun Jans), Alex Navarro, and Blake Anderson
+Janak Panthi (aka Crasun Jans), Alex Navarro, Kevin Torres, and Blake Anderson

@@ -33,6 +33,10 @@ from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
+
+from bosdyn.client import frame_helpers, math_helpers
+from bosdyn.client.robot_state import RobotStateClient
+
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
@@ -398,4 +402,147 @@ class SpotBodyWrapper():
         success = response.error.code == header_pb2.CommonError.Code.CODE_OK
         return success, Text(response.error.message)
 
+    def sassy_confused(self) -> Tuple[bool, str]:
+        """Makes Spot look confused in a bit of a sassy way"""
+        try:
+            # Lower and rotate Spot's body
+            roll = EulerZXY(yaw=0.0, roll=0.4, pitch=0.0)
+            body_height = -0.1
+            self.set_mobility_params(body_height_offset=body_height,footprint_R_body=roll)
 
+            # Ensure params are set
+            assert self._mobility_params is not None, "Mobility parameters not set!"
+
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+            
+            # Maintain the pose for 1 seconds
+            time.sleep(1)
+
+            # Restore to normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+
+
+            return True, "Spot successfully completed low rotate and returned to normal stance."
+
+        except Exception as e:
+            return False, f"Failed to execute low rotate sequence: {e}"
+        
+    def no_nod(self) -> Tuple[bool, str]:
+        """Makes Spot do a quick "no" gesture."""
+        try:
+            yaw_sequence = [0.15, -0.15, 0.15, -0.15, 0.15, -0.15]
+
+            for yaw_element in yaw_sequence:
+
+                nod = EulerZXY(yaw=yaw_element, roll=0.0, pitch=0.1)
+                self.set_mobility_params(body_height_offset=0.0, footprint_R_body=nod)
+                
+                # Execute yaw command
+                self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+            
+                # Maintain the pose for 1 seconds
+                time.sleep(0.25)
+
+            # Restore to normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+
+            return True, "Spot successfully performed a 'no nod' gesture"
+
+        except Exception as e:
+            return False, f"Failed to execute 'no nod' gesture: {e}"
+
+    def water_shakeoff(self) -> Tuple[bool, str]:
+        """Makes Spot do a quick "water shakeoff" gesture."""
+        try:
+            sequence = [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0]
+
+            for element in sequence:
+
+                shake = EulerZXY(yaw=0.1*element, roll=0.5*element, pitch=0.0)
+                self.set_mobility_params(body_height_offset=-0.15, footprint_R_body=shake)
+                
+                # Execute water_shakeoff command
+                self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+            
+                # Maintain the pose for 1 seconds
+                time.sleep(0.23)
+
+            # Restore to normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+
+            return True, "Spot successfully performed a 'water shakeoff' gesture"
+
+        except Exception as e:
+            return False, f"Failed to execute 'water shakeoff' gesture: {e}"
+
+    def serious_stance(self) -> Tuple[bool, str]:
+        """Makes Spot perform a "serious" gesture stance."""
+        try:
+
+            pose = EulerZXY(yaw=0.0, roll=0.0, pitch=0.2)
+            self.set_mobility_params(body_height_offset=-0.19, footprint_R_body=pose)
+            
+            # Execute stance command
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+
+            return True, "Spot successfully performed a 'serious stance' gesture"
+
+        except Exception as e:
+            return False, f"Failed to execute 'serious stance' gesture: {e}"
+
+    def perform_gesture(self, gesture_sequence) -> Tuple[bool, str]:
+        """Makes Spot perform a gesture sequence with validation"""
+
+        # Define the valid bounds for each gesture component
+        BOUNDS = {
+            "yaw": (-0.6, 0.6),           # Yaw range in radians
+            "roll": (-0.6, 0.6),          # Roll range in radians
+            "pitch": (-0.6, 0.6),         # Pitch range in radians
+            "body_height": (-0.2, 0.2),   # Height offset in meters
+            "pose_duration": (0.0, 10.0)  # Duration in seconds (min/max duration)
+            }
+
+        try:
+            for idx, gesture in enumerate(gesture_sequence):
+                # Extract individual gesture components
+                yaw = gesture.yaw
+                roll = gesture.roll
+                pitch = gesture.pitch
+                body_height = gesture.body_height
+                pose_duration = gesture.pose_duration
+
+                # Build a dictionary for easier validation and clearer messages
+                gesture_dict = {
+                    "yaw": yaw,
+                    "roll": roll,
+                    "pitch": pitch,
+                    "body_height": body_height,
+                    "pose_duration": pose_duration
+                }
+
+                # Validate each value against its bounds
+                for label, value in gesture_dict.items():
+                    min_val, max_val = BOUNDS[label]
+                    if not (min_val <= value <= max_val):
+                        return False, (
+                            f"Gesture {idx} has an invalid {label} value: {value} "
+                            f"(allowed range: {min_val} to {max_val})"
+                        )
+
+                # If all values are within bounds, proceed with execution
+                posture = EulerZXY(yaw=yaw, roll=roll, pitch=pitch)
+                self.set_mobility_params(body_height_offset=body_height,footprint_R_body=posture)
+
+                # Execute the gesture
+                self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+                
+                # Maintain the pose for the desired duration
+                time.sleep(pose_duration)
+
+            # Restore Spot to its normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+            
+            return True, "Spot successfully performed the gesture sequence"
+
+        except Exception as e:
+            return False, f"Failed to execute gesture sequence: {e}"

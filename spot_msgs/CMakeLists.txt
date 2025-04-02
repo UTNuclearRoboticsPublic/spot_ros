@@ -32,6 +32,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/NonContactTrajectory.srv"
   "srv/SetLocomotion.srv"
   "srv/SetVelocity.srv"
+  "srv/GestureSequence.srv"
   "srv/GetImages.srv"
 
   "msg/ArmJointPosition.msg"
@@ -63,6 +64,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SystemFault.msg"
   "msg/SystemFaultState.msg"
   "msg/WiFiState.msg"
+  "msg/Gesture.msg"
 
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs
 )

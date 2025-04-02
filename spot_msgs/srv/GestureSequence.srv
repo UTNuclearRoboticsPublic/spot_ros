@@ -1,0 +1,5 @@
+string gesture_mode
+spot_msgs/Gesture[] gesture_sequence
+---
+bool success           
+string message          
