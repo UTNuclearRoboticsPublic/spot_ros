@@ -87,7 +87,8 @@ arm_joint_names = {
     'arm0.f1x' : 'arm0_fingers'
 }
 
-friendly_joint_names = dict(body_joint_names, **arm_joint_names)
+joint_name_map_BD_to_ROS = dict(body_joint_names, **arm_joint_names)
+joint_name_map_ROS_to_BD = dict(zip(joint_name_map_BD_to_ROS.values(), joint_name_map_BD_to_ROS.keys()))
 
 def TimestampToMsg(timestamp: timestamp_pb2.Timestamp) -> ROSTime:
     """Convert timestamp_pb2.Timestamp to rclpy.time.Time"""
@@ -390,7 +391,7 @@ def JointStatesToMsg(kinematic_state: KinematicStateProto,
 
     for joint in kinematic_state.joint_states:
         try:
-            name = friendly_joint_names[joint.name]
+            name = joint_name_map_BD_to_ROS[joint.name]
         except KeyError:
             lease_manager.logger.error('Failed to look up friendly name for frame ' + joint.name,
                                        once=True)

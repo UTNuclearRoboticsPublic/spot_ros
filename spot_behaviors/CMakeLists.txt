@@ -27,6 +27,7 @@ include_directories(
 add_library(${PROJECT_NAME} SHARED
   src/check_battery.cpp
   src/dock_robot.cpp
+  src/get_spot_ik.cpp
   src/walk_to_pose.cpp
   src/check_arm_stowed.cpp
   src/move_hand_to_pose.cpp
