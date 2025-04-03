@@ -133,8 +133,11 @@ def TransformToMsg(*, child_frame: str, parent_frame: str, transform: SE3Pose, t
 
     return new_tf
 
-def MsgToTransform(msg: Transform) -> SE3Pose:
-    """Converts geometry_msgs.msg.Transform to bosdyn.client.math_helpers.SE3Pose"""
+def MsgToTransform(msg: Transform | TransformStamped) -> SE3Pose:
+    """Converts geometry_msgs.msg.Transform(Stamped) to bosdyn.client.math_helpers.SE3Pose"""
+    if isinstance(msg, TransformStamped):
+        msg = msg.transform
+
     return SE3Pose (
         x = msg.translation.x,
         y = msg.translation.y,
