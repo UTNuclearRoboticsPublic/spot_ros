@@ -1,0 +1,51 @@
+<root BTCPP_format="4">
+<!-- 
+    Due to the unique nature of Spot (i.e. a mobile manipulator with balance constraints),
+    we cannot simply use MoveIt to reach the intended goal. However, we likewise cannot 
+    rely only on the Boston Dynamics API to calculate the plan for us because it does not
+    account for obstacles in the environment (as of April 2025; if this ever changes please
+    do simplify this code to just use BD). So instead we must use a mix of both. The sequence
+    of events to calculate a full motion plan is as follows:
+    
+     1. Calculate an initial estimate of the arm state using a MoveIt IK query. This will be 
+        slightly off as the robot will adjust its body pose to balance the arm.
+     2. Calculate the final IK pose using the BD API using the MoveIt solution as an initial seed. 
+        This will hopefully be collision free since it is close to the MoveIt solution which is
+        also collision free
+     3. Command the body to the body pose presented by the BD IK solution
+     4. Send the BD arm joints IK solution to MoveIt to solve the motion plan for the arm and 
+        execute it 
+
+    Note that in the event that the final configuration is not collision free, the MoveIt planner
+    will detect that and refuse to execute any plan, so the system is still safe
+-->
+
+    <!-- Ports: -->
+    <!-- target_pose (input): geometry_msgs::msg::PoseStamped::SharedPtr -->
+    <!-- target_link (input): std::string -->
+    <Sequence>
+        <GetMoveitIK 
+            group_name="arm"
+            goal_pose="{target_pose}"
+            avoid_collision="true"
+            ik_link_name="{target_link}"
+            timeout="3"
+        joint_state="{joint_state}"/>
+        <GetSpotIK
+            goal_pose="{target_pose}"
+            nominal_joint_state="{joint_state}"
+            ik_link_name="{target_link}"
+            timeout="3"
+        joint_state="{arm_state}"
+        body_pose="{body_pose}"/>
+        <PublishMessageToTopic 
+            topic="/spot_driver/body_pose" 
+            value="{body_pose}"/>
+        <Sleep msec="500"/>
+        <MoveToJointState 
+            group_name="arm"
+            joint_state="{arm_state}"
+            timeout="3"/>
+    </Sequence>
+
+</root>
