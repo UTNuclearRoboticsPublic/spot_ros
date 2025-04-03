@@ -30,8 +30,8 @@ float64[] joint_nominal_positions
 # Whether a solution was found
 bool solution_found
 
-# The robot body pose in the solution state
-geometry_msgs/PoseStamped body_pose
+# The robot body pose in the solution state relative to the robot stance
+geometry_msgs/Pose body_pose
 
 # The robot joint angles in the solution state
 sensor_msgs/JointState arm_joint_state

@@ -17,7 +17,7 @@ BT::PortsList GetSpotIK::providedPorts() {
         BT::InputPort<std::string>("ik_link_name", "arm0_hand", "The name of the link for which we want to solve IK. Default to the group end effector"),
         BT::InputPort<float>("timeout", 1.0, "How long to wait for the request to return in seconds"),
         BT::OutputPort<sensor_msgs::msg::JointState::SharedPtr>("joint_state", "The solution joint state for the robot arm only"),
-        BT::OutputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("body_pose", "The pose of the robot body in the IK solution")
+        BT::OutputPort<geometry_msgs::msg::Pose::SharedPtr>("body_pose", "The pose of the robot body in the IK solution")
     };
 }
 
@@ -112,7 +112,7 @@ BT::NodeStatus GetSpotIK::onRunning() {
                 return BT::NodeStatus::FAILURE;
             }
             setOutput("joint_state", std::make_shared<sensor_msgs::msg::JointState>(resp->arm_joint_state));
-            setOutput("body_pose", std::make_shared<geometry_msgs::msg::PoseStamped>(resp->body_pose));
+            setOutput("body_pose", std::make_shared<geometry_msgs::msg::Pose>(resp->body_pose));
             return BT::NodeStatus::SUCCESS;
     }
 }
