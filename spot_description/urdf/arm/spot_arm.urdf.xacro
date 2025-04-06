@@ -267,6 +267,13 @@
         <origin xyz = "0.19557 0.0 0.0"/>
     </joint>
 
+    <link name="${name}_mounting_frame"/>
+    <joint name="${name}_wrist_to_mounting_frame" type="fixed">
+        <parent link = "${name}_wrist_roll"/>
+        <child  link = "${name}_mounting_frame"/>
+        <origin xyz = "0.1103 0 -0.036"/>
+    </joint>
+
     </xacro:macro>
 <!-- Transmissions -->
   <transmission name="tran1">
