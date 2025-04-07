@@ -38,7 +38,7 @@ namespace spot_behaviors{
 
 class GetSpotIK : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    GetSpotIK(const std::string& name, const BT::NodeConfiguration& config);
+    GetSpotIK(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer = nullptr);
 
     /** We accept 3 input ports 
      *  - goal_pose: geometry_msgs::msg::PoseStamped::SharedPtr

@@ -2,7 +2,7 @@
 
 namespace spot_behaviors {
 
-GetSpotIK::GetSpotIK(const std::string& name, const BT::NodeConfiguration& config) :
+GetSpotIK::GetSpotIK(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr) :
 StatefulActionNode(name, config),
 NodeBehaviorBase(name, nullptr)
 {

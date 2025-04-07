@@ -23,29 +23,34 @@
     <!-- Ports: -->
     <!-- target_pose (input): geometry_msgs::msg::PoseStamped::SharedPtr -->
     <!-- target_link (input): std::string -->
-    <Sequence>
-        <GetMoveitIK 
-            group_name="arm"
-            goal_pose="{target_pose}"
-            avoid_collision="true"
-            ik_link_name="{target_link}"
-            timeout="3"
-        joint_state="{joint_state}"/>
-        <GetSpotIK
-            goal_pose="{target_pose}"
-            nominal_joint_state="{joint_state}"
-            ik_link_name="{target_link}"
-            timeout="3"
-        joint_state="{arm_state}"
-        body_pose="{body_pose}"/>
-        <PublishMessageToTopic 
-            topic="/spot_driver/body_pose" 
-            value="{body_pose}"/>
-        <Sleep msec="500"/>
-        <MoveToJointState 
-            group_name="arm"
+    <BehaviorTree ID="MoveHandExact">
+        <Sequence>
+            <GetMoveitIK 
+                group_name="arm"
+                goal_pose="{target_pose}"
+                avoid_collisions="true"
+                ik_link_name="{target_link}"
+                timeout="3"
+            joint_state="{joint_state}"/>
+            <GetSpotIK
+                goal_pose="{target_pose}"
+                nominal_joint_state="{joint_state}"
+                ik_link_name="{target_link}"
+                timeout="3"
             joint_state="{arm_state}"
-            timeout="3"/>
-    </Sequence>
+            body_pose="{body_pose}"/>
+            <PublishMessageToTopic 
+                topic="/spot_driver/body_pose" 
+                value="{body_pose}"/>
+            <Sleep msec="500"/>
+            <TriggerService service_name="/spot_manipulation_driver/mini_unstow_arm" timeout="10"/>
+            <Sleep msec="500"/>
+            <MoveToJointState 
+                group_name="arm"
+                joint_state="{arm_state}"
+                timeout="3"
+                moveit_namespace="spot_moveit"/>
+        </Sequence>
+    </BehaviorTree>
 
 </root>

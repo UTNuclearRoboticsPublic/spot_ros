@@ -42,6 +42,7 @@
 #include "spot_behaviors/move_hand_through_poses.hpp"
 #include "spot_behaviors/move_hand_to_pose.hpp"
 #include "spot_behaviors/walk_to_pose.hpp"
+#include "spot_behaviors/get_spot_ik.hpp"
 
 namespace spot_behaviors {
 
@@ -59,11 +60,13 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(MoveHandThroughPoses);
     REGSITER_SPOT_BEHAVIOR(MoveHandToPose);
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
+    REGSITER_SPOT_BEHAVIOR(GetSpotIK);
 
     // A manifest of subtrees and their requirements
     static const std::map<std::string, std::vector<std::string>> subtree_requirements{
-        {"safely_stow_arm.xml", {"MoveHandToPose", "TriggerService", "CheckArmStowed"}},
-        {"move_to.xml"        , {"NavigateToPose", "WalkToPose"}}
+        {"safely_stow_arm.xml" , {"MoveHandToPose", "TriggerService", "CheckArmStowed"}},
+        {"move_to.xml"         , {"NavigateToPose", "WalkToPose"}},
+        {"move_hand_exact.xml", {"GetMoveitIK", "GetSpotIK", "PublishMessageToTopic", "MoveToJointState"}}
     };
 
     // Register all the sub-trees in the package
