@@ -218,12 +218,12 @@ class SpotLeaseManager():
         """Return whether or not the robot is allowed to accept new command or move"""
         return self._is_frozen
     
-    def registerLeaseOwner(self, owner_id) -> Tuple[bool, Text]:
+    def registerLeaseOwner(self, owner_id, force: bool = False) -> Tuple[bool, Text]:
         if self.isRegisteredLeaseOwner(owner_id):
             self.logger.warn(f"Lease already owned for object with id {owner_id}")
             return True, 'You already own this lease'
 
-        (success, msg) = self.claim() if self._lease is None else (True, "Success")
+        (success, msg) = self.claim(force) if self._lease is None else (True, "Success")
         
         if success:
             self._lease_owners.append(owner_id)
@@ -312,10 +312,10 @@ class SpotLeaseManager():
 
         return rtime
 
-    def claim(self) -> Tuple[bool, Text]:
+    def claim(self, force: bool = False) -> Tuple[bool, Text]:
         """Get a lease for the robot, a handle on the estop endpoint, and the ID of the robot."""
         try:
-            got_lease, msg = self.getLease()
+            got_lease, msg = self.getLease(force)
             if not got_lease:
                 return False, msg
             self.resetEStop()
@@ -364,11 +364,11 @@ class SpotLeaseManager():
             self._estop_keepalive = None
             self._estop_endpoint = None
 
-    def getLease(self) -> Tuple[bool, Text]:
+    def getLease(self, force: bool = False) -> Tuple[bool, Text]:
         """Get a lease for the robot and keep the lease alive automatically."""
         try:
             self.logger.info("Obtaining lease...")
-            self._lease = self._lease_client.acquire()
+            self._lease = self._lease_client.acquire() if not force else self._lease_client.take()
         except (ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError) as err:
             self.logger.error(f"Unable to obtain lease: {Text(err.error_message)}")
             return False, err.error_message

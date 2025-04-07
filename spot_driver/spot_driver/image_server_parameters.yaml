@@ -1,0 +1,38 @@
+spot_driver_parameters:
+  hostname:
+    type: string
+    description: Spot computer hostname
+    default_value: '192.168.50.3'
+    validation:
+      not_empty<>: null
+  
+  image_sources:
+    type: string_array
+    description: The image sources to register with the Boston Dynamics API
+    default_value:
+      - frontleft
+      - frontright
+      - left
+      - right
+      - back
+      - hand_rgb
+      - hand_tof
+    validation:
+      subset_of<>: [[frontleft, frontright, left, right, back, hand_rgb, hand_tof]]
+      unique<>: null
+
+  rates:
+    __map_image_sources:
+      rgb:
+        type: double
+        description: The rate to publish color images from this source. Set to zero to disable continous publishing
+        default_value: 1.0
+        validation:
+          gt_eq<>: 0.0
+
+      depth:
+        type: double
+        description: The rate to publish depth images from this source. Set to zero to disable continous publishing 
+        default_value: 1.0
+        validation:
+          gt_eq<>: 0.0

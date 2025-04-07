@@ -1,7 +1,7 @@
 services:
-  spot_bringup:
-    container_name: spot_bringup
-    image: nrg/spot_bringup:${TARGET_ROS_DISTRO}
+  spot_ros:
+    container_name: spot_ros
+    image: nrg/spot_ros:${TARGET_ROS_DISTRO}
     build:
       platforms:
         # - linux/arm64
@@ -11,7 +11,7 @@ services:
         ROS_DISTRO: $TARGET_ROS_DISTRO
       ssh:
         - default
-      target: bringup
+      target: spot_ros
     environment:
       # Enable colored output on ros2 launch
       - RCUTILS_COLORIZED_OUTPUT=1
@@ -20,6 +20,7 @@ services:
       - BOSDYN_CLIENT_PASSWORD
       - SPOT_URDF_EXTRAS
       - SPOT_ACCESSORIES
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     # Enable host compatibiltiy for as much as possible to make usage seamless
     network_mode: host
     ipc: host
@@ -27,7 +28,45 @@ services:
     stdin_open: true
     tty: true
 
-  spot_bringup_teleop:
-    extends: spot_bringup
+  bringup:
+    extends: spot_ros
+    image: nrg/spot_bringup:${TARGET_ROS_DISTRO}
+    container_name: spot_bringup
+    entrypoint: /entrypoints/bringup.bash
     devices:
       - /dev/input/js0
+
+  bringup_autonomous:
+    extends: spot_ros
+    image: nrg/spot_bringup_auto:${TARGET_ROS_DISTRO}
+    container_name: spot_bringup
+    entrypoint: /entrypoints/bringup.bash
+
+  navigation:
+    extends: spot_ros
+    image: nrg/spot_navigation:${TARGET_ROS_DISTRO}
+    container_name: spot_navigation
+    # For autonomous modes we require an attached controller
+    devices:
+      - /dev/input/js0
+    environment:
+      - SPOT_NAV_MAP
+    volumes:
+      - ${SPOT_NAV_MAP}.yaml:/maps/user_map.yaml
+      - ${SPOT_NAV_MAP}.pgm:/maps/user_map.pgm
+    entrypoint: /entrypoints/navigation.bash
+
+  slam:
+    extends: spot_ros
+    image: nrg/spot_slam:${TARGET_ROS_DISTRO}
+    container_name: spot_slam
+    entrypoint: /entrypoints/slam.bash
+
+  save_map:
+    extends: spot_ros
+    image: nrg/spot_map_saver:${TARGET_ROS_DISTRO}
+    container_name: spot_map_saver
+    entrypoint: /entrypoints/map_saver.bash
+    # We need to mount a volume so that the map can be saved
+    volumes:
+      - /tmp:/tmp

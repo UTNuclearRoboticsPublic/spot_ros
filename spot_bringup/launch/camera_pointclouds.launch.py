@@ -17,11 +17,11 @@ def generate_launch_description():
                             description='Whether to include color in pointclouds',
                             default_value='True'),
 
-        DeclareLaunchArgument('hand_4k', 
+        DeclareLaunchArgument('hand_rgb', 
                             description='Whether to publish hand color pointcloud',
                             default_value='False'),
 
-        DeclareLaunchArgument('hand', 
+        DeclareLaunchArgument('hand_tof', 
                             description='Whether to publish hand mono pointcloud',
                             default_value='False'),
 
@@ -72,35 +72,35 @@ def generate_launch_description():
 
         # Factory function for adding nodes to launched based on the Launch Configuration
         node_descriptions = []
-        def addNodeDescription(base_ns: str, topic_ns: str, depth_ns: str) -> None:
-            if IfCondition(LaunchConfiguration(topic_ns)).evaluate(context) or IfCondition(LaunchConfiguration('all')).evaluate(context):
+        def addNodeDescription(base_ns: str, camera_name: str) -> None:
+            if IfCondition(LaunchConfiguration(camera_name)).evaluate(context) or IfCondition(LaunchConfiguration('all')).evaluate(context):
                 node_descriptions.append(
                     ComposableNode(
                         package='depth_image_proc',
                         plugin=plugin_name,
-                        name=f'{topic_ns}_cloud',
+                        name=f'{camera_name}_cloud',
                         parameters=[
                             {'use_sim_time': LaunchConfiguration('use_sim_time')}
                         ],
                         remappings=[
-                            ('points',                      f'{topic_ns}_points{output_suffix}'),
-                            ('image_rect',                  f'/{base_ns}/depth/{depth_ns}/image'),
-                            ('camera_info',                 f'/{base_ns}/depth/{depth_ns}/camera_info'),
-                            ('rgb/camera_info',             f'/{base_ns}/rgb/{depth_ns}/camera_info'),
-                            ('rgb/image_rect_color',        f'/{base_ns}/rgb/{depth_ns}/image'),
-                            ('depth_registered/image_rect', f'/{base_ns}/depth/{depth_ns}/image'),
+                            ('points',                      f'/spot_pointclouds/{camera_name}_points{output_suffix}'),
+                            ('image_rect',                  f'/{base_ns}/depth/{camera_name}/image'),
+                            ('camera_info',                 f'/{base_ns}/depth/{camera_name}/camera_info'),
+                            ('rgb/camera_info',             f'/{base_ns}/rgb/{camera_name}/camera_info'),
+                            ('rgb/image_rect_color',        f'/{base_ns}/rgb/{camera_name}/image'),
+                            ('depth_registered/image_rect', f'/{base_ns}/depth/{camera_name}/image'),
                         ],
-                        extra_arguments=[{'use_intra_process_comms': True}],            
+                        extra_arguments=[{'use_intra_process_comms': False}],            
                     )
                 )
 
-        addNodeDescription('spot_driver', 'frontleft'  , 'frontleft')
-        addNodeDescription('spot_driver', 'frontright' , 'frontright')
-        addNodeDescription('spot_driver', 'left'       , 'left')
-        addNodeDescription('spot_driver', 'right'      , 'right')
-        addNodeDescription('spot_driver', 'back'       , 'back')
-        addNodeDescription('spot_manipulation_driver', 'hand'   , 'tof')
-        addNodeDescription('spot_manipulation_driver', 'hand_4k', 'camera')
+        addNodeDescription('spot_image_server', 'frontleft' )
+        addNodeDescription('spot_image_server', 'frontright')
+        addNodeDescription('spot_image_server', 'left'      )
+        addNodeDescription('spot_image_server', 'right'     )
+        addNodeDescription('spot_image_server', 'back'      )
+        addNodeDescription('spot_image_server', 'hand_tof'  )
+        addNodeDescription('spot_image_server', 'hand_rgb'  )
 
         # If we need to create a new container, do so
         new_container = ComposableNodeContainer(

@@ -35,6 +35,8 @@ def generate_launch_description():
                             default_value='192.168.1.201'),
         DeclareLaunchArgument('spot_namespace',
                             default_value=''),
+        DeclareLaunchArgument('image_config',
+                            default_value=''),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -156,6 +158,12 @@ def generate_launch_description():
             body_params,
             arm_params
         ]
+    )
+
+    image_publisher_include = Node(
+        package='spot_driver',
+        executable='image_server',
+        parameters=[LaunchConfiguration('image_config')]
     )
 
     # State publisher
@@ -280,6 +288,7 @@ def generate_launch_description():
         *launch_args,
         driver_include,
         combined_driver,
+        image_publisher_include,
         state_publisher_include,
         realsense_include,
         joy_node,

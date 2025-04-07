@@ -267,19 +267,13 @@
         <origin xyz = "0.19557 0.0 0.0"/>
     </joint>
 
-    <link name="hand_color_image_sensor"/>
-    <joint name="color_image_joint" type="fixed">
+    <link name="${name}_mounting_frame"/>
+    <joint name="${name}_wrist_to_mounting_frame" type="fixed">
         <parent link = "${name}_wrist_roll"/>
-        <child  link = "hand_color_image_sensor"/>
-        <origin xyz  = "0.14 0.02 0.022" rpy="-1.42 0 -1.57"/>
+        <child  link = "${name}_mounting_frame"/>
+        <origin xyz = "0.1103 0 -0.036"/>
     </joint>
 
-    <link name="hand_depth_sensor"/>
-    <joint name="depth_sensor_joint" type="fixed">
-        <parent link = "${name}_wrist_roll"/>
-        <child  link = "hand_depth_sensor"/>
-        <origin xyz  = "0.14 0.0 0.01" rpy="0 1.42 0"/>
-    </joint>
     </xacro:macro>
 <!-- Transmissions -->
   <transmission name="tran1">

@@ -33,6 +33,7 @@ add_library(${PROJECT_NAME} SHARED
   src/move_hand_to_pose.cpp
   src/check_hand_collision.cpp
   src/move_hand_through_poses.cpp
+  src/gesture_sequence.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
