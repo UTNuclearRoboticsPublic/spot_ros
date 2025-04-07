@@ -98,21 +98,21 @@ def MsgToTimestamp(timestamp_msg: ROSTime) -> timestamp_pb2.Timestamp:
     """Convert rclpy.time.Time to timestamp_pb2.Timestamp"""
     return timestamp_pb2.Timestamp(seconds=timestamp_msg.sec, nanos=timestamp_msg.nanosec)
 
-def Vec3ToMsg(vector3_proto: Vec3Proto) -> Vector3:
+def Vec3ToMsg(vector3_proto: Vec3Proto | Vec3) -> Vector3:
     """Convert Vec3Proto to geometry_msgs.msg.Vector3"""
     return Vector3(x=vector3_proto.x, y=vector3_proto.y, z=vector3_proto.z)
 
-def MsgToVec3(msg: Vector3 | Point) -> Vec3Proto:
-    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3Proto"""
-    return Vec3Proto(x = msg.x, y=msg.y, z=msg.z)
+def MsgToVec3(msg: Vector3 | Point) -> Vec3:
+    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3"""
+    return Vec3(x = msg.x, y=msg.y, z=msg.z)
 
-def QuaternionToMsg(quat_proto: QuaternionProto) -> Quaternion:
+def QuaternionToMsg(quat_proto: QuaternionProto | Quat) -> Quaternion:
     """Converts QuaternionProto to geometry_msgs.msg.Quaternion"""
     return Quaternion(x=quat_proto.x, y=quat_proto.y, z=quat_proto.z, w=quat_proto.w)
 
-def MsgToQuaternion(quat_msg: Quaternion) -> QuaternionProto:
-    """Converts geometry_msgs.msg.Quaternion to QuaternionProto"""
-    return QuaternionProto(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
+def MsgToQuaternion(quat_msg: Quaternion) -> Quat:
+    """Converts geometry_msgs.msg.Quaternion to Quaternion"""
+    return Quat(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
 
 def SE3VelocityToMsg(se3_velocity: SE3VelocityProto) -> Twist:
     """Converts SE3VelocityProto to geometry_msgs.msg.Twist"""
