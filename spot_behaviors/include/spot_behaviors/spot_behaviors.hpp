@@ -86,6 +86,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
         }
 
         // We can only register if all requirements are satisfied, otherwise we get a runtime error
+        RCLCPP_INFO(rclcpp::get_logger("registerSpotBehaviors"), "Registering behavior tree file '%s'", tree_file.c_str());
         if (has_all_requirements) factory.registerBehaviorTreeFromFile(share_path/"behavior_trees"/tree_file);
     }
 }
