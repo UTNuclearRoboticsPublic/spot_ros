@@ -548,8 +548,7 @@ class SpotROS(Node):
     def bodyPoseCallback(self, data: Pose) -> None:
         """Callback for cmd_vel command"""
         try:
-            q = data.orientation
-            rotation = geometry_pb2.Quaternion(w=q.w, x=q.x, y=q.y, z=q.z)
+            rotation = MsgToQuaternion(data.orientation).to_proto()
             self.spot_wrapper.set_mobility_params(body_height_offset=data.position.z, footprint_R_body=to_euler_zxy(rotation))
             self.spot_wrapper.stand()
         except Exception as e:

@@ -1,0 +1,22 @@
+<root BTCPP_format="4">
+<!-- 
+    Due to the unique nature of Spot (i.e. a mobile manipulator with balance constraints),
+    we cannot simply use MoveIt to reach the intended goal. However, we likewise cannot 
+    rely only on the Boston Dynamics API to calculate the plan for us because it does not
+    account for obstacles in the environment (as of April 2025; if this ever changes please
+    do simplify this code to just use BD). So instead we must use a mix of both. So instead
+    we use MoveIt to get very close to the solution without any collisions, and then we use
+    the BD API to correct the error due to the robot lean
+-->
+
+    <!-- Ports: -->
+    <!-- target_pose (input): geometry_msgs::msg::PoseStamped::SharedPtr -->
+    <!-- target_link (input): std::string -->
+    <BehaviorTree ID="MoveHandExact">
+        <Sequence>
+            <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="moveit"/>
+            <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="bosdyn"/>
+        </Sequence>
+    </BehaviorTree>
+
+</root>

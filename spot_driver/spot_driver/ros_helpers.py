@@ -87,7 +87,8 @@ arm_joint_names = {
     'arm0.f1x' : 'arm0_fingers'
 }
 
-friendly_joint_names = dict(body_joint_names, **arm_joint_names)
+joint_name_map_BD_to_ROS = dict(body_joint_names, **arm_joint_names)
+joint_name_map_ROS_to_BD = dict(zip(joint_name_map_BD_to_ROS.values(), joint_name_map_BD_to_ROS.keys()))
 
 def TimestampToMsg(timestamp: timestamp_pb2.Timestamp) -> ROSTime:
     """Convert timestamp_pb2.Timestamp to rclpy.time.Time"""
@@ -97,21 +98,21 @@ def MsgToTimestamp(timestamp_msg: ROSTime) -> timestamp_pb2.Timestamp:
     """Convert rclpy.time.Time to timestamp_pb2.Timestamp"""
     return timestamp_pb2.Timestamp(seconds=timestamp_msg.sec, nanos=timestamp_msg.nanosec)
 
-def Vec3ToMsg(vector3_proto: Vec3Proto) -> Vector3:
+def Vec3ToMsg(vector3_proto: Vec3Proto | Vec3) -> Vector3:
     """Convert Vec3Proto to geometry_msgs.msg.Vector3"""
     return Vector3(x=vector3_proto.x, y=vector3_proto.y, z=vector3_proto.z)
 
-def MsgToVec3(msg: Vector3 | Point) -> Vec3Proto:
-    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3Proto"""
-    return Vec3Proto(x = msg.x, y=msg.y, z=msg.z)
+def MsgToVec3(msg: Vector3 | Point) -> Vec3:
+    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3"""
+    return Vec3(x = msg.x, y=msg.y, z=msg.z)
 
-def QuaternionToMsg(quat_proto: QuaternionProto) -> Quaternion:
+def QuaternionToMsg(quat_proto: QuaternionProto | Quat) -> Quaternion:
     """Converts QuaternionProto to geometry_msgs.msg.Quaternion"""
     return Quaternion(x=quat_proto.x, y=quat_proto.y, z=quat_proto.z, w=quat_proto.w)
 
-def MsgToQuaternion(quat_msg: Quaternion) -> QuaternionProto:
-    """Converts geometry_msgs.msg.Quaternion to QuaternionProto"""
-    return QuaternionProto(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
+def MsgToQuaternion(quat_msg: Quaternion) -> Quat:
+    """Converts geometry_msgs.msg.Quaternion to Quaternion"""
+    return Quat(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
 
 def SE3VelocityToMsg(se3_velocity: SE3VelocityProto) -> Twist:
     """Converts SE3VelocityProto to geometry_msgs.msg.Twist"""
@@ -132,8 +133,11 @@ def TransformToMsg(*, child_frame: str, parent_frame: str, transform: SE3Pose, t
 
     return new_tf
 
-def MsgToTransform(msg: Transform) -> SE3Pose:
-    """Converts geometry_msgs.msg.Transform to bosdyn.client.math_helpers.SE3Pose"""
+def MsgToTransform(msg: Transform | TransformStamped) -> SE3Pose:
+    """Converts geometry_msgs.msg.Transform(Stamped) to bosdyn.client.math_helpers.SE3Pose"""
+    if isinstance(msg, TransformStamped):
+        msg = msg.transform
+
     return SE3Pose (
         x = msg.translation.x,
         y = msg.translation.y,
@@ -147,6 +151,21 @@ def MsgToPose(msg: Pose) -> SE3Pose:
         y = msg.position.y,
         z = msg.position.z,
         rot = MsgToQuaternion(msg.orientation)
+    )
+
+def PoseToMsg(pose: SE3Pose):
+    return Pose(
+        position = Point(
+            x = pose.x,
+            y = pose.y,
+            z = pose.z
+        ),
+        orientation = Quaternion(
+            w = pose.rot.w,
+            x = pose.rot.x,
+            y = pose.rot.y,
+            z = pose.rot.z
+        )
     )
 
 def populateTransformStamped(time: rclpy.time.Time | ROSTime,
@@ -350,7 +369,7 @@ def JointStatesToMsg(kinematic_state: KinematicStateProto,
 
     for joint in kinematic_state.joint_states:
         try:
-            name = friendly_joint_names[joint.name]
+            name = joint_name_map_BD_to_ROS[joint.name]
         except KeyError:
             lease_manager.logger.error('Failed to look up friendly name for frame ' + joint.name,
                                        once=True)

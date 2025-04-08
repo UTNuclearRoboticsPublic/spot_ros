@@ -16,6 +16,10 @@ geometry_msgs/Pose[] waypoints
 # Ignored for all axes marked as position control axes.
 geometry_msgs/Wrench[] wrench_trajectory
 
+# Optional tool frame to use when commanding the arm.
+# Defaults to the hand frame
+string tool_frame arm0_hand
+
 # Timestamps at which each waypoint should be achieved relative to the starting point of the trajectory
 float64[] timestamps
 

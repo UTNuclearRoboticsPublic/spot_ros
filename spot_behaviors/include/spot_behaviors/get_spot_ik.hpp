@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////
-//      Title     : move_arm_to_pose.hpp
-//      Project   : spot_ros
-//      Copyright : Copyright© The University of Texas at Austin, 2024. All rights reserved.
+//      Title     : get_spot_ik.hpp
+//      Project   : spot_behaviors
+//      Copyright : Copyright© The University of Texas at Austin, 2025. All rights reserved.
 //                
 //          All files within this directory are subject to the following, unless an alternative
 //          license is explicitly included within the text of each file.
@@ -29,26 +29,31 @@
 
 #include <optional>
 #include <rclcpp/rclcpp.hpp>
+#include <geometry_msgs/msg/pose.hpp>
 #include <behaviortree_cpp/action_node.h>
-#include <rclcpp_action/rclcpp_action.hpp>
-#include <moveit_msgs/action/move_group.hpp>
-#include "spot_behaviors/node_behavior_base.hpp"
-#include "spot_msgs/action/arm_cartesian_command.hpp"
+#include <spot_msgs/srv/inverse_kinematics.hpp>
+#include <spot_behaviors/node_behavior_base.hpp>
 
 namespace spot_behaviors{
 
-class MoveHandToPose : public BT::StatefulActionNode, public NodeBehaviorBase {
+class GetSpotIK : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    MoveHandToPose(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
+    GetSpotIK(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer = nullptr);
 
-    /** We accept x input ports - TODO 
-     *  - target_pose: geometry_msgs::msg::PoseStamped 
+    /** We accept 3 input ports 
+     *  - goal_pose: geometry_msgs::msg::PoseStamped::SharedPtr
+     *  - gaze_target: geometry_msgs::msg::PointStamped::SharedPtr
+     *  - ik_link_name: string [optional]
+     *  - timeout: float [Default 1.0 second]
+     *  We provide 2 output ports
+     *  - joint_state: sensor_msgs::msg::JointState::SharedPtr
+     *  - body_pose: geometry_msgs::msg::PoseStamped::SharedPtr
      */
-    static BT::PortsList providedPorts();
+    static BT::PortsList providedPorts(); 
 
     /** 
-     * Make the the motion request. 
-     * @return RUNNING if the action server is available, FAILURE otherwise
+     * Make the the IK request. 
+     * @return RUNNING if the IK server is available, FAILURE otherwise
      */
     BT::NodeStatus onStart() override;
 
@@ -65,26 +70,11 @@ public:
     void onHalted() override;
 
 protected:
-    // Parameters (default values are provided at parameter declaration)
-    double max_planning_time_{};
-    std::string planning_group_{};
-    double max_velocity_scaling_factor_{};
+    rclcpp::Client<spot_msgs::srv::InverseKinematics>::SharedPtr spot_ik_client_;
+    rclcpp::Time query_start_time_;
+    rclcpp::Duration query_timeout_{0, 0};
 
-    // Action client
-    rclcpp_action::Client<moveit_msgs::action::MoveGroup>::SharedPtr move_group_action_client_;
-    rclcpp_action::Client<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_action_client_;
-
-    // Action client future handle - only used while waiting for a request to be accepted or jejected
-    std::shared_future<rclcpp_action::ClientGoalHandle<moveit_msgs::action::MoveGroup>::SharedPtr> move_group_response_future_;
-    std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr> bosdyn_response_future_;
-    rclcpp::Time request_timestamp_{};
-
-    // Action client goal handle - nullptr if no request is active
-    rclcpp_action::ClientGoalHandle<moveit_msgs::action::MoveGroup>::SharedPtr move_group_goal_handle_;
-    rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_goal_handle_;
-
-    template<typename ActionType>
-    BT::NodeStatus checkRequestStatus(std::shared_future<typename rclcpp_action::ClientGoalHandle<ActionType>::SharedPtr> shared_future);
+    std::optional<rclcpp::Client<spot_msgs::srv::InverseKinematics>::FutureAndRequestId> query_;
 };
 
 } // namespace spot_behaviors

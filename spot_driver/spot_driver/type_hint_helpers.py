@@ -1,6 +1,7 @@
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2, geometry_pb2, arm_command_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
+from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsResponse, InverseKinematicsRequest
 
 # Until python type hints gets proper support for protobuf types
 class Vec3Proto(type[geometry_pb2.Vec3]): pass
@@ -26,3 +27,5 @@ class ManipulatorStateProto(type[robot_state_pb2.ManipulatorState]): pass
 class ArmVelocityCommandProto(type[arm_command_pb2.ArmVelocityCommand]): pass
 class ArmCartesianCommandProto(type[arm_command_pb2.ArmCartesianCommand]): pass
 class WrenchProto(type[geometry_pb2.Wrench]): pass
+class InverseKinematicsRequestProto(type[InverseKinematicsRequest]): pass
+class InverseKinematicsResponseProto(type[InverseKinematicsResponse]): pass
