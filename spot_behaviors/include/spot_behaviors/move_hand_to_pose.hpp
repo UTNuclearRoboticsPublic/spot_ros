@@ -33,6 +33,7 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <moveit_msgs/action/move_group.hpp>
 #include "spot_behaviors/node_behavior_base.hpp"
+#include "spot_msgs/action/arm_cartesian_command.hpp"
 
 namespace spot_behaviors{
 
@@ -71,13 +72,19 @@ protected:
 
     // Action client
     rclcpp_action::Client<moveit_msgs::action::MoveGroup>::SharedPtr move_group_action_client_;
+    rclcpp_action::Client<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_action_client_;
 
     // Action client future handle - only used while waiting for a request to be accepted or jejected
     std::shared_future<rclcpp_action::ClientGoalHandle<moveit_msgs::action::MoveGroup>::SharedPtr> move_group_response_future_;
+    std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr> bosdyn_response_future_;
     rclcpp::Time request_timestamp_{};
 
     // Action client goal handle - nullptr if no request is active
     rclcpp_action::ClientGoalHandle<moveit_msgs::action::MoveGroup>::SharedPtr move_group_goal_handle_;
+    rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_goal_handle_;
+
+    template<typename ActionType>
+    BT::NodeStatus checkRequestStatus(std::shared_future<typename rclcpp_action::ClientGoalHandle<ActionType>::SharedPtr> shared_future);
 };
 
 } // namespace spot_behaviors
