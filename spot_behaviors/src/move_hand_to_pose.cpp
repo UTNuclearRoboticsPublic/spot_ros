@@ -112,7 +112,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
 
     } else if (backend == "bosdyn") {
         // TODO: Add preferred joint configuration
-        
+
         spot_msgs::action::ArmCartesianCommand::Goal arm_command;
         arm_command.header = target_pose.header;
         arm_command.tool_frame = target_link;
@@ -184,7 +184,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
 
     // Check if the action is ongoing, or if it has concluded
     rclcpp::spin_some(this->get_node_base_interface());
-    const std::string server_name = move_group_goal_handle_ ? "MoveIt" : "Boston Dynamics";
+    const std::string action_name = move_group_goal_handle_ ? "MoveGroup" : "ArmCartesianCommand";
     const int8_t goal_status = move_group_goal_handle_ ? move_group_goal_handle_->get_status() : bosdyn_goal_handle_->get_status();
     switch (goal_status){
         case action_msgs::msg::GoalStatus::STATUS_CANCELING:
@@ -193,21 +193,21 @@ BT::NodeStatus MoveHandToPose::onRunning() {
             return BT::NodeStatus::RUNNING;
 
         case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
-            RCLCPP_WARN(get_logger(), "%s action returned status UNKNOWN, reporting failure", server_name.c_str());
+            RCLCPP_WARN(get_logger(), "%s action returned status UNKNOWN, reporting failure", action_name.c_str());
             [[fallthrough]];
         case action_msgs::msg::GoalStatus::STATUS_ABORTED:
         case action_msgs::msg::GoalStatus::STATUS_CANCELED:
-            RCLCPP_WARN(get_logger(), "%s action failed", server_name.c_str());
+            RCLCPP_WARN(get_logger(), "%s action failed", action_name.c_str());
             move_group_goal_handle_.reset();
             return BT::NodeStatus::FAILURE;
 
         case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
-            RCLCPP_INFO(get_logger(), "MoveHandToPose: %s Action complete", server_name.c_str());
+            RCLCPP_INFO(get_logger(), "MoveHandToPose: %s Action complete", action_name.c_str());
             move_group_goal_handle_.reset();
             return BT::NodeStatus::SUCCESS;
     }
 
-    RCLCPP_ERROR(get_logger(), "%s action returned unknown status code \"%d\", reporting failure", server_name.c_str(), +goal_status);
+    RCLCPP_ERROR(get_logger(), "%s action returned unknown status code \"%d\", reporting failure", action_name.c_str(), +goal_status);
     return BT::NodeStatus::FAILURE;
 }
 

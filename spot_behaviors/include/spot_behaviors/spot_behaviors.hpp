@@ -66,7 +66,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     static const std::map<std::string, std::vector<std::string>> subtree_requirements{
         {"safely_stow_arm.xml" , {"MoveHandToPose", "TriggerService", "CheckArmStowed"}},
         {"move_to.xml"         , {"NavigateToPose", "WalkToPose"}},
-        {"move_hand_exact.xml", {"GetMoveitIK", "GetSpotIK", "PublishMessageToTopic", "MoveToJointState"}}
+        {"move_hand_exact.xml" , {"MoveHandToPose"}}
     };
 
     // Register all the sub-trees in the package
