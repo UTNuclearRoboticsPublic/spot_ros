@@ -169,7 +169,7 @@ def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
             {'source_list':['/spot_extra_joint_states']}
         ],
         remappings=[
-            ('/joint_states', '/spot_fake_joint_states')
+            ('/joint_states', '/spot_driver/joint_states')
         ]
     ),
 
@@ -233,7 +233,7 @@ def generate_launch_description():
             output='both',
             parameters=[{'robot_description': urdf_param}],
             remappings=[
-                ('/joint_states', '/spot_fake_joint_states')
+                ('/joint_states', '/spot_driver/joint_states')
             ]
         )
     ])
