@@ -7,24 +7,11 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import PushRosNamespace
+from spot_description.get_accessories import get_accessories_from_env
 
 def generate_launch_description():
 
-    spot_accessories: str = os.getenv('SPOT_ACCESSORIES', '')
-    spot_accessories_dict: dict = {}
-    for accessory in spot_accessories.split(' '):
-        if accessory == 'ARM':
-            spot_accessories_dict['has_arm'] = 'True'
-        elif accessory == 'EAP':
-            spot_accessories_dict['has_eap'] = 'True'
-        elif accessory == 'EAP2':
-            spot_accessories_dict['has_eap_2'] = 'True'
-        elif accessory == 'CAM':
-            spot_accessories_dict['has_cam_payload'] = 'True'
-        elif accessory == 'RL_KIT':
-            spot_accessories_dict['has_rl_kit'] = 'True'
-        elif accessory == 'REALSENSE':
-            spot_accessories_dict['has_realsense'] = 'True'
+    spot_accessories_dict = get_accessories_from_env()
 
     launch_args = [
 
