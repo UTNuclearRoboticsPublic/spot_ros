@@ -5,6 +5,7 @@ from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitut
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+from spot_description.get_accessories import get_accessories_from_env
 
 joint_names = [
     "front_left_hip_x",
@@ -177,36 +178,38 @@ def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
 
 def generate_launch_description():
 
+    spot_accessory_dict = get_accessories_from_env()
+
     launch_args = [
         DeclareLaunchArgument('has_arm',
             description='Boolean. Include the Spot Arm.',
             choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_arm', 'False')),
             
         DeclareLaunchArgument('has_eap',
             description='Boolean. Include the Enhanced Autonomy package (EAP)',
             choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_eap', 'False')),
 
         DeclareLaunchArgument('has_eap_2',
             description='Boolean. Include the Updated Enhanced Autonomy package (EAP2)',
             choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_eap_2', 'False')),
 
         DeclareLaunchArgument('has_rl_kit',
             description='Boolean. Include the RL Research Kit mounting set',
             choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_rl_kit', 'False')),
 
         DeclareLaunchArgument('has_realsense',
             description='Boolean. Include an arm mounted Realsense D435',
             choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_realsense', 'False')),
 
         DeclareLaunchArgument('has_cam_payload',
             description='Boolean. Include the CAM payload',
             choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_cam_payload', 'False')),
 
         DeclareLaunchArgument('configuration',
             description='The configuration to emulate for the Spot robot',
