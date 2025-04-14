@@ -48,6 +48,10 @@ def generate_launch_description():
         DeclareLaunchArgument('has_eap_2',
                             description="Robot includes the Updated Extended Autonomy Package (EAP2)",
                             default_value=spot_accessories_dict.get('has_eap_2', 'False')),
+        DeclareLaunchArgument('kinematic_model',
+                            description='The kinematic model to use for the Spot description',
+                            choices=['none', 'body_assist', 'mobile_manipulation'],
+                            default_value='none'),
         DeclareLaunchArgument('has_rl_kit',
                             description="Robot includes the Reinforcement Learning Research Kit mounting setup",
                             default_value=spot_accessories_dict.get('has_rl_kit', 'False')),
@@ -97,6 +101,7 @@ def generate_launch_description():
     has_arm         = LaunchConfiguration('has_arm')
     has_eap         = LaunchConfiguration('has_eap')
     has_eap_2       = LaunchConfiguration('has_eap_2')
+    kinematic_model = LaunchConfiguration('kinematic_model')
     has_rl_kit      = LaunchConfiguration('has_rl_kit')
     has_realsense   = LaunchConfiguration('has_realsense')
     has_cam_payload = LaunchConfiguration('has_cam_payload')
@@ -124,6 +129,7 @@ def generate_launch_description():
                 'has_eap':         has_eap,
                 'has_arm':         has_arm,
                 'has_eap_2':       has_eap_2,
+                'kinematic_model': kinematic_model,
                 'has_rl_kit':      has_rl_kit,
                 'has_cam_payload': has_cam_payload,
                 'auto_claim':      auto_claim,
@@ -144,6 +150,7 @@ def generate_launch_description():
             'has_eap':         has_eap,
             'has_arm':         has_arm,
             'has_eap_2':       has_eap_2,
+            'kinematic_model': kinematic_model,
             'has_rl_kit':      has_rl_kit,
             'has_cam_payload': has_cam_payload,
             'auto_claim':      auto_claim,
@@ -178,6 +185,7 @@ def generate_launch_description():
       launch_arguments={'has_arm': has_arm,
                         'has_eap': has_eap,
                         'has_eap_2': has_eap_2,
+                        'kinematic_model': kinematic_model,
                         'has_rl_kit': has_rl_kit,}.items()
     )
 
