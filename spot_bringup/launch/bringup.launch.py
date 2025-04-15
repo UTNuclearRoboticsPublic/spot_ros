@@ -263,9 +263,9 @@ def generate_launch_description():
         package='twist_mux',
         executable='twist_mux',
         output='screen',
-        remappings={('/cmd_vel_out', '/spot_driver/cmd_vel')},
+        remappings=[('/cmd_vel_out', '/spot_driver/cmd_vel')],
         parameters=[
-            {twist_mux_config}]
+            twist_mux_config]
     )
 
     ## Launch
