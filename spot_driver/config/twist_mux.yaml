@@ -1,14 +1,16 @@
-topics:
-- name    : controller
-  topic   : controller/cmd_vel
-  timeout : 0.5
-  priority: 9
-- name    : keyboard
-  topic   : keyboard/cmd_vel
-  timeout : 0.5
-  priority: 8
-- name    : hololens
-  topic   : hololens/cmd_vel
-  timeout : 0.5
-  priority: 7
-locks: []
+twist_mux:
+  ros__parameters:
+    topics:
+      controller:
+        topic   : controller/cmd_vel
+        timeout : 0.5
+        priority: 9
+      keyboard:
+        topic   : keyboard/cmd_vel
+        timeout : 0.5
+        priority: 8
+      hololens:
+        topic   : hololens/cmd_vel
+        timeout : 0.5
+        priority: 7
+
