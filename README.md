@@ -136,5 +136,8 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `TriggerService` | `service_name` `timeout` `empty` | --- | Calls a service with `std_srvs/Trigger` (or `std_srvs/Empty` if `empty` is True) and waits for `timeout` seconds for a response. Returns the success value of the response (always `SUCCESS` for Empty), or `FAILURE` if no response is received |
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
 
+# Commanding Spot using Twist Mux
+The default driver launch file starts up the Twist Mux node which takes in controller/keyboard/hololens input and outputs out cmd vel based on priority. To change the priority of the inputs or add other inputs, edit `twist_mux.yaml` in `spot_driver\config`.
+
 ## Authors
 Janak Panthi (aka Crasun Jans), Alex Navarro, Kevin Torres, and Blake Anderson
