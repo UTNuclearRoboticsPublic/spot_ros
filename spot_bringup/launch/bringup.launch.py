@@ -64,12 +64,6 @@ def generate_launch_description():
         DeclareLaunchArgument('auto_stand',
                             description='Stand the robot upon connection.',
                             default_value='False'),
-        DeclareLaunchArgument('publish_images',
-                              description='Specify whether to publish (colored) images',
-                              default_value='False'),
-        DeclareLaunchArgument('publish_depth_images',
-                              description='Specify whether to publish depth images',
-                              default_value='False'),
         DeclareLaunchArgument('launch_pointcloud_service',
                             description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
                             default_value='False'),
@@ -100,8 +94,6 @@ def generate_launch_description():
     auto_claim      = LaunchConfiguration('auto_claim')
     auto_power_on   = LaunchConfiguration('auto_power_on')
     auto_stand      = LaunchConfiguration('auto_stand')
-    publish_images  = LaunchConfiguration('publish_images')
-    publish_depth_images = LaunchConfiguration('publish_depth_images')
     launch_pointcloud_service = LaunchConfiguration('launch_pointcloud_service')
 
     body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
@@ -127,8 +119,6 @@ def generate_launch_description():
                 'auto_claim':      auto_claim,
                 'auto_power_on':   auto_power_on,
                 'auto_stand':      auto_stand,
-                'publish_images':  publish_images,
-                'publish_depth_images': publish_depth_images,
                 'launch_pointcloud_service': launch_pointcloud_service
             }.items()
     )
@@ -148,8 +138,6 @@ def generate_launch_description():
             'auto_claim':      auto_claim,
             'auto_power_on':   auto_power_on,
             'auto_stand':      auto_stand,
-            'publish_images':  publish_images,
-            'publish_depth_images': publish_depth_images,
             'launch_pointcloud_service': launch_pointcloud_service,
             'action_namespace': LaunchConfiguration('manipulation_action_namespace'),
             'data_capture_mode': LaunchConfiguration('data_capture_mode'),
