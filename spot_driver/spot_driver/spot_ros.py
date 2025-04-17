@@ -154,6 +154,12 @@ class SpotROS(Node):
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
 
+        self.declare_parameter('kinematic_model', 'none',
+            ParameterDescriptor(description='The kinematic model for the Spot urdf, used to publish corresponding virtual joint states here',
+                                type=ParameterType.PARAMETER_STRING,
+                                additional_constraints="'none', 'body_assist', or 'mobile_manipulation'",
+                                read_only=True))
+
         self.declare_parameter('sounds', Text(''),
             ParameterDescriptor(description='Array of YAML files giving WAV sound files to load. Keys in the files are labels and values are the filepaths.',
                                 type=ParameterType.PARAMETER_STRING_ARRAY,
@@ -213,7 +219,8 @@ class SpotROS(Node):
         joint_state = JointStatesToMsg(state.kinematic_state, self.spot_wrapper)
 
         # Add in the virtual joints #
-        virtual_joint_state = GetVirtualJointValues(state.kinematic_state)
+        kinematic_model = self.get_parameter('kinematic_model').value
+        virtual_joint_state = GetVirtualJointValues(state.kinematic_state, kinematic_model)
         joint_state.name.extend(virtual_joint_state.name)
         joint_state.position.extend(virtual_joint_state.position)
         joint_state.velocity.extend(virtual_joint_state.velocity)

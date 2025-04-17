@@ -23,7 +23,12 @@ def generate_launch_description():
         DeclareLaunchArgument('spot_namespace',
                             default_value=''),
         DeclareLaunchArgument('image_config',
-                            default_value=''),
+                            default_value=PathJoinSubstitution([
+                                FindPackageShare("spot_driver"),
+                                "config",
+                                "image_service_only.yaml"
+                            ]),
+                            description="Path to image config YAML. By default we don't publish images"),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -35,6 +40,10 @@ def generate_launch_description():
         DeclareLaunchArgument('has_eap_2',
                             description="Robot includes the Updated Extended Autonomy Package (EAP2)",
                             default_value=spot_accessories_dict.get('has_eap_2', 'False')),
+        DeclareLaunchArgument('kinematic_model',
+                            description='The kinematic model to use for the Spot description',
+                            choices=['none', 'body_assist', 'mobile_manipulation'],
+                            default_value='none'),
         DeclareLaunchArgument('has_rl_kit',
                             description="Robot includes the Reinforcement Learning Research Kit mounting setup",
                             default_value=spot_accessories_dict.get('has_rl_kit', 'False')),
@@ -55,12 +64,6 @@ def generate_launch_description():
         DeclareLaunchArgument('auto_stand',
                             description='Stand the robot upon connection.',
                             default_value='False'),
-        DeclareLaunchArgument('publish_images',
-                              description='Specify whether to publish (colored) images',
-                              default_value='False'),
-        DeclareLaunchArgument('publish_depth_images',
-                              description='Specify whether to publish depth images',
-                              default_value='False'),
         DeclareLaunchArgument('launch_pointcloud_service',
                             description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
                             default_value='False'),
@@ -84,14 +87,13 @@ def generate_launch_description():
     has_arm         = LaunchConfiguration('has_arm')
     has_eap         = LaunchConfiguration('has_eap')
     has_eap_2       = LaunchConfiguration('has_eap_2')
+    kinematic_model = LaunchConfiguration('kinematic_model')
     has_rl_kit      = LaunchConfiguration('has_rl_kit')
     has_realsense   = LaunchConfiguration('has_realsense')
     has_cam_payload = LaunchConfiguration('has_cam_payload')
     auto_claim      = LaunchConfiguration('auto_claim')
     auto_power_on   = LaunchConfiguration('auto_power_on')
     auto_stand      = LaunchConfiguration('auto_stand')
-    publish_images  = LaunchConfiguration('publish_images')
-    publish_depth_images = LaunchConfiguration('publish_depth_images')
     launch_pointcloud_service = LaunchConfiguration('launch_pointcloud_service')
 
     body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
@@ -111,13 +113,12 @@ def generate_launch_description():
                 'has_eap':         has_eap,
                 'has_arm':         has_arm,
                 'has_eap_2':       has_eap_2,
+                'kinematic_model': kinematic_model,
                 'has_rl_kit':      has_rl_kit,
                 'has_cam_payload': has_cam_payload,
                 'auto_claim':      auto_claim,
                 'auto_power_on':   auto_power_on,
                 'auto_stand':      auto_stand,
-                'publish_images':  publish_images,
-                'publish_depth_images': publish_depth_images,
                 'launch_pointcloud_service': launch_pointcloud_service
             }.items()
     )
@@ -131,13 +132,12 @@ def generate_launch_description():
             'has_eap':         has_eap,
             'has_arm':         has_arm,
             'has_eap_2':       has_eap_2,
+            'kinematic_model': kinematic_model,
             'has_rl_kit':      has_rl_kit,
             'has_cam_payload': has_cam_payload,
             'auto_claim':      auto_claim,
             'auto_power_on':   auto_power_on,
             'auto_stand':      auto_stand,
-            'publish_images':  publish_images,
-            'publish_depth_images': publish_depth_images,
             'launch_pointcloud_service': launch_pointcloud_service,
             'action_namespace': LaunchConfiguration('manipulation_action_namespace'),
             'data_capture_mode': LaunchConfiguration('data_capture_mode'),
@@ -165,6 +165,7 @@ def generate_launch_description():
       launch_arguments={'has_arm': has_arm,
                         'has_eap': has_eap,
                         'has_eap_2': has_eap_2,
+                        'kinematic_model': kinematic_model,
                         'has_rl_kit': has_rl_kit,}.items()
     )
 

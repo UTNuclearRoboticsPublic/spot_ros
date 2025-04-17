@@ -559,7 +559,11 @@ def GetTFFromState(kinematic_state: KinematicStateProto,
 
     return tf_msg
 
-def GetVirtualJointValues(kinematic_state: KinematicStateProto) -> JointState:
+def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model: str) -> JointState:
+    """
+    Computes virtual joint states based on the selected kinematic model.
+    Returns a JointState message with corresponding virtual joint names and states.
+    """
     transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map 
     tform_body_to_odom = SE3Pose.from_proto(transform_map.get("odom").parent_tform_child)
     tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
@@ -570,44 +574,44 @@ def GetVirtualJointValues(kinematic_state: KinematicStateProto) -> JointState:
 
     #TODO: Velocities
 
-    # base_footprint -> body_with_height
-    joint_state.name.append("body_height_joint")
-    joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    if kinematic_model == "body_assist":
+        # base_footprint -> body_with_height
+        joint_state.name.append("body_height_joint")
+        joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
-    joint_state.name.append("body_yaw_joint")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
+        joint_state.name.append("body_yaw_joint")
+        joint_state.position.append(0)
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_yaw -> body_with_pitch_and_yaw
-    joint_state.name.append("body_pitch_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_yaw -> body_with_pitch_and_yaw
+        joint_state.name.append("body_pitch_joint")
+        joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_pitch_and_yaw -> body
-    joint_state.name.append("body_roll_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_pitch_and_yaw -> body
+        joint_state.name.append("body_roll_joint")
+        joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    joint_state.name.append("body_x")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    elif kinematic_model == "mobile_manipulation":
+        for joint_name in ["body_x", "body_y", "body_or"]:
+            joint_state.name.append(joint_name)
+            joint_state.position.append(0)
+            joint_state.velocity.append(0)
+            joint_state.effort.append(0)
 
-    joint_state.name.append("body_y")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    elif kinematic_model == "none":
+        pass
 
-    joint_state.name.append("body_or")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    else:
+        raise ValueError(f"Unsupported kinematic model: {kinematic_model}")
+
 
     return joint_state
 
