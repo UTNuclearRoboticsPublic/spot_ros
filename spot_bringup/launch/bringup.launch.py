@@ -23,7 +23,12 @@ def generate_launch_description():
         DeclareLaunchArgument('spot_namespace',
                             default_value=''),
         DeclareLaunchArgument('image_config',
-                            default_value=''),
+                            default_value=PathJoinSubstitution([
+                                FindPackageShare("spot_driver"),
+                                "config",
+                                "image_service_only.yaml"
+                            ]),
+                            description="Path to image config YAML. By default we don't publish images"),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
