@@ -607,10 +607,10 @@ def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model:
             joint_state.effort.append(0)
 
     elif kinematic_model == "none":
-        # Nothing to add
+        pass
 
     else:
-    raise ValueError(f"Unsupported kinematic model: {kinematic_model}")
+        raise ValueError(f"Unsupported kinematic model: {kinematic_model}")
 
 
     return joint_state
