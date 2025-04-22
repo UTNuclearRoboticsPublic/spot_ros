@@ -70,3 +70,9 @@ services:
     # We need to mount a volume so that the map can be saved
     volumes:
       - /tmp:/tmp
+
+  moveit:
+    extends: spot_ros
+    image: nrg/spot_moveit_server:${TARGET_ROS_DISTRO}
+    container_name: spot_moveit_server
+    entrypoint: /entrypoints/moveit_server.bash
