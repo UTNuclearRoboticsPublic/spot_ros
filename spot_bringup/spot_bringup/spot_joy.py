@@ -6,7 +6,7 @@ import numpy as np
 from asyncio import Future
 
 import rclpy.duration
-from rclpy.node import Node
+from rclpy.node import Node, Parameter
 from rclpy.client import Client
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
@@ -145,7 +145,8 @@ class SpotJoyUtils(Node):
         self._gripper_closed = True
 
         # Controller configuration parameter
-        self.controller_config = self.declare_parameter(name="controller", 
+        self.controller_config = self.declare_parameter(name="controller",
+            value=Parameter.Type.STRING,
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_STRING,
                 description="Name of the controller configuration to load",
