@@ -227,7 +227,7 @@ class SpotROS(Node):
         joint_state.effort.extend(virtual_joint_state.effort)
         
         # TF #
-        tf_msg = GetTFFromState(state.kinematic_state, self.spot_wrapper)
+        tf_msg = GetTFFromState(state.kinematic_state, self.spot_wrapper, kinematic_model)
 
         self.joint_state_pub.publish(joint_state)
         if len(tf_msg.transforms) > 0:
