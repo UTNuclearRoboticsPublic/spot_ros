@@ -832,7 +832,7 @@ class SpotROS(Node):
         feedback_msg.standing = self.spot_wrapper.is_standing
         feedback_msg.sitting  = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
-        feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
+        feedback_msg.docked = self.spot_wrapper.is_docked
         robot_id = self.spot_wrapper.robot_id
         if robot_id:
             feedback_msg.serial_number = robot_id.serial_number
