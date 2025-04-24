@@ -79,7 +79,7 @@ class SpotBodyWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-    def connect(self, lease_manager: SpotLeaseManager, rates = {}, callbacks = {}) -> bool:
+    def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
         Connect the lease manager to a Spot robot at address 'hostname' if it is not already connected. 
         Additionally registers self as a lease owner with this lease manager registers clients for robot
@@ -107,7 +107,7 @@ class SpotBodyWrapper():
         self._lease_manager = lease_manager
         if not self._lease_manager.is_connected:
             self._lease_manager.setLogger(self._logger)
-            if not self._lease_manager.connect(self._hostname, rates, callbacks):
+            if not self._lease_manager.connect(self._hostname):
                 return False
 
         self._robot_id = self._lease_manager.ID
@@ -132,7 +132,7 @@ class SpotBodyWrapper():
                 return False
 
         # Optionally populate pointcloud data asynchronously
-        if self._has_eap_2 and 'point_cloud' in callbacks:
+        if self._has_eap_2:
             # Create point cloud requests
             point_cloud_sources = {'velodyne-point-cloud'}
             for source in point_cloud_sources:

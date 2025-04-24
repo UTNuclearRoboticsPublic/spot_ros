@@ -271,9 +271,9 @@ class SpotROS(Node):
     def StandingIdleCallback(self) -> None:
         self.spot_wrapper.update_idle_state()
 
-    def LeaseCB(self, _) -> None:
+    def LeaseCB(self) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
-        self.spot_wrapper._lease_manager._lease_task.update()
+        self.spot_wrapper._lease_manager.updateLeaseInfo()
         
         lease_array_msg = LeaseArray()
         lease_list = self.spot_wrapper.lease
@@ -657,14 +657,13 @@ class SpotROS(Node):
             else:
                 self._logger.warn("Pointcloud service requested but robot does not have EAP2")
 
-        callbacks["lease"] = self.LeaseCB
-
         # Setup timers for the state tasks
         self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), self.RobotStateCB)
-        self.idle_timer = self.create_timer(0.1, self.StandingIdleCallback)
+        self.idle_timer  = self.create_timer(0.1, self.StandingIdleCallback)
+        self.lease_timer = self.create_timer(1/rates_dict.get('status.lease', 1.0), self.LeaseCB)
 
         # Verify connection
-        if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
+        if self.spot_wrapper.connect(lease_manager):
             self.get_logger().info(f'Connected to Spot {self.spot_wrapper.robot_id.nickname}...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
@@ -815,9 +814,6 @@ class SpotROS(Node):
 
         if not self.spot_wrapper.is_connected:
             return
-
-        # call state periodic tasks
-        self.spot_wrapper._lease_manager.updateLeaseTask()
 
         # publish robot feedback state
         feedback_msg = Feedback()
