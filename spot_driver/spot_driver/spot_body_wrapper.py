@@ -421,7 +421,6 @@ class SpotBodyWrapper():
                     self._last_stand_command = None
                 else:
                     self._is_standing = False
-                    self._logger.info('Standing...')
                     is_moving = True
             except (ResponseError, RpcError) as e:
                 self._logger.error(f"Error when getting robot command feedback: {e}")
@@ -438,14 +437,12 @@ class SpotBodyWrapper():
                 else:
                     self._is_sitting = False
                     is_moving = True
-                    self._logger.info('Sitting...')
             except (ResponseError, RpcError) as e:
                 self._logger.error(f"Error when getting robot command feedback: {e}")
                 self._last_sit_command = None
 
         if (dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKING) or \
            (dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING):
-            self._logger.info("Undocking")
             is_moving = True
             self._is_standing = True
             self._is_sitting = False
