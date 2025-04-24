@@ -512,7 +512,8 @@ def GetWifiFromState(comms_states: CommsStateProto) -> WiFiState:
     return wifi_msg
 
 def GetTFFromState(kinematic_state: KinematicStateProto,
-                   lease_manager: SpotLeaseManager) -> TFMessage:
+                   lease_manager: SpotLeaseManager,
+                   kinematic_model: str) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
     Args:
@@ -543,19 +544,30 @@ def GetTFFromState(kinematic_state: KinematicStateProto,
 
     ## === TODO: Fix orientation when on slopes === ##
 
-    # Add the base footprint transform 
-    tform_odom_to_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("odom").parent_tform_child).inverse()
-    tform_body_to_flat_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("flat_body").parent_tform_child)
-    tform_gpe_to_base_footprint = tform_odom_to_body * tform_body_to_flat_body
-    tform_gpe_to_base_footprint.x = 0.0
-    tform_gpe_to_base_footprint.y = 0.0
-    tform_gpe_to_base_footprint.z = 0.0
+    # Add the GPE -> base footprint transform, where GPE is aligned with the odom frame 
+    odom_tform_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'odom', 'body')
+    body_tform_flat_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'body', 'flat_body')
+    gpe_tform_base_footprint = odom_tform_body * body_tform_flat_body
+    gpe_tform_base_footprint.x = 0.0
+    gpe_tform_base_footprint.y = 0.0
+    gpe_tform_base_footprint.z = 0.0
     tf_msg.transforms.append(TransformToMsg(
-        child_frame="base_footprint", 
-        parent_frame="gpe", 
-        transform=tform_gpe_to_base_footprint, 
+        child_frame='base_footprint', 
+        parent_frame='gpe', 
+        transform=gpe_tform_base_footprint, 
         timestamp=timestamp)
     )
+
+    # If there is no kinematic model set, we also need to publish the base_footprint -> body transform
+    if kinematic_model == 'none':
+        gpe_tform_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'gpe', 'body')
+        base_footprint_tform_body = gpe_tform_base_footprint.inverse() * gpe_tform_body
+        tf_msg.transforms.append(TransformToMsg(
+            child_frame='body',
+            parent_frame='base_footprint',
+            transform=base_footprint_tform_body,
+            timestamp=timestamp
+        ))
 
     return tf_msg
 
