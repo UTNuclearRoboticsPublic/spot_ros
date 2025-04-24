@@ -15,12 +15,10 @@ RUN sed -i 's/#force_color_prompt=yes/force_color_prompt=yes/' "/root/.bashrc" \
 # Set up a virtual environment to make python install correctly on all version of Ubuntu
 WORKDIR /colcon_ws/src
 RUN apt update && apt install -y virtualenv && rm -rf /var/lib/apt/lists/*
-RUN virtualenv --system-site-packages ./spot_venv \
-    && touch spot_venv/COLCON_IGNORE \
-    && source spot_venv/bin/activate
+RUN virtualenv --system-site-packages /spot_venv
 
 # Set up the environment to use venv binaries by default
-ENV PATH="/colcon_ws/src/spot_venv/bin:$PATH"
+ENV PATH="/spot_venv/bin:$PATH"
 
 # Install the boston dynamics SDK and other python dependencies
 ARG SPOT_VERSION
@@ -61,7 +59,7 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
-ENV ROS_DISTRO ${ROS_DISTRO}
+ENV ROS_DISTRO=${ROS_DISTRO}
 
 ADD entrypoints /entrypoints
 RUN chmod +x /entrypoints/*
