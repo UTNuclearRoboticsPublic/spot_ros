@@ -27,16 +27,14 @@
 
 from typing import Text, Tuple
 from .async_queries import *
+from asyncio import Future
 
 from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
-
-from bosdyn.client import frame_helpers, math_helpers
-from bosdyn.client.robot_state import RobotStateClient
-
+from bosdyn.client.common import FutureWrapper
 from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
@@ -46,7 +44,6 @@ from bosdyn.client.robot_command import RobotCommandBuilder
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
-from google.protobuf.message import Message as PB2Message
 
 from .spot_lease_manager import SpotLeaseManager
 from .type_hint_helpers import *
@@ -61,6 +58,10 @@ class SpotBodyWrapper():
         self._has_eap_2 = has_eap_2
         self._has_cam_payload = has_cam_payload
         self._lease_manager = None
+
+        """ State futures """
+        self._robot_state_future: FutureWrapper = None
+        self._robot_state_proto = None
 
         self._robot_id = None
         self._is_sitting = True
@@ -143,9 +144,6 @@ class SpotBodyWrapper():
         self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
         self._async_idle_task  = AsyncTasks([self._idle_task])
 
-        self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-        self._async_state_task = AsyncTasks([self._robot_state_task])
-
         self._is_connected = True
         return True
 
@@ -166,8 +164,8 @@ class SpotBodyWrapper():
 
     @property
     def robot_state(self):
-        """Return latest proto from the _robot_state_task"""
-        return self._robot_state_task.proto
+        """Return latest proto from the robot state response"""
+        return self._robot_state_proto
 
     @property
     def lease(self):
@@ -203,9 +201,14 @@ class SpotBodyWrapper():
         """Return the robot time in local time as a proto timestamp"""
         return self._lease_manager.robotToLocalTime(timestamp)
 
-    def updateStateTasks(self) -> None:
+    def setStateResult(self, future: Future) -> None:
+        self._robot_state_proto = future.result()
+
+    def udpateState(self) -> None:
         """Update the robot state"""
-        self._async_state_task.update()
+        if self._robot_state_future is None or self._robot_state_future.done():
+            self._robot_state_future = self._lease_manager._robot_state_client.get_robot_state_async()
+            self._robot_state_future.add_done_callback(self.setStateResult)
 
     def updateIdleTasks(self) -> None:
         """Update the idle task"""

@@ -206,11 +206,12 @@ class SpotROS(Node):
         print('Shutting down ROS driver for Spot')
         self.spot_wrapper.release()
 
-    def RobotStateCB(self, _) -> None:
+    def RobotStateCB(self) -> None:
         """Callback for when the Spot Wrapper gets new robot state data."""
+        self.spot_wrapper.udpateState()
         state = self.spot_wrapper.robot_state
 
-        if not state:
+        if state is None:
             return
 
         odom_mode = self.get_parameter('odom_mode').value
@@ -648,13 +649,14 @@ class SpotROS(Node):
             else:
                 self._logger.warn("Pointcloud service requested but robot does not have EAP2")
 
-
-        callbacks["robot_state"] = self.RobotStateCB
-        callbacks["lease"]       = self.LeaseCB
+        callbacks["lease"] = self.LeaseCB
 
         # Dictionary of all param values in the 'rates' namespace
         rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
         self.get_logger().info(f"Rates: {rates_dict}")
+
+        # Setup timers for the state tasks
+        self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), lambda: self.RobotStateCB())
 
         # Verify connection
         if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
@@ -821,7 +823,6 @@ class SpotROS(Node):
 
         # call state periodic tasks
         self.spot_wrapper.updateIdleTasks()
-        self.spot_wrapper.updateStateTasks()
         self.spot_wrapper._lease_manager.updateLeaseTask()
 
         # publish robot feedback state
