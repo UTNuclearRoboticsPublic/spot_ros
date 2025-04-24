@@ -79,7 +79,6 @@ from spot_msgs.msg import MobilityParams
 from spot_msgs.action import NavigateTo, WalkTo
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
-from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
 from spot_msgs.srv import GestureSequence
 
 class SpotROS(Node):
@@ -269,6 +268,9 @@ class SpotROS(Node):
         # Behavior Faults #
         behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
+
+    def StandingIdleCallback(self) -> None:
+        self.spot_wrapper.update_idle_state()
 
     def LeaseCB(self, _) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
@@ -656,7 +658,8 @@ class SpotROS(Node):
         self.get_logger().info(f"Rates: {rates_dict}")
 
         # Setup timers for the state tasks
-        self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), lambda: self.RobotStateCB())
+        self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), self.RobotStateCB)
+        self.idle_timer = self.create_timer(0.1, self.StandingIdleCallback)
 
         # Verify connection
         if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
@@ -822,7 +825,6 @@ class SpotROS(Node):
             return
 
         # call state periodic tasks
-        self.spot_wrapper.updateIdleTasks()
         self.spot_wrapper._lease_manager.updateLeaseTask()
 
         # publish robot feedback state

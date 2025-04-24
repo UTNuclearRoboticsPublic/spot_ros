@@ -140,9 +140,6 @@ class SpotBodyWrapper():
             sensor_tasks.append(self._pointcloud_task)
 
         self._async_sensor_tasks = AsyncTasks(sensor_tasks)
-        
-        self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
-        self._async_idle_task  = AsyncTasks([self._idle_task])
 
         self._is_connected = True
         return True
@@ -209,10 +206,6 @@ class SpotBodyWrapper():
         if self._robot_state_future is None or self._robot_state_future.done():
             self._robot_state_future = self._lease_manager._robot_state_client.get_robot_state_async()
             self._robot_state_future.add_done_callback(self.setStateResult)
-
-    def updateIdleTasks(self) -> None:
-        """Update the idle task"""
-        self._async_idle_task.update()
 
     def updateSensorTasks(self) -> None:
         """Loop through the sensor query periodic tasks and update their data if needed."""
@@ -404,6 +397,74 @@ class SpotBodyWrapper():
         response = self._audio_client.set_volume(percentage)
         success = response.error.code == header_pb2.CommonError.Code.CODE_OK
         return success, Text(response.error.message)
+    
+    def update_idle_state(self) -> None:
+        if self._last_stand_command is not None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_stand_command)
+                self._is_sitting = False
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.stand_feedback.status ==
+                        basic_command_pb2.StandCommand.Feedback.STATUS_IS_STANDING):
+                    self._is_standing = True
+                    self._last_stand_command = None
+                else:
+                    self._is_standing = False
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_stand_command = None
+
+        if self._last_sit_command is not None:
+            try:
+                self._is_standing = False
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_sit_command)
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.sit_feedback.status ==
+                        basic_command_pb2.SitCommand.Feedback.STATUS_IS_SITTING):
+                    self._is_sitting = True
+                    self._last_sit_command = None
+                else:
+                    self._is_sitting = False
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_sit_command = None
+
+        if self._last_velocity_command_time != None:
+            if time.time() < self._last_velocity_command_time:
+                self._is_moving = True
+            else:
+                self._last_velocity_command_time = None
+
+        if self._last_trajectory_command != None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_trajectory_command)
+                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                # STATUS_AT_GOAL always means that the robot reached the goal. If the trajectory command did not
+                # request precise positioning, then STATUS_NEAR_GOAL also counts as reaching the goal
+                if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
+                    (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
+                     not self._last_trajectory_command_precise):
+                    self._at_goal = True
+                    # Clear the command once at the goal
+                    self._last_trajectory_command = None
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_GOING_TO_GOAL:
+                    self._is_moving = True
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL:
+                    self._is_moving = True
+                    self._near_goal = True
+                else:
+                    self._last_trajectory_command = None
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_trajectory_command = None
+
+        # TODO: Verify that this logic is correct. If I understand this, this line will almost never (or perhaps actually never) execute
+        if (self.is_standing and not self.is_moving
+                    and not self._lease_manager.frozen
+                    and self._last_trajectory_command is not None
+                    and self._last_stand_command is not None
+                    and self._last_velocity_command_time is not None
+                    and self._last_docking_command is not None
+                    and self.lease is not None):            
+            self.stand(True)
 
     def sassy_confused(self) -> Tuple[bool, str]:
         """Makes Spot look confused in a bit of a sassy way"""
