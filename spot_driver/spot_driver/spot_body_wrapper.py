@@ -35,10 +35,9 @@ from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
 from bosdyn.client.common import FutureWrapper
-from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
-from bosdyn.client.point_cloud import build_pc_request
+from bosdyn.client.point_cloud import PointCloudClient, build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
 
@@ -62,6 +61,11 @@ class SpotBodyWrapper():
         """ State futures """
         self._robot_state_future: FutureWrapper = None
         self._robot_state_proto = None
+
+        """ Point cloud task """
+        self._point_cloud_requests = []
+        self._point_cloud_future: FutureWrapper = None
+        self._point_cloud_proto = None
 
         self._robot_id = None
         self._is_sitting = True
@@ -113,7 +117,7 @@ class SpotBodyWrapper():
             self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
 
             if self._has_eap_2:
-                self._pointcloud_client = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
+                self._pointcloud_client: PointCloudClient = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
 
 
         except Exception as e:
@@ -127,19 +131,12 @@ class SpotBodyWrapper():
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
 
-        sensor_tasks = []        
-
         # Optionally populate pointcloud data asynchronously
         if self._has_eap_2 and 'point_cloud' in callbacks:
             # Create point cloud requests
-            point_cloud_requests = []
             point_cloud_sources = {'velodyne-point-cloud'}
             for source in point_cloud_sources:
-                point_cloud_requests.append(build_pc_request(source))
-            self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
-            sensor_tasks.append(self._pointcloud_task)
-
-        self._async_sensor_tasks = AsyncTasks(sensor_tasks)
+                self._point_cloud_requests.append(build_pc_request(source))
 
         self._is_connected = True
         return True
@@ -172,7 +169,7 @@ class SpotBodyWrapper():
     @property
     def point_clouds(self):
         """Return the latest proto from teh _pointcloud_task"""
-        return self._pointcloud_task.proto
+        return self._point_cloud_proto
 
     @property
     def is_sitting(self) -> bool:
@@ -204,6 +201,7 @@ class SpotBodyWrapper():
         return self._lease_manager.robotToLocalTime(timestamp)
 
     def setStateResult(self, future: Future) -> None:
+        """ Callback to set the result of an async robot state query """
         self._robot_state_proto = future.result()
 
     def udpateState(self) -> None:
@@ -212,9 +210,15 @@ class SpotBodyWrapper():
             self._robot_state_future = self._lease_manager._robot_state_client.get_robot_state_async()
             self._robot_state_future.add_done_callback(self.setStateResult)
 
-    def updateSensorTasks(self) -> None:
-        """Loop through the sensor query periodic tasks and update their data if needed."""
-        self._async_sensor_tasks.update()
+    def setPointCloudResult(self, future: Future) -> None:
+        """ Callback to set the result of an async pointcloud query """
+        self._point_cloud_proto = future.result()
+
+    def updatePointCloud(self) -> None:
+        """Check if we have received a pointcloud message from the robot, and if so record it and send a new one"""
+        if self._point_cloud_future is None or self._point_cloud_future.done():
+            self._point_cloud_future = self._pointcloud_client.get_point_cloud_async(self._point_cloud_requests)
+            self._point_cloud_future.add_done_callback(self.setPointCloudResult)
 
     def claim(self, force: bool = False) -> bool:
         """Add this driver as an EStop and Lease owner of the lease manager"""

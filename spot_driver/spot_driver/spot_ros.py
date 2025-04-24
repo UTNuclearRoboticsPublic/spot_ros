@@ -94,7 +94,6 @@ class SpotROS(Node):
 
         pub_period = 0.1
         self.status_timer = self.create_timer(pub_period, self.publishStatus)
-        self.sensors_timer = self.create_timer(pub_period, self.publishSensors)
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
@@ -298,8 +297,12 @@ class SpotROS(Node):
 
         self.lease_pub.publish(lease_array_msg)
 
-    def PointCloudCB(self, _) -> None:
+    def PointCloudCB(self) -> None:
         """Callback for when the Spot Wrapper gets new pointcloud data."""
+        self.spot_wrapper.updatePointCloud()
+
+        if self.spot_wrapper.point_clouds is None:
+            return
         
         for idx, pointcloud in enumerate(self.spot_wrapper.point_clouds):
             if self.point_cloud_pubs[idx].get_subscription_count() > 0:
@@ -638,24 +641,23 @@ class SpotROS(Node):
         # Connect to the robot
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
+        # Dictionary of all param values in the 'rates' namespace
+        rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
+        self.get_logger().info(f"Rates: {rates_dict}")
+
         # Pointcloud
         if self.get_parameter('launch_pointcloud_service').value:
-            callbacks["point_cloud"] = self.PointCloudCB
-
             point_cloud_sources = {}
 
-            if has_eap_2 and 'point_cloud' in callbacks:
+            if has_eap_2:
                 self._logger.info("Launching EAP2 pointcloud service")
                 point_cloud_sources['velodyne-point-cloud'] = 'velodyne_points'
                 self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for (_, topic) in point_cloud_sources.items()]
+                self.pointcloud_timer = self.create_timer(1/rates_dict.get("sensors.point_cloud", 1.0), self.PointCloudCB)
             else:
                 self._logger.warn("Pointcloud service requested but robot does not have EAP2")
 
         callbacks["lease"] = self.LeaseCB
-
-        # Dictionary of all param values in the 'rates' namespace
-        rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
-        self.get_logger().info(f"Rates: {rates_dict}")
 
         # Setup timers for the state tasks
         self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), self.RobotStateCB)
@@ -806,16 +808,6 @@ class SpotROS(Node):
                 self.get_logger().error(Text(err))
 
         return True
-
-    def publishSensors(self):
-        if self.spot_wrapper is None:
-            return
-
-        if not self.spot_wrapper.is_connected:
-            return
-
-        # call sensor periodic tasks
-        self.spot_wrapper.updateSensorTasks()
 
     def publishStatus(self):
         if self.spot_wrapper is None:
