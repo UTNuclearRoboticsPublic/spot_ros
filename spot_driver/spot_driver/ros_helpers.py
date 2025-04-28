@@ -212,16 +212,17 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
             * CameraInfo: message to define the state and config of the camera that took the image
             * TFMessage: with the transforms necessary to locate the image frames
     """
-    base_frame_name = BODY_FRAME_NAME
-    child_frame_name = data.shot.frame_name_image_sensor
-    transform = get_a_tform_b(data.shot.transforms_snapshot, base_frame_name, child_frame_name)
-    transform_stamped = populateTransformStamped(
-        time=TimestampToMsg(lease_manager.robotToLocalTime(data.shot.acquisition_time)),
-        parent_frame=base_frame_name,
-        child_frame=child_frame_name,
-        transform=transform
-    )
-    tf_msg = TFMessage(transforms=[transform_stamped])
+    transforms = []
+    for child_frame, transform in data.shot.transforms_snapshot.child_to_parent_edge_map.items():
+        if not transform.parent_frame_name:
+            continue
+        transforms.append(populateTransformStamped(
+            time=TimestampToMsg(lease_manager.robotToLocalTime(data.shot.acquisition_time)),
+            parent_frame=transform.parent_frame_name,
+            child_frame=child_frame,
+            transform=SE3Pose.from_proto(transform.parent_tform_child)
+        ))
+    tf_msg = TFMessage(transforms=transforms)
 
     image_msg = Image()
     local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)

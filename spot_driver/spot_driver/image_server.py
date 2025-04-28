@@ -145,7 +145,7 @@ class SpotImageServer(Node):
             body_image_responses = self.image_client.get_image(body_requests)
             for image_response in body_image_responses:
                 _, _, tf_message = getImageMsg(image_response, self.lease_manager)
-                self.tf_broadcaster.sendTransform(tf_message.transforms[0])
+                self.tf_broadcaster.sendTransform([tform for tform in tf_message.transforms if tform.child_frame_id != 'odom' and tform.child_frame_id != 'vision'])
 
         # Publish hand static transforms
         hand_requests = [req for (name, req) in self.image_requests.items() if 'hand' in name]
