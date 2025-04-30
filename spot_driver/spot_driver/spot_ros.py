@@ -92,14 +92,11 @@ class SpotROS(Node):
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         self.status_timer = None
 
-        pub_period = 0.1
-        self.status_timer = self.create_timer(pub_period, self.publishStatus)
-
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         """ ROS Parameters """
-        status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease'}}
+        status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease', 'feedback'}}
         sensor_rate_params = {f'rates.sensors.{param}' for param in {'point_cloud'}}
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
@@ -267,9 +264,6 @@ class SpotROS(Node):
         # Behavior Faults #
         behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
-
-    def StandingIdleCallback(self) -> None:
-        self.spot_wrapper.update_idle_state()
 
     def LeaseCB(self) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
@@ -659,7 +653,7 @@ class SpotROS(Node):
 
         # Setup timers for the state tasks
         self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), self.RobotStateCB)
-        self.idle_timer  = self.create_timer(0.1, self.StandingIdleCallback)
+        self.idle_timer  = self.create_timer(1/rates_dict.get('status.feedback', 10.0), self.publishStatus)
         self.lease_timer = self.create_timer(1/rates_dict.get('status.lease', 1.0), self.LeaseCB)
 
         # Verify connection
@@ -814,6 +808,8 @@ class SpotROS(Node):
 
         if not self.spot_wrapper.is_connected:
             return
+        
+        self.spot_wrapper.update_idle_state()
 
         # publish robot feedback state
         feedback_msg = Feedback()
