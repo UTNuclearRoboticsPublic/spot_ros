@@ -20,7 +20,6 @@ from bosdyn.client.frame_helpers import get_a_tform_b, BODY_FRAME_NAME, HAND_FRA
 from spot_msgs.srv import GetImages
 from spot_driver.image_server_parameters import spot_driver_parameters
 
-from .async_queries import AsyncImageService
 from .ros_helpers import getImageMsg, populateTransformStamped, TimestampToMsg
 from .spot_body_wrapper import SpotLeaseManager
 from .type_hint_helpers import *
