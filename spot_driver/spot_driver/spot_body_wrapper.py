@@ -204,7 +204,7 @@ class SpotBodyWrapper():
         """ Callback to set the result of an async robot state query """
         self._robot_state_proto = future.result()
 
-    def udpateState(self) -> None:
+    def updateState(self) -> None:
         """Update the robot state"""
         if self._robot_state_future is None or self._robot_state_future.done():
             self._robot_state_future = self._lease_manager._robot_state_client.get_robot_state_async()
