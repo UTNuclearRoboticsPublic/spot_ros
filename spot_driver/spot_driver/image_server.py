@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
-from logging import Logger
 from asyncio import Future, InvalidStateError
 
 import rclpy
 import rclpy.logging
 from rclpy.node import Node
+from rclpy.timer import Timer
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Image, CameraInfo
@@ -25,27 +25,25 @@ from .ros_helpers import getImageMsg, populateTransformStamped, TimestampToMsg
 from .spot_body_wrapper import SpotLeaseManager
 from .type_hint_helpers import *
 
+""" Class for managing camera publishing """
+class CameraPub():
+    def __init__(self, parent: SpotImageServer, namespace: str):
+        self.parent = parent
+        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
+        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
+        self.lease_manager = parent.lease_manager
+
+    def process_data(self, data: ImageResponseProto):
+        if self.image_pub.get_subscription_count() > 0:
+            image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
+            self.image_pub.publish(image_msg)
+            self.info_pub.publish(camera_info_msg)
+
+
 class SpotImageServer(Node):
-    """ Inner class for managing camera publishing """
-    class CameraPub():
-        def __init__(self, parent: SpotImageServer, namespace: str):
-            self.parent = parent
-            self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
-            self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
-            self.lease_manager = parent.lease_manager
-
-        def process_data(self, data: ImageResponseProto):
-            if self.image_pub.get_subscription_count() > 0:
-                image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
-                self.image_pub.publish(image_msg)
-                self.info_pub.publish(camera_info_msg)
-
     def __init__(self):
         super().__init__('spot_image_server')
         self.get_logger().info('Starting Spot Image Server')
-
-        # Initialize ROS side
-        self.camera_pubs: dict[str, self.CameraPub] = {}
 
         parameter_listener = spot_driver_parameters.ParamListener(self)
         self.params = parameter_listener.get_params()
@@ -61,16 +59,19 @@ class SpotImageServer(Node):
         if not self.lease_manager.connect(self.params.hostname):
             raise RuntimeError('Aborting spot_image_server bringup')
 
-        logger_py = Logger(self.get_name())
-
         try:
-            self.image_client = self.lease_manager.robot.ensure_client(ImageClient.default_service_name)
+            self.image_client: ImageClient = self.lease_manager.robot.ensure_client(ImageClient.default_service_name)
         except Exception as e:
             raise RuntimeError(f'Unable to create image client: {e}')
 
         # Initialize Boston Dynamics image services
         self.image_requests: dict[str, ImageRequestProto] = {}
-        self.continuous_publish_tasks: list[AsyncImageService] = []
+
+        # Bookkeeping of image tasks on the ROS side
+        self.camera_pubs: dict[str, CameraPub] = {}
+        self.callback_groups: list[MutuallyExclusiveCallbackGroup] = []
+        self.publish_timers: list[Timer] = []
+        self.image_response_futures: dict[str, Future] = {}
 
         self.get_logger().info('Creating publishers:')
         for image_source in self.params.image_sources:
@@ -89,34 +90,23 @@ class SpotImageServer(Node):
             depth_rate = self.params.rates.get_entry(image_source).depth
 
             if rgb_rate > 0:
-                self.camera_pubs[rgb_source] = self.CameraPub(self, 'rgb/' + image_source)
-                self.continuous_publish_tasks.append(AsyncImageService(
-                    client=self.image_client,
-                    logger=logger_py,
-                    rate=rgb_rate,
-                    callback=self.image_callback, 
-                    image_requests=[self.image_requests[rgb_source]]
-                ))
+                self.camera_pubs[rgb_source] = CameraPub(self, 'rgb/' + image_source)
+                self.callback_groups.append(MutuallyExclusiveCallbackGroup())
+                self.publish_timers.append(
+                    self.create_timer(1/rgb_rate, lambda source=rgb_source: self.update_image_task(source), callback_group=self.callback_groups[-1])
+                )
                 self.get_logger().info(f'Publishing to rgb/{image_source} at {rgb_rate} Hz')
 
             if depth_rate > 0:
-                self.camera_pubs[depth_source] = (self.CameraPub(self, 'depth/' + image_source))
-                self.continuous_publish_tasks.append(AsyncImageService(
-                    client=self.image_client,
-                    logger=logger_py,
-                    rate=depth_rate,
-                    callback=self.image_callback, 
-                    image_requests=[self.image_requests[depth_source]]
-                ))
+                self.camera_pubs[depth_source] = CameraPub(self, 'depth/' + image_source)
+                self.callback_groups.append(MutuallyExclusiveCallbackGroup())
+                self.publish_timers.append(
+                    self.create_timer(1/depth_rate, lambda source=depth_source: self.update_image_task(source), callback_group=self.callback_groups[-1])
+                )
                 self.get_logger().info(f'Publishing to depth/{image_source} at {depth_rate} Hz')
 
         # Update the tf tree with the transforms to the calibrated body cameras
         self.publish_static_transforms()
-
-        # Start a loop to constantly check for image messages from the robot at 20Hz
-        self.timer_group = MutuallyExclusiveCallbackGroup()
-        self.update_timer = self.create_timer(0.05, lambda: [task.update() for task in self.continuous_publish_tasks], callback_group=self.timer_group)
-
         self.get_logger().info(f'Spot Image Server online')
 
     def resolve_source_name(self, parameter_source: str) -> tuple[str, str]:
@@ -164,7 +154,16 @@ class SpotImageServer(Node):
                 )
                 self.tf_broadcaster.sendTransform(transform_stamped)
         
-    def image_callback(self, response_future: Future):
+    def update_image_task(self, source_name: str) -> None:
+        if source_name not in self.image_response_futures or self.image_response_futures[source_name].done():
+            # Do not make requests on images topics that no one is listening to
+            is_active_topic = self.camera_pubs[source_name].image_pub.get_subscription_count() > 0 or self.camera_pubs[source_name].info_pub.get_subscription_count() > 0
+            if not is_active_topic: return
+            
+            self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
+            self.image_response_futures[source_name].add_done_callback(self.publish_image_callback)
+
+    def publish_image_callback(self, response_future: Future):
         try:
             response: ImageResponseProto = response_future.result()[0]
             self.camera_pubs[response.source.name].process_data(response)
@@ -216,7 +215,7 @@ def main():
     except Exception as e:
         rclpy.logging.get_logger('spot_image_server').error(f'{e}')
         exit(1)
-    mt_exec = MultiThreadedExecutor(num_threads=2)
+    mt_exec = MultiThreadedExecutor(num_threads=4)
     mt_exec.add_node(image_server)
     mt_exec.spin()
 
