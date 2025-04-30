@@ -48,7 +48,10 @@ BT::PortsList MoveHandToPose::providedPorts(){
         BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose"),
         BT::InputPort<std::string>("target_link"),
         BT::InputPort<std::string>("planning_group"),
-        BT::InputPort<std::string>("backend", "moveit", "Which action service to call for the motion. Options are [moveit, bosdyn]")
+        BT::InputPort<std::string>("backend", "moveit", "Which action service to call for the motion. Options are [moveit, bosdyn]"),
+        BT::InputPort<std::string>("pipeline", "The planning pipeline to use for planning"),
+        BT::InputPort<std::string>("planner", "The planner to use"),
+        BT::InputPort<float>("planning_timeout", "The time to wait for the planner to compute in seconds")
     };
 }
 
@@ -90,8 +93,9 @@ BT::NodeStatus MoveHandToPose::onStart() {
         moveit_msgs::action::MoveGroup::Goal move_group_goal;
         move_group_goal.planning_options.plan_only = false;
         move_group_goal.planning_options.replan = false;
-        move_group_goal.request.allowed_planning_time = max_planning_time_;
+        move_group_goal.request.allowed_planning_time = getInput<float>("planning_timeout").value_or(max_planning_time_);
         move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
+        move_group_goal.request.max_acceleration_scaling_factor = 1.0;
         move_group_goal.request.goal_constraints.push_back(
             kinematic_constraints::constructGoalConstraints(target_link, target_pose)
         );
@@ -104,6 +108,14 @@ BT::NodeStatus MoveHandToPose::onStart() {
         move_group_goal.request.workspace_parameters.max_corner.x = +1e9;
         move_group_goal.request.workspace_parameters.max_corner.y = +1e9;
         move_group_goal.request.workspace_parameters.max_corner.z = +1e9;
+
+        if (std::string pipeline; getInput("pipeline", pipeline)) {
+            move_group_goal.request.pipeline_id = pipeline;
+        }
+
+        if (std::string planner; getInput("planner", planner)) {
+            move_group_goal.request.planner_id = planner;
+        }
 
         // Request the motion
         RCLCPP_INFO(get_logger(), "Sending move group goal to action server");

@@ -134,7 +134,7 @@ class SpotImageServer(Node):
             body_image_responses = self.image_client.get_image(body_requests)
             for image_response in body_image_responses:
                 _, _, tf_message = getImageMsg(image_response, self.lease_manager)
-                self.tf_broadcaster.pub_tf.publish(tf_message)
+                self.tf_broadcaster.sendTransform([tform for tform in tf_message.transforms if tform.child_frame_id != 'odom' and tform.child_frame_id != 'vision'])
 
         # Publish hand static transforms
         hand_requests = [req for (name, req) in self.image_requests.items() if 'hand' in name]
@@ -147,7 +147,7 @@ class SpotImageServer(Node):
                 hand_tform_image_frame = body_tform_hand.inverse() * body_tform_image_frame
                 transform_stamped = populateTransformStamped(
                     time=TimestampToMsg(self.lease_manager.robotToLocalTime(image_response.shot.acquisition_time)),
-                    parent_frame=HAND_FRAME_NAME,
+                    parent_frame='arm0_hand',
                     child_frame=image_response.shot.frame_name_image_sensor,
                     transform=hand_tform_image_frame
                 )
