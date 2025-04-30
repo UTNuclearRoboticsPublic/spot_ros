@@ -98,6 +98,14 @@ class SpotROS(Node):
         """ ROS Parameters """
         status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease', 'feedback'}}
         sensor_rate_params = {f'rates.sensors.{param}' for param in {'point_cloud'}}
+
+        default_rates_hz = {
+            'rates.status.robot_state' : 10.0,
+            'rates.status.lease'       :  1.0,
+            'rates.status.feedback'    : 10.0,
+            'rates.sensors.point_cloud': 10.0
+        }
+
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -116,7 +124,7 @@ class SpotROS(Node):
                                 read_only=True))
 
         for name in status_rate_params:
-            self.declare_parameter(name, 1.0,
+            self.declare_parameter(name, default_rates_hz.get(name, 1.0),
                 ParameterDescriptor(description='Publish rate for robot status topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
@@ -124,7 +132,7 @@ class SpotROS(Node):
                                     read_only=True))
         
         for name in sensor_rate_params:
-            self.declare_parameter(name, 1.5,
+            self.declare_parameter(name, default_rates_hz.get(name, 1.0),
                 ParameterDescriptor(description='Publish rate for sensor topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
@@ -636,8 +644,8 @@ class SpotROS(Node):
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
         # Dictionary of all param values in the 'rates' namespace
-        rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
-        self.get_logger().info(f"Rates: {rates_dict}")
+        status_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.status').items() }
+        sensor_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.sensors').items() }
 
         # Pointcloud
         if self.get_parameter('launch_pointcloud_service').value:
@@ -647,14 +655,20 @@ class SpotROS(Node):
                 self._logger.info("Launching EAP2 pointcloud service")
                 point_cloud_sources['velodyne-point-cloud'] = 'velodyne_points'
                 self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for (_, topic) in point_cloud_sources.items()]
-                self.pointcloud_timer = self.create_timer(1/rates_dict.get("sensors.point_cloud", 1.0), self.PointCloudCB)
+                self.pointcloud_timer = self.create_timer(1/sensor_rates_dict["point_cloud"], self.PointCloudCB)
             else:
                 self._logger.warn("Pointcloud service requested but robot does not have EAP2")
+                sensor_rates_dict.pop('point_cloud')
+        else:
+            sensor_rates_dict.pop('point_cloud')
+
+        self.get_logger().info(f"Status Rates: {status_rates_dict}")
+        self.get_logger().info(f"Sensor Rates: {sensor_rates_dict}")
 
         # Setup timers for the state tasks
-        self.state_timer = self.create_timer(1/rates_dict.get('status.robot_state', 5.0), self.RobotStateCB)
-        self.idle_timer  = self.create_timer(1/rates_dict.get('status.feedback', 10.0), self.publishStatus)
-        self.lease_timer = self.create_timer(1/rates_dict.get('status.lease', 1.0), self.LeaseCB)
+        self.state_timer = self.create_timer(1/status_rates_dict['robot_state'], self.RobotStateCB)
+        self.idle_timer  = self.create_timer(1/status_rates_dict['feedback'   ], self.publishStatus)
+        self.lease_timer = self.create_timer(1/status_rates_dict['lease'      ], self.LeaseCB)
 
         # Verify connection
         if self.spot_wrapper.connect(lease_manager):
