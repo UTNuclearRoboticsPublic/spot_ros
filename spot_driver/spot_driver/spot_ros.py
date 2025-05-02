@@ -79,7 +79,6 @@ from spot_msgs.msg import MobilityParams
 from spot_msgs.action import NavigateTo, WalkTo
 
 from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
-from spot_msgs.srv import GripperAngleMove, ArmForceTrajectory
 from spot_msgs.srv import GestureSequence
 
 class SpotROS(Node):
@@ -93,16 +92,20 @@ class SpotROS(Node):
         self.static_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
         self.status_timer = None
 
-        pub_period = 0.1
-        self.status_timer = self.create_timer(pub_period, self.publishStatus)
-        self.sensors_timer = self.create_timer(pub_period, self.publishSensors)
-
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         """ ROS Parameters """
-        status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease'}}
+        status_rate_params = {f'rates.status.{param}'  for param in {'robot_state', 'lease', 'feedback'}}
         sensor_rate_params = {f'rates.sensors.{param}' for param in {'point_cloud'}}
+
+        default_rates_hz = {
+            'rates.status.robot_state' : 10.0,
+            'rates.status.lease'       :  1.0,
+            'rates.status.feedback'    : 10.0,
+            'rates.sensors.point_cloud': 10.0
+        }
+
         self.add_on_set_parameters_callback(
             functools.partial(self.parameters_callback,
                               status_rate_params=status_rate_params,
@@ -121,7 +124,7 @@ class SpotROS(Node):
                                 read_only=True))
 
         for name in status_rate_params:
-            self.declare_parameter(name, 1.0,
+            self.declare_parameter(name, default_rates_hz.get(name, 1.0),
                 ParameterDescriptor(description='Publish rate for robot status topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
@@ -129,7 +132,7 @@ class SpotROS(Node):
                                     read_only=True))
         
         for name in sensor_rate_params:
-            self.declare_parameter(name, 1.5,
+            self.declare_parameter(name, default_rates_hz.get(name, 1.0),
                 ParameterDescriptor(description='Publish rate for sensor topics.',
                                     type=ParameterType.PARAMETER_DOUBLE,
                                     floating_point_range=[FloatingPointRange(
@@ -206,11 +209,12 @@ class SpotROS(Node):
         print('Shutting down ROS driver for Spot')
         self.spot_wrapper.release()
 
-    def RobotStateCB(self, _) -> None:
+    def RobotStateCB(self) -> None:
         """Callback for when the Spot Wrapper gets new robot state data."""
+        self.spot_wrapper.updateState()
         state = self.spot_wrapper.robot_state
 
-        if not state:
+        if state is None:
             return
 
         odom_mode = self.get_parameter('odom_mode').value
@@ -269,9 +273,9 @@ class SpotROS(Node):
         behavior_fault_state_msg = BehaviorFaultsToMsg(state.behavior_fault_state, self.spot_wrapper)
         self.behavior_faults_pub.publish(behavior_fault_state_msg)
 
-    def LeaseCB(self, _) -> None:
+    def LeaseCB(self) -> None:
         """Callback for when the Spot Wrapper gets new lease data."""
-        self.spot_wrapper._lease_manager._lease_task.update()
+        self.spot_wrapper._lease_manager.updateLeaseInfo()
         
         lease_array_msg = LeaseArray()
         lease_list = self.spot_wrapper.lease
@@ -295,8 +299,12 @@ class SpotROS(Node):
 
         self.lease_pub.publish(lease_array_msg)
 
-    def PointCloudCB(self, _) -> None:
+    def PointCloudCB(self) -> None:
         """Callback for when the Spot Wrapper gets new pointcloud data."""
+        self.spot_wrapper.updatePointCloud()
+
+        if self.spot_wrapper.point_clouds is None:
+            return
         
         for idx, pointcloud in enumerate(self.spot_wrapper.point_clouds):
             if self.point_cloud_pubs[idx].get_subscription_count() > 0:
@@ -635,29 +643,35 @@ class SpotROS(Node):
         # Connect to the robot
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
+        # Dictionary of all param values in the 'rates' namespace
+        status_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.status').items() }
+        sensor_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.sensors').items() }
+
         # Pointcloud
         if self.get_parameter('launch_pointcloud_service').value:
-            callbacks["point_cloud"] = self.PointCloudCB
-
             point_cloud_sources = {}
 
-            if has_eap_2 and 'point_cloud' in callbacks:
+            if has_eap_2:
                 self._logger.info("Launching EAP2 pointcloud service")
                 point_cloud_sources['velodyne-point-cloud'] = 'velodyne_points'
                 self.point_cloud_pubs = [self.create_publisher(PointCloud2, f"~/{topic}", 10) for (_, topic) in point_cloud_sources.items()]
+                self.pointcloud_timer = self.create_timer(1/sensor_rates_dict["point_cloud"], self.PointCloudCB)
             else:
                 self._logger.warn("Pointcloud service requested but robot does not have EAP2")
+                sensor_rates_dict.pop('point_cloud')
+        else:
+            sensor_rates_dict.pop('point_cloud')
 
+        self.get_logger().info(f"Status Rates: {status_rates_dict}")
+        self.get_logger().info(f"Sensor Rates: {sensor_rates_dict}")
 
-        callbacks["robot_state"] = self.RobotStateCB
-        callbacks["lease"]       = self.LeaseCB
-
-        # Dictionary of all param values in the 'rates' namespace
-        rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates').items() }
-        self.get_logger().info(f"Rates: {rates_dict}")
+        # Setup timers for the state tasks
+        self.state_timer = self.create_timer(1/status_rates_dict['robot_state'], self.RobotStateCB)
+        self.idle_timer  = self.create_timer(1/status_rates_dict['feedback'   ], self.publishStatus)
+        self.lease_timer = self.create_timer(1/status_rates_dict['lease'      ], self.LeaseCB)
 
         # Verify connection
-        if self.spot_wrapper.connect(lease_manager, rates_dict, callbacks):
+        if self.spot_wrapper.connect(lease_manager):
             self.get_logger().info(f'Connected to Spot {self.spot_wrapper.robot_id.nickname}...')
         else:
             self.get_logger().fatal('Failed to launch ROS driver!')
@@ -802,34 +816,21 @@ class SpotROS(Node):
 
         return True
 
-    def publishSensors(self):
-        if self.spot_wrapper is None:
-            return
-
-        if not self.spot_wrapper.is_connected:
-            return
-
-        # call sensor periodic tasks
-        self.spot_wrapper.updateSensorTasks()
-
     def publishStatus(self):
         if self.spot_wrapper is None:
             return
 
         if not self.spot_wrapper.is_connected:
             return
-
-        # call state periodic tasks
-        self.spot_wrapper.updateIdleTasks()
-        self.spot_wrapper.updateStateTasks()
-        self.spot_wrapper._lease_manager.updateLeaseTask()
+        
+        self.spot_wrapper.update_idle_state()
 
         # publish robot feedback state
         feedback_msg = Feedback()
         feedback_msg.standing = self.spot_wrapper.is_standing
         feedback_msg.sitting  = self.spot_wrapper.is_sitting
         feedback_msg.moving = self.spot_wrapper.is_moving
-        feedback_msg.docked = self.spot_wrapper.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
+        feedback_msg.docked = self.spot_wrapper.is_docked
         robot_id = self.spot_wrapper.robot_id
         if robot_id:
             feedback_msg.serial_number = robot_id.serial_number
