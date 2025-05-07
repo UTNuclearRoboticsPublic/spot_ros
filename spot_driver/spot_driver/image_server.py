@@ -10,7 +10,7 @@ from rclpy.timer import Timer
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Image, CameraInfo
-from tf2_ros import StaticTransformBroadcaster
+from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
 
 from bosdyn.api import image_pb2
 from bosdyn.client.image import ImageClient, build_image_request, UnknownImageSourceError, SourceDataError, UnsetStatusError, ImageDataError
@@ -33,11 +33,10 @@ class CameraPub():
         self.lease_manager = parent.lease_manager
 
     def process_data(self, data: ImageResponseProto):
-        if self.image_pub.get_subscription_count() > 0:
-            image_msg, camera_info_msg, tf_msg = getImageMsg(data, self.lease_manager)
-            self.image_pub.publish(image_msg)
-            self.info_pub.publish(camera_info_msg)
-            self.parent.tf_broadcaster.sendTransform(tf_msg.transforms)
+        image_msg, camera_info_msg, tf_msg = getImageMsg(data, self.lease_manager)
+        self.image_pub.publish(image_msg)
+        self.info_pub.publish(camera_info_msg)
+        self.parent.tf_broadcaster.sendTransform(tf_msg.transforms)
 
 
 class SpotImageServer(Node):
@@ -51,7 +50,8 @@ class SpotImageServer(Node):
         self.get_logger().info(f'Creating image services for the following sources: {", ".join(self.params.image_sources)}')
 
         self.get_image_service = self.create_service(GetImages, '~/get_images', self.get_image_callback)
-        self.tf_broadcaster = StaticTransformBroadcaster(self)
+        self.static_tf_broadcaster = StaticTransformBroadcaster(self)
+        self.tf_broadcaster = TransformBroadcaster(self)
 
         # Connect to robot
         self.lease_manager = SpotLeaseManager()
@@ -105,7 +105,34 @@ class SpotImageServer(Node):
                 )
                 self.get_logger().info(f'Publishing to depth/{image_source} at {depth_rate} Hz')
 
+        self.publish_static_transforms()
         self.get_logger().info(f'Spot Image Server online')
+
+    def publish_static_transforms(self):
+        # Publish body static transforms
+        body_requests = [req for (name, req) in self.image_requests.items() if 'hand' not in name]
+        if len(body_requests):
+            body_image_responses = self.image_client.get_image(body_requests)
+            for image_response in body_image_responses:
+                _, _, tf_message = getImageMsg(image_response, self.lease_manager)
+                self.static_tf_broadcaster.sendTransform([tform for tform in tf_message.transforms if tform.child_frame_id != 'odom' and tform.child_frame_id != 'vision'])
+
+        # Publish hand static transforms
+        hand_requests = [req for (name, req) in self.image_requests.items() if 'hand' in name]
+        if len(hand_requests):
+            hand_image_responses = self.image_client.get_image(hand_requests)
+            body_snapshot = self.lease_manager._robot_state_client.get_robot_state().kinematic_state.transforms_snapshot
+            body_tform_hand = get_a_tform_b(body_snapshot, BODY_FRAME_NAME, HAND_FRAME_NAME)
+            for image_response in hand_image_responses:
+                body_tform_image_frame = get_a_tform_b(image_response.shot.transforms_snapshot, BODY_FRAME_NAME, image_response.shot.frame_name_image_sensor)
+                hand_tform_image_frame = body_tform_hand.inverse() * body_tform_image_frame
+                transform_stamped = populateTransformStamped(
+                    time=TimestampToMsg(self.lease_manager.robotToLocalTime(image_response.shot.acquisition_time)),
+                    parent_frame='arm0_hand',
+                    child_frame=image_response.shot.frame_name_image_sensor,
+                    transform=hand_tform_image_frame
+                )
+                self.static_tf_broadcaster.sendTransform(transform_stamped)
 
     def resolve_source_name(self, parameter_source: str) -> tuple[str, str]:
         if parameter_source.startswith('hand'):
@@ -129,7 +156,7 @@ class SpotImageServer(Node):
     def update_image_task(self, source_name: str) -> None:
         if source_name not in self.image_response_futures or self.image_response_futures[source_name].done():
             # Do not make requests on images topics that no one is listening to
-            is_active_topic = self.camera_pubs[source_name].image_pub.get_subscription_count() > 0 or self.camera_pubs[source_name].info_pub.get_subscription_count() > 0
+            is_active_topic = (self.camera_pubs[source_name].image_pub.get_subscription_count() > 0) or (self.camera_pubs[source_name].info_pub.get_subscription_count() > 0)
             if not is_active_topic: return
             
             self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
