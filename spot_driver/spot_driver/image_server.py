@@ -202,7 +202,7 @@ class SpotImageServer(Node):
 
             all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
 
-            excluded_child_frames = {'odom', 'vision', 'arm0.link_wr1', 'hand_color_image_sensor'}
+            excluded_child_frames = {'odom', 'vision', 'arm0.link_wr1'}
 
             for child_frame, parent_edge in all_tfs_from_data.items():
                 if child_frame in excluded_child_frames:
