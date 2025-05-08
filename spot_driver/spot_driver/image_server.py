@@ -228,7 +228,6 @@ class SpotImageServer(Node):
         unique_transforms = list(transform_map.values())
 
         if unique_transforms:
-            self.log_transforms(unique_transforms)
             self.static_tf_broadcaster.sendTransform(unique_transforms)
             self.get_logger().info(f'Camera static transforms broadcasted ({len(unique_transforms)} unique frames)')
         else:
