@@ -7,10 +7,11 @@ import rclpy
 import rclpy.logging
 from rclpy.node import Node
 from rclpy.timer import Timer
+from rclpy.time import Time
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Image, CameraInfo
-from tf2_ros import StaticTransformBroadcaster, TransformBroadcaster
+from tf2_ros import StaticTransformBroadcaster
 
 from bosdyn.api import image_pb2
 from bosdyn.client.image import ImageClient, build_image_request, UnknownImageSourceError, SourceDataError, UnsetStatusError, ImageDataError
@@ -33,11 +34,10 @@ class CameraPub():
         self.lease_manager = parent.lease_manager
 
     def process_data(self, data: ImageResponseProto):
-        image_msg, camera_info_msg, tf_msg = getImageMsg(data, self.lease_manager)
-        self.image_pub.publish(image_msg)
-        self.info_pub.publish(camera_info_msg)
-        self.parent.tf_broadcaster.sendTransform(tf_msg.transforms)
-
+        if self.image_pub.get_subscription_count() > 0:
+            image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
+            self.image_pub.publish(image_msg)
+            self.info_pub.publish(camera_info_msg)
 
 class SpotImageServer(Node):
     def __init__(self):
@@ -51,7 +51,6 @@ class SpotImageServer(Node):
 
         self.get_image_service = self.create_service(GetImages, '~/get_images', self.get_image_callback)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
-        self.tf_broadcaster = TransformBroadcaster(self)
 
         # Connect to robot
         self.lease_manager = SpotLeaseManager()
@@ -105,34 +104,10 @@ class SpotImageServer(Node):
                 )
                 self.get_logger().info(f'Publishing to depth/{image_source} at {depth_rate} Hz')
 
-        self.publish_static_transforms()
+        # Broadcast camera transforms just once post initialization
+        self.static_tf_timer = self.create_timer(0.5, self.broadcast_camera_transforms)
+
         self.get_logger().info(f'Spot Image Server online')
-
-    def publish_static_transforms(self):
-        # Publish body static transforms
-        body_requests = [req for (name, req) in self.image_requests.items() if 'hand' not in name]
-        if len(body_requests):
-            body_image_responses = self.image_client.get_image(body_requests)
-            for image_response in body_image_responses:
-                _, _, tf_message = getImageMsg(image_response, self.lease_manager)
-                self.static_tf_broadcaster.sendTransform([tform for tform in tf_message.transforms if tform.child_frame_id != 'odom' and tform.child_frame_id != 'vision'])
-
-        # Publish hand static transforms
-        hand_requests = [req for (name, req) in self.image_requests.items() if 'hand' in name]
-        if len(hand_requests):
-            hand_image_responses = self.image_client.get_image(hand_requests)
-            body_snapshot = self.lease_manager._robot_state_client.get_robot_state().kinematic_state.transforms_snapshot
-            body_tform_hand = get_a_tform_b(body_snapshot, BODY_FRAME_NAME, HAND_FRAME_NAME)
-            for image_response in hand_image_responses:
-                body_tform_image_frame = get_a_tform_b(image_response.shot.transforms_snapshot, BODY_FRAME_NAME, image_response.shot.frame_name_image_sensor)
-                hand_tform_image_frame = body_tform_hand.inverse() * body_tform_image_frame
-                transform_stamped = populateTransformStamped(
-                    time=TimestampToMsg(self.lease_manager.robotToLocalTime(image_response.shot.acquisition_time)),
-                    parent_frame='arm0_hand',
-                    child_frame=image_response.shot.frame_name_image_sensor,
-                    transform=hand_tform_image_frame
-                )
-                self.static_tf_broadcaster.sendTransform(transform_stamped)
 
     def resolve_source_name(self, parameter_source: str) -> tuple[str, str]:
         if parameter_source.startswith('hand'):
@@ -156,7 +131,7 @@ class SpotImageServer(Node):
     def update_image_task(self, source_name: str) -> None:
         if source_name not in self.image_response_futures or self.image_response_futures[source_name].done():
             # Do not make requests on images topics that no one is listening to
-            is_active_topic = (self.camera_pubs[source_name].image_pub.get_subscription_count() > 0) or (self.camera_pubs[source_name].info_pub.get_subscription_count() > 0)
+            is_active_topic = self.camera_pubs[source_name].image_pub.get_subscription_count() > 0 or self.camera_pubs[source_name].info_pub.get_subscription_count() > 0
             if not is_active_topic: return
             
             self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
@@ -192,10 +167,9 @@ class SpotImageServer(Node):
                     self.get_logger().warn(f'Unable to retrieve image from {response.source.name}')
                     return resp
 
-                image_msg, camera_info, tf_msg = getImageMsg(response, self.lease_manager)
+                image_msg, camera_info, _ = getImageMsg(response, self.lease_manager)
                 resp.images.append(image_msg)
                 resp.camera_infos.append(camera_info)
-                self.tf_broadcaster.sendTransform(tf_msg.transforms)
 
             resp.success = True
 
@@ -207,6 +181,76 @@ class SpotImageServer(Node):
             self.get_logger().warn(f'Unable to retrive image from robot: {e}')
 
         return resp
+
+    def broadcast_camera_transforms(self):
+        """
+        Broadcasts static camera transforms for all configured image sources.
+        This runs once after node startup to ensure TF listeners receive them.
+        Avoids broadcasting duplicate (parent -> child) transforms.
+        """
+        if hasattr(self, 'static_tf_timer'):
+            self.static_tf_timer.cancel()  # Make it oneshot
+
+        if not self.image_requests:
+            self.get_logger().info('No image requests to broadcast transforms')
+            return
+
+        transform_map = {}  # key: (parent_frame_id, child_frame_id) -> value: TransformStamped
+
+        for response in self.image_client.get_image(list(self.image_requests.values())):
+            image_data = response  # ImageResponseProto
+
+            all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
+
+            excluded_child_frames = {'odom', 'vision', 'arm0.link_wr1'}
+
+            for child_frame, parent_edge in all_tfs_from_data.items():
+                if child_frame in excluded_child_frames:
+                    continue
+                if not parent_edge.parent_frame_name:
+                    continue  # skip invalid entries
+
+                pair_key = (parent_edge.parent_frame_name, child_frame)
+                if pair_key in transform_map:
+                    continue  # already added, skip
+
+                local_time = self.lease_manager.robotToLocalTime(image_data.shot.acquisition_time)
+                tf_time = Time(seconds=local_time.seconds, nanoseconds=local_time.nanos)
+
+                static_tf = populateTransformStamped(
+                    tf_time,
+                    parent_edge.parent_frame_name,
+                    child_frame,
+                    parent_edge.parent_tform_child
+                )
+                transform_map[pair_key] = static_tf  # store it keyed by (parent, child)
+
+        unique_transforms = list(transform_map.values())
+
+        if unique_transforms:
+            self.static_tf_broadcaster.sendTransform(unique_transforms)
+            self.get_logger().info(f'Camera static transforms broadcasted ({len(unique_transforms)} unique frames)')
+        else:
+            self.get_logger().warn('No static camera transforms found to broadcast')
+
+    def log_transforms(self, tf_transforms):
+        """
+        Logs a list of TransformStamped messages using the ROS2 logger.
+        Args:
+            tf_transforms (list of geometry_msgs.msg.TransformStamped): List of transforms.
+        """
+        for transform in tf_transforms:
+            header = transform.header
+            trans = transform.transform.translation
+            rot = transform.transform.rotation
+
+            msg = (
+                "------------------------------\n"
+                f"Frame: {header.frame_id} -> {transform.child_frame_id}\n"
+                f"  Translation: x={trans.x:.3f}, y={trans.y:.3f}, z={trans.z:.3f}\n"
+                f"  Rotation (quaternion): x={rot.x:.3f}, y={rot.y:.3f}, z={rot.z:.3f}, w={rot.w:.3f}"
+            )
+            self.get_logger().info(msg)
 
 def main():
     rclpy.init()
