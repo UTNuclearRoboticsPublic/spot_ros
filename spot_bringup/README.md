@@ -1,0 +1,2 @@
+# Notes on Twist Multiplexer Usage
+The default driver launch file starts up the Twist Mux node which takes in controller/cmd_vel, keyboard/cmd_vel, and hololens/cmd_vel input and outputs out cmd vel based on priority. To change the priority of the inputs or add other inputs, edit `twist_mux.yaml` in `spot_driver\config`.
