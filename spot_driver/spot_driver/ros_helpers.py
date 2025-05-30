@@ -212,16 +212,17 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
             * CameraInfo: message to define the state and config of the camera that took the image
             * TFMessage: with the transforms necessary to locate the image frames
     """
-    base_frame_name = BODY_FRAME_NAME
-    child_frame_name = data.shot.frame_name_image_sensor
-    transform = get_a_tform_b(data.shot.transforms_snapshot, base_frame_name, child_frame_name)
-    transform_stamped = populateTransformStamped(
-        time=TimestampToMsg(lease_manager.robotToLocalTime(data.shot.acquisition_time)),
-        parent_frame=base_frame_name,
-        child_frame=child_frame_name,
-        transform=transform
-    )
-    tf_msg = TFMessage(transforms=[transform_stamped])
+    transforms = []
+    for child_frame, transform in data.shot.transforms_snapshot.child_to_parent_edge_map.items():
+        if not transform.parent_frame_name:
+            continue
+        transforms.append(populateTransformStamped(
+            time=TimestampToMsg(lease_manager.robotToLocalTime(data.shot.acquisition_time)),
+            parent_frame=transform.parent_frame_name,
+            child_frame=child_frame,
+            transform=SE3Pose.from_proto(transform.parent_tform_child)
+        ))
+    tf_msg = TFMessage(transforms=transforms)
 
     image_msg = Image()
     local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
@@ -512,7 +513,8 @@ def GetWifiFromState(comms_states: CommsStateProto) -> WiFiState:
     return wifi_msg
 
 def GetTFFromState(kinematic_state: KinematicStateProto,
-                   lease_manager: SpotLeaseManager) -> TFMessage:
+                   lease_manager: SpotLeaseManager,
+                   kinematic_model: str) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
     Args:
@@ -543,23 +545,38 @@ def GetTFFromState(kinematic_state: KinematicStateProto,
 
     ## === TODO: Fix orientation when on slopes === ##
 
-    # Add the base footprint transform 
-    tform_odom_to_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("odom").parent_tform_child).inverse()
-    tform_body_to_flat_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("flat_body").parent_tform_child)
-    tform_gpe_to_base_footprint = tform_odom_to_body * tform_body_to_flat_body
-    tform_gpe_to_base_footprint.x = 0.0
-    tform_gpe_to_base_footprint.y = 0.0
-    tform_gpe_to_base_footprint.z = 0.0
+    # Add the GPE -> base footprint transform, where GPE is aligned with the odom frame 
+    odom_tform_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'odom', 'body')
+    body_tform_flat_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'body', 'flat_body')
+    gpe_tform_base_footprint = odom_tform_body * body_tform_flat_body
+    gpe_tform_base_footprint.x = 0.0
+    gpe_tform_base_footprint.y = 0.0
+    gpe_tform_base_footprint.z = 0.0
     tf_msg.transforms.append(TransformToMsg(
-        child_frame="base_footprint", 
-        parent_frame="gpe", 
-        transform=tform_gpe_to_base_footprint, 
+        child_frame='base_footprint', 
+        parent_frame='gpe', 
+        transform=gpe_tform_base_footprint, 
         timestamp=timestamp)
     )
 
+    # If there is no kinematic model set, we also need to publish the base_footprint -> body transform
+    if kinematic_model == 'none':
+        gpe_tform_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'gpe', 'body')
+        base_footprint_tform_body = gpe_tform_base_footprint.inverse() * gpe_tform_body
+        tf_msg.transforms.append(TransformToMsg(
+            child_frame='body',
+            parent_frame='base_footprint',
+            transform=base_footprint_tform_body,
+            timestamp=timestamp
+        ))
+
     return tf_msg
 
-def GetVirtualJointValues(kinematic_state: KinematicStateProto) -> JointState:
+def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model: str) -> JointState:
+    """
+    Computes virtual joint states based on the selected kinematic model.
+    Returns a JointState message with corresponding virtual joint names and states.
+    """
     transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map 
     tform_body_to_odom = SE3Pose.from_proto(transform_map.get("odom").parent_tform_child)
     tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
@@ -570,44 +587,44 @@ def GetVirtualJointValues(kinematic_state: KinematicStateProto) -> JointState:
 
     #TODO: Velocities
 
-    # base_footprint -> body_with_height
-    joint_state.name.append("body_height_joint")
-    joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    if kinematic_model == "body_assist":
+        # base_footprint -> body_with_height
+        joint_state.name.append("body_height_joint")
+        joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
-    joint_state.name.append("body_yaw_joint")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
+        joint_state.name.append("body_yaw_joint")
+        joint_state.position.append(0)
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_yaw -> body_with_pitch_and_yaw
-    joint_state.name.append("body_pitch_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_yaw -> body_with_pitch_and_yaw
+        joint_state.name.append("body_pitch_joint")
+        joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_pitch_and_yaw -> body
-    joint_state.name.append("body_roll_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_pitch_and_yaw -> body
+        joint_state.name.append("body_roll_joint")
+        joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    joint_state.name.append("body_x")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    elif kinematic_model == "mobile_manipulation":
+        for joint_name in ["body_x", "body_y", "body_or"]:
+            joint_state.name.append(joint_name)
+            joint_state.position.append(0)
+            joint_state.velocity.append(0)
+            joint_state.effort.append(0)
 
-    joint_state.name.append("body_y")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    elif kinematic_model == "none":
+        pass
 
-    joint_state.name.append("body_or")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    else:
+        raise ValueError(f"Unsupported kinematic model: {kinematic_model}")
+
 
     return joint_state
 

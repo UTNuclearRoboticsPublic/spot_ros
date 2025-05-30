@@ -21,6 +21,17 @@ services:
       - SPOT_URDF_EXTRAS
       - SPOT_ACCESSORIES
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      # pass the display variable to the container
+      - DISPLAY=${DISPLAY}
+      # disable qt-X11 memory sharing for RViz
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # mount the X11 socket to enable graphics display
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # required for non-nvidia users, comment out for nvidia users
+      - /dev/dri:/dev/dri
+      # add the .Xauthority file to use ssh X11 forwarding
+      - ${HOME}/.Xauthority:/root/.Xauthority:rw
     # Enable host compatibiltiy for as much as possible to make usage seamless
     network_mode: host
     ipc: host
@@ -70,3 +81,9 @@ services:
     # We need to mount a volume so that the map can be saved
     volumes:
       - /tmp:/tmp
+
+  moveit:
+    extends: spot_ros
+    image: nrg/spot_moveit_server:${TARGET_ROS_DISTRO}
+    container_name: spot_moveit_server
+    entrypoint: /entrypoints/moveit_server.bash

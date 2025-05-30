@@ -1,10 +1,13 @@
+#!/usr/bin/env python3
+
 from __future__ import annotations
-from logging import Logger
 from asyncio import Future, InvalidStateError
 
 import rclpy
 import rclpy.logging
 from rclpy.node import Node
+from rclpy.timer import Timer
+from rclpy.time import Time
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Image, CameraInfo
@@ -18,32 +21,28 @@ from bosdyn.client.frame_helpers import get_a_tform_b, BODY_FRAME_NAME, HAND_FRA
 from spot_msgs.srv import GetImages
 from spot_driver.image_server_parameters import spot_driver_parameters
 
-from .async_queries import AsyncImageService
 from .ros_helpers import getImageMsg, populateTransformStamped, TimestampToMsg
 from .spot_body_wrapper import SpotLeaseManager
 from .type_hint_helpers import *
 
+""" Class for managing camera publishing """
+class CameraPub():
+    def __init__(self, parent: SpotImageServer, namespace: str):
+        self.parent = parent
+        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
+        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
+        self.lease_manager = parent.lease_manager
+
+    def process_data(self, data: ImageResponseProto):
+        if self.image_pub.get_subscription_count() > 0:
+            image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
+            self.image_pub.publish(image_msg)
+            self.info_pub.publish(camera_info_msg)
+
 class SpotImageServer(Node):
-    """ Inner class for managing camera publishing """
-    class CameraPub():
-        def __init__(self, parent: SpotImageServer, namespace: str):
-            self.parent = parent
-            self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
-            self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
-            self.lease_manager = parent.lease_manager
-
-        def process_data(self, data: ImageResponseProto):
-            if self.image_pub.get_subscription_count() > 0:
-                image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
-                self.image_pub.publish(image_msg)
-                self.info_pub.publish(camera_info_msg)
-
     def __init__(self):
         super().__init__('spot_image_server')
         self.get_logger().info('Starting Spot Image Server')
-
-        # Initialize ROS side
-        self.camera_pubs: dict[str, self.CameraPub] = {}
 
         parameter_listener = spot_driver_parameters.ParamListener(self)
         self.params = parameter_listener.get_params()
@@ -51,7 +50,7 @@ class SpotImageServer(Node):
         self.get_logger().info(f'Creating image services for the following sources: {", ".join(self.params.image_sources)}')
 
         self.get_image_service = self.create_service(GetImages, '~/get_images', self.get_image_callback)
-        self.tf_broadcaster = StaticTransformBroadcaster(self)
+        self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
         # Connect to robot
         self.lease_manager = SpotLeaseManager()
@@ -59,16 +58,19 @@ class SpotImageServer(Node):
         if not self.lease_manager.connect(self.params.hostname):
             raise RuntimeError('Aborting spot_image_server bringup')
 
-        logger_py = Logger(self.get_name())
-
         try:
-            self.image_client = self.lease_manager.robot.ensure_client(ImageClient.default_service_name)
+            self.image_client: ImageClient = self.lease_manager.robot.ensure_client(ImageClient.default_service_name)
         except Exception as e:
             raise RuntimeError(f'Unable to create image client: {e}')
 
         # Initialize Boston Dynamics image services
         self.image_requests: dict[str, ImageRequestProto] = {}
-        self.continuous_publish_tasks: list[AsyncImageService] = []
+
+        # Bookkeeping of image tasks on the ROS side
+        self.camera_pubs: dict[str, CameraPub] = {}
+        self.callback_groups: list[MutuallyExclusiveCallbackGroup] = []
+        self.publish_timers: list[Timer] = []
+        self.image_response_futures: dict[str, Future] = {}
 
         self.get_logger().info('Creating publishers:')
         for image_source in self.params.image_sources:
@@ -87,33 +89,23 @@ class SpotImageServer(Node):
             depth_rate = self.params.rates.get_entry(image_source).depth
 
             if rgb_rate > 0:
-                self.camera_pubs[rgb_source] = self.CameraPub(self, 'rgb/' + image_source)
-                self.continuous_publish_tasks.append(AsyncImageService(
-                    client=self.image_client,
-                    logger=logger_py,
-                    rate=rgb_rate,
-                    callback=self.image_callback, 
-                    image_requests=[self.image_requests[rgb_source]]
-                ))
+                self.camera_pubs[rgb_source] = CameraPub(self, 'rgb/' + image_source)
+                self.callback_groups.append(MutuallyExclusiveCallbackGroup())
+                self.publish_timers.append(
+                    self.create_timer(1/rgb_rate, lambda source=rgb_source: self.update_image_task(source), callback_group=self.callback_groups[-1])
+                )
                 self.get_logger().info(f'Publishing to rgb/{image_source} at {rgb_rate} Hz')
 
             if depth_rate > 0:
-                self.camera_pubs[depth_source] = (self.CameraPub(self, 'depth/' + image_source))
-                self.continuous_publish_tasks.append(AsyncImageService(
-                    client=self.image_client,
-                    logger=logger_py,
-                    rate=depth_rate,
-                    callback=self.image_callback, 
-                    image_requests=[self.image_requests[depth_source]]
-                ))
+                self.camera_pubs[depth_source] = CameraPub(self, 'depth/' + image_source)
+                self.callback_groups.append(MutuallyExclusiveCallbackGroup())
+                self.publish_timers.append(
+                    self.create_timer(1/depth_rate, lambda source=depth_source: self.update_image_task(source), callback_group=self.callback_groups[-1])
+                )
                 self.get_logger().info(f'Publishing to depth/{image_source} at {depth_rate} Hz')
 
-        # Update the tf tree with the transforms to the calibrated body cameras
-        self.publish_static_transforms()
-
-        # Start a loop to constantly check for image messages from the robot at 20Hz
-        self.timer_group = MutuallyExclusiveCallbackGroup()
-        self.update_timer = self.create_timer(0.05, lambda: [task.update() for task in self.continuous_publish_tasks], callback_group=self.timer_group)
+        # Broadcast camera transforms just once post initialization
+        self.static_tf_timer = self.create_timer(0.5, self.broadcast_camera_transforms)
 
         self.get_logger().info(f'Spot Image Server online')
 
@@ -136,33 +128,16 @@ class SpotImageServer(Node):
 
         return rgb_source, depth_source
     
-    def publish_static_transforms(self):
-        # Publish body static transforms
-        body_requests = [req for (name, req) in self.image_requests.items() if 'hand' not in name]
-        if len(body_requests):
-            body_image_responses = self.image_client.get_image(body_requests)
-            for image_response in body_image_responses:
-                _, _, tf_message = getImageMsg(image_response, self.lease_manager)
-                self.tf_broadcaster.pub_tf.publish(tf_message)
+    def update_image_task(self, source_name: str) -> None:
+        if source_name not in self.image_response_futures or self.image_response_futures[source_name].done():
+            # Do not make requests on images topics that no one is listening to
+            is_active_topic = self.camera_pubs[source_name].image_pub.get_subscription_count() > 0 or self.camera_pubs[source_name].info_pub.get_subscription_count() > 0
+            if not is_active_topic: return
+            
+            self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
+            self.image_response_futures[source_name].add_done_callback(self.publish_image_callback)
 
-        # Publish hand static transforms
-        hand_requests = [req for (name, req) in self.image_requests.items() if 'hand' in name]
-        if len(hand_requests):
-            hand_image_responses = self.image_client.get_image(hand_requests)
-            body_snapshot = self.lease_manager._robot_state_client.get_robot_state().kinematic_state.transforms_snapshot
-            body_tform_hand = get_a_tform_b(body_snapshot, BODY_FRAME_NAME, HAND_FRAME_NAME)
-            for image_response in hand_image_responses:
-                body_tform_image_frame = get_a_tform_b(image_response.shot.transforms_snapshot, BODY_FRAME_NAME, image_response.shot.frame_name_image_sensor)
-                hand_tform_image_frame = body_tform_hand.inverse() * body_tform_image_frame
-                transform_stamped = populateTransformStamped(
-                    time=TimestampToMsg(self.lease_manager.robotToLocalTime(image_response.shot.acquisition_time)),
-                    parent_frame=HAND_FRAME_NAME,
-                    child_frame=image_response.shot.frame_name_image_sensor,
-                    transform=hand_tform_image_frame
-                )
-                self.tf_broadcaster.sendTransform(transform_stamped)
-        
-    def image_callback(self, response_future: Future):
+    def publish_image_callback(self, response_future: Future):
         try:
             response: ImageResponseProto = response_future.result()[0]
             self.camera_pubs[response.source.name].process_data(response)
@@ -207,6 +182,76 @@ class SpotImageServer(Node):
 
         return resp
 
+    def broadcast_camera_transforms(self):
+        """
+        Broadcasts static camera transforms for all configured image sources.
+        This runs once after node startup to ensure TF listeners receive them.
+        Avoids broadcasting duplicate (parent -> child) transforms.
+        """
+        if hasattr(self, 'static_tf_timer'):
+            self.static_tf_timer.cancel()  # Make it oneshot
+
+        if not self.image_requests:
+            self.get_logger().info('No image requests to broadcast transforms')
+            return
+
+        transform_map = {}  # key: (parent_frame_id, child_frame_id) -> value: TransformStamped
+
+        for response in self.image_client.get_image(list(self.image_requests.values())):
+            image_data = response  # ImageResponseProto
+
+            all_tfs_from_data = image_data.shot.transforms_snapshot.child_to_parent_edge_map
+
+            excluded_child_frames = {'odom', 'vision', 'arm0.link_wr1'}
+
+            for child_frame, parent_edge in all_tfs_from_data.items():
+                if child_frame in excluded_child_frames:
+                    continue
+                if not parent_edge.parent_frame_name:
+                    continue  # skip invalid entries
+
+                pair_key = (parent_edge.parent_frame_name, child_frame)
+                if pair_key in transform_map:
+                    continue  # already added, skip
+
+                local_time = self.lease_manager.robotToLocalTime(image_data.shot.acquisition_time)
+                tf_time = Time(seconds=local_time.seconds, nanoseconds=local_time.nanos)
+
+                static_tf = populateTransformStamped(
+                    tf_time,
+                    parent_edge.parent_frame_name,
+                    child_frame,
+                    parent_edge.parent_tform_child
+                )
+                transform_map[pair_key] = static_tf  # store it keyed by (parent, child)
+
+        unique_transforms = list(transform_map.values())
+
+        if unique_transforms:
+            self.static_tf_broadcaster.sendTransform(unique_transforms)
+            self.get_logger().info(f'Camera static transforms broadcasted ({len(unique_transforms)} unique frames)')
+        else:
+            self.get_logger().warn('No static camera transforms found to broadcast')
+
+    def log_transforms(self, tf_transforms):
+        """
+        Logs a list of TransformStamped messages using the ROS2 logger.
+        Args:
+            tf_transforms (list of geometry_msgs.msg.TransformStamped): List of transforms.
+        """
+        for transform in tf_transforms:
+            header = transform.header
+            trans = transform.transform.translation
+            rot = transform.transform.rotation
+
+            msg = (
+                "------------------------------\n"
+                f"Frame: {header.frame_id} -> {transform.child_frame_id}\n"
+                f"  Translation: x={trans.x:.3f}, y={trans.y:.3f}, z={trans.z:.3f}\n"
+                f"  Rotation (quaternion): x={rot.x:.3f}, y={rot.y:.3f}, z={rot.z:.3f}, w={rot.w:.3f}"
+            )
+            self.get_logger().info(msg)
+
 def main():
     rclpy.init()
     try:
@@ -214,7 +259,7 @@ def main():
     except Exception as e:
         rclpy.logging.get_logger('spot_image_server').error(f'{e}')
         exit(1)
-    mt_exec = MultiThreadedExecutor(num_threads=2)
+    mt_exec = MultiThreadedExecutor(num_threads=4)
     mt_exec.add_node(image_server)
     mt_exec.spin()
 

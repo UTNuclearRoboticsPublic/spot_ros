@@ -14,8 +14,14 @@
     <!-- target_link (input): std::string -->
     <BehaviorTree ID="MoveHandExact">
         <Sequence>
-            <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="moveit"/>
-            <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="bosdyn"/>
+            <Repeat num_cycles="2">
+                <Fallback>
+                    <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="moveit" pipeline="pilz_industrial_motion_planner" planner="LIN"/>
+                    <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="moveit" pipeline="pilz_industrial_motion_planner" planner="PTP"/>
+                    <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="moveit" pipeline="ompl" planner="BFMT" planning_timeout="1.0"/>
+                    <MoveHandToPose target_pose="{target_pose}" target_link="{target_link}" backend="moveit" pipeline="ompl" planner="RRTConnect"/>
+                </Fallback>
+            </Repeat>
         </Sequence>
     </BehaviorTree>
 

@@ -27,26 +27,22 @@
 
 from typing import Text, Tuple
 from .async_queries import *
+from asyncio import Future
 
 from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
-
-from bosdyn.client import frame_helpers, math_helpers
-from bosdyn.client.robot_state import RobotStateClient
-
-from bosdyn.client.async_tasks import AsyncTasks
+from bosdyn.client.common import FutureWrapper
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
-from bosdyn.client.point_cloud import build_pc_request
+from bosdyn.client.point_cloud import PointCloudClient, build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
-from google.protobuf.message import Message as PB2Message
 
 from .spot_lease_manager import SpotLeaseManager
 from .type_hint_helpers import *
@@ -62,6 +58,15 @@ class SpotBodyWrapper():
         self._has_cam_payload = has_cam_payload
         self._lease_manager = None
 
+        """ State futures """
+        self._robot_state_future: FutureWrapper = None
+        self._robot_state_proto = None
+
+        """ Point cloud task """
+        self._point_cloud_requests = []
+        self._point_cloud_future: FutureWrapper = None
+        self._point_cloud_proto = None
+
         self._robot_id = None
         self._is_sitting = True
         self._is_standing = False
@@ -74,7 +79,7 @@ class SpotBodyWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-    def connect(self, lease_manager: SpotLeaseManager, rates = {}, callbacks = {}) -> bool:
+    def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
         Connect the lease manager to a Spot robot at address 'hostname' if it is not already connected. 
         Additionally registers self as a lease owner with this lease manager registers clients for robot
@@ -102,7 +107,7 @@ class SpotBodyWrapper():
         self._lease_manager = lease_manager
         if not self._lease_manager.is_connected:
             self._lease_manager.setLogger(self._logger)
-            if not self._lease_manager.connect(self._hostname, rates, callbacks):
+            if not self._lease_manager.connect(self._hostname):
                 return False
 
         self._robot_id = self._lease_manager.ID
@@ -112,7 +117,7 @@ class SpotBodyWrapper():
             self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
 
             if self._has_eap_2:
-                self._pointcloud_client = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
+                self._pointcloud_client: PointCloudClient = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
 
 
         except Exception as e:
@@ -126,25 +131,12 @@ class SpotBodyWrapper():
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
 
-        sensor_tasks = []        
-
         # Optionally populate pointcloud data asynchronously
-        if self._has_eap_2 and 'point_cloud' in callbacks:
+        if self._has_eap_2:
             # Create point cloud requests
-            point_cloud_requests = []
             point_cloud_sources = {'velodyne-point-cloud'}
             for source in point_cloud_sources:
-                point_cloud_requests.append(build_pc_request(source))
-            self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
-            sensor_tasks.append(self._pointcloud_task)
-
-        self._async_sensor_tasks = AsyncTasks(sensor_tasks)
-        
-        self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
-        self._async_idle_task  = AsyncTasks([self._idle_task])
-
-        self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-        self._async_state_task = AsyncTasks([self._robot_state_task])
+                self._point_cloud_requests.append(build_pc_request(source))
 
         self._is_connected = True
         return True
@@ -166,8 +158,8 @@ class SpotBodyWrapper():
 
     @property
     def robot_state(self):
-        """Return latest proto from the _robot_state_task"""
-        return self._robot_state_task.proto
+        """Return latest proto from the robot state response"""
+        return self._robot_state_proto
 
     @property
     def lease(self):
@@ -177,7 +169,7 @@ class SpotBodyWrapper():
     @property
     def point_clouds(self):
         """Return the latest proto from teh _pointcloud_task"""
-        return self._pointcloud_task.proto
+        return self._point_cloud_proto
 
     @property
     def is_sitting(self) -> bool:
@@ -193,6 +185,11 @@ class SpotBodyWrapper():
     def is_moving(self) -> bool:
         """Return boolean of walking state"""
         return self._is_moving
+    
+    @property
+    def is_docked(self) -> bool:
+        """Return boolean of docked state"""
+        return self.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
 
     @property
     def time_skew(self) -> PB2Duration:
@@ -203,17 +200,25 @@ class SpotBodyWrapper():
         """Return the robot time in local time as a proto timestamp"""
         return self._lease_manager.robotToLocalTime(timestamp)
 
-    def updateStateTasks(self) -> None:
+    def setStateResult(self, future: Future) -> None:
+        """ Callback to set the result of an async robot state query """
+        self._robot_state_proto = future.result()
+
+    def updateState(self) -> None:
         """Update the robot state"""
-        self._async_state_task.update()
+        if self._robot_state_future is None or self._robot_state_future.done():
+            self._robot_state_future = self._lease_manager._robot_state_client.get_robot_state_async()
+            self._robot_state_future.add_done_callback(self.setStateResult)
 
-    def updateIdleTasks(self) -> None:
-        """Update the idle task"""
-        self._async_idle_task.update()
+    def setPointCloudResult(self, future: Future) -> None:
+        """ Callback to set the result of an async pointcloud query """
+        self._point_cloud_proto = future.result()
 
-    def updateSensorTasks(self) -> None:
-        """Loop through the sensor query periodic tasks and update their data if needed."""
-        self._async_sensor_tasks.update()
+    def updatePointCloud(self) -> None:
+        """Check if we have received a pointcloud message from the robot, and if so record it and send a new one"""
+        if self._point_cloud_future is None or self._point_cloud_future.done():
+            self._point_cloud_future = self._pointcloud_client.get_point_cloud_async(self._point_cloud_requests)
+            self._point_cloud_future.add_done_callback(self.setPointCloudResult)
 
     def claim(self, force: bool = False) -> bool:
         """Add this driver as an EStop and Lease owner of the lease manager"""
@@ -401,6 +406,93 @@ class SpotBodyWrapper():
         response = self._audio_client.set_volume(percentage)
         success = response.error.code == header_pb2.CommonError.Code.CODE_OK
         return success, Text(response.error.message)
+    
+    def update_idle_state(self) -> None:
+        is_moving = False
+        dock_state = self.get_docking_state()
+
+        if self._last_stand_command is not None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_stand_command)
+                self._is_sitting = False
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.stand_feedback.status ==
+                        basic_command_pb2.StandCommand.Feedback.STATUS_IS_STANDING):
+                    self._is_standing = True
+                    self._last_stand_command = None
+                else:
+                    self._is_standing = False
+                    is_moving = True
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_stand_command = None
+
+        if self._last_sit_command is not None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_sit_command)
+                self._is_standing = False
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.sit_feedback.status ==
+                        basic_command_pb2.SitCommand.Feedback.STATUS_IS_SITTING):
+                    self._is_sitting = True
+                    self._last_sit_command = None
+                else:
+                    self._is_sitting = False
+                    is_moving = True
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_sit_command = None
+
+        if (dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKING) or \
+           (dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING):
+            is_moving = True
+            self._is_standing = True
+            self._is_sitting = False
+
+        if dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED:
+            is_moving = False
+            self._is_standing = False
+            self._is_sitting = True
+        
+        if self._last_velocity_command_time != None:
+            if time.time() < self._last_velocity_command_time:
+                is_moving = True
+            else:
+                self._is_standing = True
+                self._last_velocity_command_time = None
+
+        if self._last_trajectory_command != None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_trajectory_command)
+                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                # STATUS_AT_GOAL always means that the robot reached the goal. If the trajectory command did not
+                # request precise positioning, then STATUS_NEAR_GOAL also counts as reaching the goal
+                if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
+                    (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
+                     not self._last_trajectory_command_precise):
+                    self._at_goal = True
+                    # Clear the command once at the goal
+                    self._last_trajectory_command = None
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_GOING_TO_GOAL:
+                    is_moving = True
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL:
+                    is_moving = True
+                    self._near_goal = True
+                else:
+                    self._last_trajectory_command = None
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_trajectory_command = None
+
+        self._is_moving = is_moving
+
+        if (self.is_standing 
+            and not self.is_moving
+            and not self._lease_manager.frozen
+            and self._last_trajectory_command is None
+            and self._last_stand_command is None
+            and self._last_velocity_command_time is None
+            and self._last_docking_command is None
+            and self.lease is not None):            
+            self.stand(False)
 
     def sassy_confused(self) -> Tuple[bool, str]:
         """Makes Spot look confused in a bit of a sassy way"""
