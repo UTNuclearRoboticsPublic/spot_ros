@@ -13,3 +13,7 @@ twist_mux:
         topic   : hololens/cmd_vel
         timeout : 0.5
         priority: 8
+      navStack:
+        topic   : nav_stack/cmd_vel
+        timeout : 0.5
+        priority: 7
