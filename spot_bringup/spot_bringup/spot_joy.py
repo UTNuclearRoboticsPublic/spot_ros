@@ -11,7 +11,7 @@ from rclpy.client import Client
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.parameter import ParameterType
-from rcl_interfaces.msg import ParameterDescriptor
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
 from sensor_msgs.msg import Joy
 from spot_msgs.srv import Dock
 from spot_msgs.msg import Feedback, ManipulatorStowState
@@ -150,6 +150,7 @@ class SpotJoyUtils(Node):
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_INTEGER,
                 description='Configured dock for the robot',
+                read_only=False
             )
         ).value
         self.get_logger().info(f'Registering dock id {self.dock_id}')
@@ -169,6 +170,8 @@ class SpotJoyUtils(Node):
             raise RuntimeError()
 
         self.actions = ACTIONS[self.controller_config]
+
+        self.add_on_set_parameters_callback(self.parameterReconfigureCallback)
 
         # Subscribe to the feedback topic to monitor dock state
         self._feedback_sub = self.create_subscription(Feedback, '/spot_driver/status/feedback', self.updateState, 10)
@@ -207,6 +210,17 @@ class SpotJoyUtils(Node):
         self._body_pitch  = 0.0
 
         self.get_logger().info("Spot joy node setup complete")
+
+    def parameterReconfigureCallback(self, parameters: list[Parameter]):
+        for param in parameters:
+            if param.name == 'dock_id':
+                if param.value < 0:
+                    self.get_logger().warn(f'Dock id parameter must be a positive integer, but you gave {param.value}')
+                    return SetParametersResult(successful=False, reason='Value was outside of the valid range (positive integers)')
+                self.dock_id = param.value
+                self.get_logger().info(f'Changing configured dock id to {self.dock_id}')
+        
+        return SetParametersResult(successful=True)
 
     def updateState(self, msg: Feedback):
         self._docked = msg.docked
