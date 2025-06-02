@@ -1,0 +1,24 @@
+spot_image_server:
+  ros__parameters:
+    rates:
+      frontleft:
+        rgb: 10.0
+        depth: 10.0
+      frontright:
+        rgb: 10.0
+        depth: 10.0
+      left:
+        rgb: 10.0
+        depth: 10.0
+      right:
+        rgb: 10.0
+        depth: 10.0
+      back:
+        rgb: 10.0
+        depth: 10.0
+      hand_rgb:
+        rgb: 10.0
+        depth: 10.0
+      hand_tof:
+        rgb: 10.0
+        depth: 10.0
