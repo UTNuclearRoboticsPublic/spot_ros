@@ -272,7 +272,7 @@ def generate_launch_description():
     )
 
     twist_mux_config = PathJoinSubstitution([
-        FindPackageShare('spot_driver'),
+        FindPackageShare('spot_bringup'),
         'config',
         'twist_mux.yaml'
     ])
