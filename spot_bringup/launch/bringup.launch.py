@@ -29,6 +29,8 @@ def generate_launch_description():
                                 "image_service_only.yaml"
                             ]),
                             description="Path to image config YAML. By default we don't publish images"),
+        DeclareLaunchArgument('dock_id',
+                            default_value='520'),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -84,6 +86,7 @@ def generate_launch_description():
                             default_value='False'),
     ]
 
+    dock_id         = LaunchConfiguration('dock_id')
     has_arm         = LaunchConfiguration('has_arm')
     has_eap         = LaunchConfiguration('has_eap')
     has_eap_2       = LaunchConfiguration('has_eap_2')
@@ -219,7 +222,10 @@ def generate_launch_description():
         package='spot_bringup',
         executable='spot_joy',
         name='spot_joy_node',
-        parameters=[{'controller': LaunchConfiguration('controller_configuration')}]
+        parameters=[
+            {'controller': LaunchConfiguration('controller_configuration')},
+            {'dock_id': LaunchConfiguration('dock_id')}
+        ]
     )
 
     # Arm Teleop Commands
