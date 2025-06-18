@@ -3,12 +3,18 @@
     <xacro:macro name="spot_arm" params="name" >
 
     <xacro:arg name="has_realsense" default="False" />
+    <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_format" default="dae" />
+
+    <!-- Determine mesh source -->
+  <xacro:property name="mesh_pkg" value="$(eval 'spot_propriety_description' if use_proprietary_meshes else 'spot_description')"/>
+  <xacro:property name="mesh_ext" value="$(eval proprietary_format if use_proprietary_meshes else 'obj')" />
 
     <link name="${name}_base_link">
         <visual>
             <geometry>
                 <!-- Add a small scale increase to cover up body mesh imperfections -->
-                <mesh filename="package://spot_description/meshes/arm/arm0.base_link.dae" scale="1.02 1.02 1.02"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.base_link.$(var mesh_ext)" scale="1.02 1.02 1.02"/>
             </geometry>
             <origin xyz="-0.001 0.0002 -0.116" rpy="0 0.03 0"/>
         </visual>
@@ -24,7 +30,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_sh0.$(var mesh_ext)"/>
             </geometry>
             <material name="arm0.link_sh0">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -80,7 +86,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_hr0.$(var mesh_ext)"/>
             </geometry>
                 <material name="arm0.link_hr0">
                     <color rgba="0.2 0.2 0.2 1"/>
@@ -108,7 +114,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_el0.$(var mesh_ext)"/>
             </geometry>
             <material name="arm0.link_el0">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -136,7 +142,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_el1.$(var mesh_ext)"/>
             </geometry>
             <material name="arm0.link_el1">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -164,7 +170,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_wr0.$(var mesh_ext)"/>
             </geometry>
             <material name="arm0.link_wr0">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -192,7 +198,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_wr1.$(var mesh_ext)"/>
             </geometry>
             <material name="arm0.link_wr1">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -229,7 +235,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.dae"/>
+                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_fngr.$(var mesh_ext)"/>
             </geometry>
             <material name="arm0.link_fngr">
                 <color rgba="0.2 0.2 0.2 1"/>
