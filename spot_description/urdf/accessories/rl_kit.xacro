@@ -87,8 +87,14 @@
               <geometry>
                 <box size="0.1905 0.04445 0.0635"/>
               </geometry>
+	      <origin xyz="0 0 0"/>
             </visual>
           </xacro:unless>
+	  <collision>
+            <geometry>
+              <box size="0.1905 0.04445 0.0635"/>
+            </geometry>
+          </collision>
         </link>
 
         <joint name="rl_kit_gxp_joint" type="fixed">
