@@ -1,6 +1,8 @@
 <?xml version="1.0" ?>
 <robot name="rl_kit" xmlns:xacro="http://www.ros.org/wiki/xacro">
     <xacro:macro name="rl_kit">
+    <xacro:arg name="use_proprietary_meshes" default="false" />
+
         <link name="rl_kit_reference_frame"/>
         <joint name="rl_kit_base_mount_to_body"  type="fixed">
             <parent link = "payload_mount_reference_frame"/>
@@ -9,12 +11,22 @@
         </joint>
 
         <link name="rl_kit_wire_housing_box">
+	<xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
                 <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/rl_kit_wire_housing_box.dae"/>
+                    <mesh filename="package://spot_propriety_description/meshes/accessories/rl_kit_wire_housing_box.dae"/>
                 </geometry>
                 <origin xyz="-0.025 0 -0.03" rpy="0 0 ${pi/2}"/>
             </visual>
+        </xacro:if>
+	<xacro:unless value="$(arg use_proprietary_meshes)">
+            <visual>
+                <geometry>
+                    <box size="${2*0.076} ${2*0.103} ${2*0.033}"/>
+                </geometry>
+                <origin xyz="-0.025 0 -0.03" rpy="0 0 ${pi/2}"/>
+            </visual>
+        </xacro:unless>
             <collision>
                 <geometry>
                     <box size="${2*0.076} ${2*0.103} ${2*0.033}"/>
@@ -28,18 +40,28 @@
         </joint>
 
         <link name="rl_kit_jetson_housing_box">
+	<xacro:if value="$(arg use_proprietary_meshes)">
             <visual name="housing">
                 <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/rl_kit_jetson_housing_box.dae"/>
+                    <mesh filename="package://spot_propriety_description/meshes/accessories/rl_kit_jetson_housing_box.dae"/>
                 </geometry>
                 <origin xyz="0.02 0 -0.056"/>
             </visual>
             <visual name="jetson">
                 <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/jetson_orin_dev_kit.dae"/>
+                    <mesh filename="package://spot_propriety_description/meshes/accessories/jetson_orin_dev_kit.dae"/>
                 </geometry>
                 <origin xyz="0 0 -0.056" rpy="0 0 ${pi/2}"/>
             </visual>
+        </xacro:if>
+	<xacro:unless value="$(arg use_proprietary_meshes)">
+          <visual name="housing_and_jetson">
+            <geometry>
+              <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
+            </geometry>
+            <origin xyz="0.02 0 -0.056"/>
+          </visual>
+        </xacro:unless>
             <collision>
                 <geometry>
                     <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
@@ -53,12 +75,22 @@
         </joint>
 
         <link name="rl_kit_gxp_interface">
+          <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/gxp.dae"/>
-                </geometry>
+              <geometry>
+                <mesh filename="package://spot_propriety_description/meshes/accessories/gxp.dae"/>
+              </geometry>
             </visual>
+          </xacro:if>
+          <xacro:unless value="$(arg use_proprietary_meshes)">
+            <visual>
+              <geometry>
+                <box size="0.1905 0.04445 0.0635"/>
+              </geometry>
+            </visual>
+          </xacro:unless>
         </link>
+
         <joint name="rl_kit_gxp_joint" type="fixed">
             <parent link = "rl_kit_reference_frame"/>
             <child  link = "rl_kit_gxp_interface"/>
