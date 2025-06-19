@@ -2,6 +2,12 @@
 <robot name="rl_kit" xmlns:xacro="http://www.ros.org/wiki/xacro">
     <xacro:macro name="rl_kit">
     <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_pkg" default="spot_proprietary_description" />
+    <xacro:arg name="proprietary_mesh_format" default="dae" />
+
+    <!-- Determine mesh source -->
+  <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
+  <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
 
         <link name="rl_kit_reference_frame"/>
         <joint name="rl_kit_base_mount_to_body"  type="fixed">
@@ -14,7 +20,7 @@
 	<xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
                 <geometry>
-                    <mesh filename="package://spot_propriety_description/meshes/accessories/rl_kit_wire_housing_box.dae"/>
+                    <mesh filename="package://${mesh_pkg}/meshes/accessories/rl_kit_wire_housing_box.${mesh_ext}"/>
                 </geometry>
                 <origin xyz="-0.025 0 -0.03" rpy="0 0 ${pi/2}"/>
             </visual>
@@ -44,13 +50,13 @@
 	<xacro:if value="$(arg use_proprietary_meshes)">
             <visual name="housing">
                 <geometry>
-                    <mesh filename="package://spot_propriety_description/meshes/accessories/rl_kit_jetson_housing_box.dae"/>
+                    <mesh filename="package://${mesh_pkg}/meshes/accessories/rl_kit_jetson_housing_box.${mesh_ext}"/>
                 </geometry>
                 <origin xyz="0.02 0 -0.056"/>
             </visual>
             <visual name="jetson">
                 <geometry>
-                    <mesh filename="package://spot_propriety_description/meshes/accessories/jetson_orin_dev_kit.dae"/>
+                    <mesh filename="package://${mesh_pkg}/meshes/accessories/jetson_orin_dev_kit.${mesh_ext}"/>
                 </geometry>
                 <origin xyz="0 0 -0.056" rpy="0 0 ${pi/2}"/>
             </visual>
@@ -80,7 +86,7 @@
           <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
               <geometry>
-                <mesh filename="package://spot_propriety_description/meshes/accessories/gxp.dae"/>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/gxp.${mesh_ext}"/>
               </geometry>
             </visual>
           </xacro:if>

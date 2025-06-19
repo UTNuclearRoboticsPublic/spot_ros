@@ -2,12 +2,12 @@
 <robot name="rl_kit_velodyne_mount" xmlns:xacro="http://www.ros.org/wiki/xacro">
     <xacro:include filename="$(find velodyne_description)/urdf/VLP-16.urdf.xacro"/>
     <xacro:arg name="use_proprietary_meshes" default="false" />
-    <xacro:arg name="proprietary_pkg" default="spot_propreity_description" />
-    <xacro:arg name="proprietary_format" default="dae" />
+    <xacro:arg name="proprietary_pkg" default="spot_proprietary_description" />
+    <xacro:arg name="proprietary_mesh_format" default="dae" />
 
     <!-- Determine mesh source -->
   <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
-  <xacro:property name="mesh_ext" value="$(eval proprietary_format if use_proprietary_meshes else 'obj')" />
+  <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
 
     <link name="rl_kit_velodyne_mounting_plate">
       <xacro:if value="$(arg use_proprietary_meshes)">
