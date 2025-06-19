@@ -29,8 +29,9 @@
         </xacro:unless>
             <collision>
                 <geometry>
-                    <box size="${2*0.103} 0.130 0.0635}"/>
+                    <box size="${2*0.103} 0.130 0.0635"/>
                 </geometry>
+                <origin xyz="0.0 0.0 0.0" rpy="0 0 ${pi/2}"/>
             </collision>
         </link>
         <joint name="rl_kit_wire_housing_box_joint"  type="fixed">
