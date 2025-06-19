@@ -3,9 +3,10 @@ services:
     container_name: spot_ros
     image: nrg/spot_ros:${TARGET_ROS_DISTRO}
     build:
-      platforms:
+      network: host
+      # platforms:
         # - linux/arm64
-        - linux/amd64
+        # - linux/amd64
       args:
         SPOT_VERSION: $SPOT_VERSION
         ROS_DISTRO: $TARGET_ROS_DISTRO
