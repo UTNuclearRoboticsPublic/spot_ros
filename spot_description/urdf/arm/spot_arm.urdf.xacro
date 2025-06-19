@@ -14,7 +14,7 @@
         <visual>
             <geometry>
                 <!-- Add a small scale increase to cover up body mesh imperfections -->
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.base_link.$(var mesh_ext)" scale="1.02 1.02 1.02"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.base_link.${mesh_ext}" scale="1.02 1.02 1.02"/>
             </geometry>
             <origin xyz="-0.001 0.0002 -0.116" rpy="0 0.03 0"/>
         </visual>
@@ -30,7 +30,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_sh0.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_sh0.${mesh_ext}"/>
             </geometry>
             <material name="arm0.link_sh0">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -86,7 +86,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_hr0.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_hr0.${mesh_ext}"/>
             </geometry>
                 <material name="arm0.link_hr0">
                     <color rgba="0.2 0.2 0.2 1"/>
@@ -114,7 +114,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_el0.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_el0.${mesh_ext}"/>
             </geometry>
             <material name="arm0.link_el0">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -142,7 +142,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_el1.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_el1.${mesh_ext}"/>
             </geometry>
             <material name="arm0.link_el1">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -170,7 +170,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_wr0.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_wr0.${mesh_ext}"/>
             </geometry>
             <material name="arm0.link_wr0">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -198,7 +198,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_wr1.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_wr1.${mesh_ext}"/>
             </geometry>
             <material name="arm0.link_wr1">
                 <color rgba="0.2 0.2 0.2 1"/>
@@ -235,7 +235,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0"/>
             <geometry>
-                <mesh filename="package://$(var mesh_pkg)/meshes/arm/arm0.link_fngr.$(var mesh_ext)"/>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_fngr.${mesh_ext}"/>
             </geometry>
             <material name="arm0.link_fngr">
                 <color rgba="0.2 0.2 0.2 1"/>
