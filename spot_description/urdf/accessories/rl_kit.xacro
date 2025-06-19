@@ -22,14 +22,14 @@
 	<xacro:unless value="$(arg use_proprietary_meshes)">
             <visual>
                 <geometry>
-                    <box size="${2*0.076} ${2*0.103} ${2*0.033}"/>
+                    <box size="${2*0.103} 0.130 0.0635"/>
                 </geometry>
-                <origin xyz="-0.025 0 -0.03" rpy="0 0 ${pi/2}"/>
+                <origin xyz="0.0 0.0 0.0" rpy="0 0 ${pi/2}"/>
             </visual>
         </xacro:unless>
             <collision>
                 <geometry>
-                    <box size="${2*0.076} ${2*0.103} ${2*0.033}"/>
+                    <box size="${2*0.103} 0.130 0.0635}"/>
                 </geometry>
             </collision>
         </link>
@@ -59,13 +59,14 @@
             <geometry>
               <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
             </geometry>
-            <origin xyz="0.02 0 -0.056"/>
+            <origin xyz="0.01 0.0 0.0"/>
           </visual>
         </xacro:unless>
             <collision>
                 <geometry>
                     <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
                 </geometry>
+            <origin xyz="0.01 0.0 0.0"/>
             </collision>
         </link>
         <joint name="rl_kit_jetson_housing_box_joint"  type="fixed">
@@ -85,15 +86,16 @@
           <xacro:unless value="$(arg use_proprietary_meshes)">
             <visual>
               <geometry>
-                <box size="0.1905 0.04445 0.0635"/>
+                <box size=" 0.04445 0.1905 0.0635"/>
               </geometry>
-	      <origin xyz="0 0 0"/>
+	      <origin xyz="${0.0445/2 + 0.01} 0 ${0.0635/2}"/>
             </visual>
           </xacro:unless>
 	  <collision>
             <geometry>
-              <box size="0.1905 0.04445 0.0635"/>
+              <box size=" 0.04445 0.1905 0.0635"/>
             </geometry>
+	      <origin xyz="${0.0445/2 + 0.01} 0 ${0.0635/2}"/>
           </collision>
         </link>
 
