@@ -12,7 +12,13 @@
     <xacro:arg name="has_realsense" default="False"/>
     <xacro:arg name="kinematic_model" default="none"/>
     <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_pkg" default="spot_propreity_description" />
+    <xacro:arg name="proprietary_format" default="dae" />
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
+
+    <!-- Determine mesh source -->
+    <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
+    <xacro:property name="mesh_ext" value="$(eval proprietary_format if use_proprietary_meshes else 'obj')" />
 
     <xacro:unless value="${kinematic_model == 'none'}">
         <link name="base_footprint"/>
@@ -629,12 +635,12 @@
           <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
               <geometry>
-                <mesh filename="package://spot_propriety_description/meshes/accessories/eap_lidar.stl"/>
+		<mesh filename="package://${mesh_pkg}/meshes/accessories/eap_lidar.${mesh_ext}"/>
               </geometry>
             </visual>
             <collision>
               <geometry>
-                <mesh filename="package://spot_propriety_description/meshes/accessories/eap_lidar.stl"/>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/eap_lidar.${mesh_ext}"/>
               </geometry>
             </collision>
           </xacro:if>
@@ -672,12 +678,12 @@
           <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
               <geometry>
-                <mesh filename="package://spot_propriety_description/meshes/accessories/EAP2.dae" />
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/EAP2.${mesh_ext}" />
               </geometry>
             </visual>
             <collision>
               <geometry>
-                <mesh filename="package://spot_propriety_description/meshes/accessories/EAP2_compressed.stl" />
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/EAP2.${mesh_ext}" />
               </geometry>
             </collision>
           </xacro:if>
