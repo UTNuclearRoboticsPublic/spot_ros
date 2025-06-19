@@ -8,12 +8,14 @@ import rclpy.logging
 from rclpy.node import Node
 from rclpy.timer import Timer
 from rclpy.time import Time
+from std_srvs.srv import Trigger
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Image, CameraInfo
 from tf2_ros import StaticTransformBroadcaster
 
 from bosdyn.api import image_pb2
+from bosdyn.client import InvalidRequestError
 from bosdyn.client.image import ImageClient, build_image_request, UnknownImageSourceError, SourceDataError, UnsetStatusError, ImageDataError
 from bosdyn.client.exceptions import RpcError
 from bosdyn.client.frame_helpers import get_a_tform_b, BODY_FRAME_NAME, HAND_FRAME_NAME
@@ -50,6 +52,7 @@ class SpotImageServer(Node):
         self.get_logger().info(f'Creating image services for the following sources: {", ".join(self.params.image_sources)}')
 
         self.get_image_service = self.create_service(GetImages, '~/get_images', self.get_image_callback)
+        self.list_source_service = self.create_service(Trigger, '~/list_registered_sources', self.list_sources_callback)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
         # Connect to robot
@@ -150,13 +153,18 @@ class SpotImageServer(Node):
         except Exception as e:
             self.get_logger().warn(f'Unknown error in image callback: {e}')
 
+    def list_sources_callback(self, req: Trigger.Request, resp: Trigger.Response) -> Trigger.Response:
+        resp.message = ' '.join([f'[{name}]' for name in self.image_requests.keys()])
+        resp.success = True
+        return resp
+
     def get_image_callback(self, req: GetImages.Request, resp: GetImages.Response) -> GetImages.Response:
         resp.success = False
 
         # Make sure the provided sources were registered on startup
         for source in req.sources:
             if source not in self.image_requests.keys():
-                self.get_logger().warn(f'Provided image source {source} does not exist')
+                self.get_logger().warn(f'Provided image source {source} does not exist. Registered sources are {self.image_requests.keys()}')
                 return resp
 
         # Request the images from the robot 
@@ -173,6 +181,8 @@ class SpotImageServer(Node):
 
             resp.success = True
 
+        except InvalidRequestError as e:
+            self.get_logger().warn(f'There was an error with the request: {e}')
         except RpcError as e:
             self.get_logger().warn(f'Error to communicating with robot: {e}')
         except UnknownImageSourceError as e:
