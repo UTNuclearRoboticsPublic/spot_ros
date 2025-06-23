@@ -648,7 +648,7 @@
           <xacro:unless value="$(arg use_proprietary_meshes)">
             <visual>
               <geometry>
-                <cylinder radius="0.1" length="0.17"/>
+                <cylinder radius="0.12" length="0.17"/>
               </geometry>
 	      <origin xyz="0 0 ${0.17/2}"/>
               <material name="black">
@@ -657,7 +657,7 @@
             </visual>
             <collision>
               <geometry>
-                <cylinder radius="0.1" length="0.17"/>
+                <cylinder radius="0.12" length="0.17"/>
               </geometry>
 	      <origin xyz="0 0 ${0.17/2}"/>
             </collision>
