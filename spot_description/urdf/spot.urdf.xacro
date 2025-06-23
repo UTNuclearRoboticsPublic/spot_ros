@@ -650,7 +650,7 @@
               <geometry>
                 <cylinder radius="0.1" length="0.17"/>
               </geometry>
-              <origin xyz="0 0 0"/>
+	      <origin xyz="0 0 ${0.17/2}"/>
               <material name="black">
                 <color rgba="0 0 0 1"/>
               </material>
@@ -659,7 +659,7 @@
               <geometry>
                 <cylinder radius="0.1" length="0.17"/>
               </geometry>
-              <origin xyz="0 0 0"/>
+	      <origin xyz="0 0 ${0.17/2}"/>
             </collision>
           </xacro:unless>
         </link>
