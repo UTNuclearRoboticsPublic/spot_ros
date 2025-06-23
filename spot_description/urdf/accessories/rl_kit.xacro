@@ -31,6 +31,9 @@
                     <box size="${2*0.103} 0.130 0.0635"/>
                 </geometry>
                 <origin xyz="0.0 0.0 0.0" rpy="0 0 ${pi/2}"/>
+                <material name="black">
+                  <color rgba="0 0 0 1"/>
+                </material>
             </visual>
         </xacro:unless>
             <collision>
@@ -67,6 +70,9 @@
               <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
             </geometry>
             <origin xyz="0.01 0.0 0.0"/>
+            <material name="black">
+              <color rgba="0 0 0 1"/>
+            </material>
           </visual>
         </xacro:unless>
             <collision>
@@ -96,6 +102,9 @@
                 <box size=" 0.04445 0.1905 0.0635"/>
               </geometry>
 	      <origin xyz="${0.0445/2 + 0.01} 0 ${0.0635/2}"/>
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
             </visual>
           </xacro:unless>
 	  <collision>

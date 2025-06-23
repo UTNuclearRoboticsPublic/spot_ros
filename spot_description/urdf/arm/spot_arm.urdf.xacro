@@ -12,6 +12,7 @@
   <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
 
     <link name="${name}_base_link">
+	<xacro:if value="$(arg use_proprietary_meshes)">
         <visual>
             <geometry>
                 <!-- Add a small scale increase to cover up body mesh imperfections -->
@@ -19,6 +20,18 @@
             </geometry>
             <origin xyz="-0.001 0.0002 -0.116" rpy="0 0.03 0"/>
         </visual>
+        </xacro:if>
+	<xacro:unless value="$(arg use_proprietary_meshes)">
+        <visual>
+            <geometry>
+                <cylinder radius="0.08" length="0.05"/>
+            </geometry>
+            <origin xyz="-0.02 0 -0.08"/>
+            <material name="black">
+              <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+        </xacro:unless>
         <collision>
             <geometry>
                 <cylinder radius="0.08" length="0.05"/>
