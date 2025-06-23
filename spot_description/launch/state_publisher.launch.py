@@ -47,7 +47,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_proprietary_meshes',
             description='Whether to use proprietary meshes',
             choices=['True', 'False'],
-            default_value='True'),
+            default_value='False'),
 
         DeclareLaunchArgument(
             'proprietary_pkg',
