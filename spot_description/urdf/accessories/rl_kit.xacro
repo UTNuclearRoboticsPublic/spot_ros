@@ -28,9 +28,9 @@
 	<xacro:unless value="$(arg use_proprietary_meshes)">
             <visual>
                 <geometry>
-                    <box size="${2*0.103} 0.130 0.0635"/>
+                    <box size="${2*0.103} 0.09 0.0635"/>
                 </geometry>
-                <origin xyz="0.0 0.0 0.0" rpy="0 0 ${pi/2}"/>
+                <origin xyz="-0.025 0.0 0.0" rpy="0 0 ${pi/2}"/>
                 <material name="black">
                   <color rgba="0 0 0 1"/>
                 </material>
@@ -38,9 +38,9 @@
         </xacro:unless>
             <collision>
                 <geometry>
-                    <box size="${2*0.103} 0.130 0.0635"/>
+                    <box size="${2*0.103} 0.09 0.0635"/>
                 </geometry>
-                <origin xyz="0.0 0.0 0.0" rpy="0 0 ${pi/2}"/>
+                <origin xyz="-0.025 0.0 0.0" rpy="0 0 ${pi/2}"/>
             </collision>
         </link>
         <joint name="rl_kit_wire_housing_box_joint"  type="fixed">
@@ -67,7 +67,7 @@
 	<xacro:unless value="$(arg use_proprietary_meshes)">
           <visual name="housing_and_jetson">
             <geometry>
-              <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
+              <box size="${2*0.068} ${2*0.1} ${2*0.056}"/>
             </geometry>
             <origin xyz="0.01 0.0 0.0"/>
             <material name="black">
@@ -77,7 +77,7 @@
         </xacro:unless>
             <collision>
                 <geometry>
-                    <box size="${2*0.078} ${2*0.103} ${2*0.056}"/>
+                    <box size="${2*0.068} ${2*0.1} ${2*0.056}"/>
                 </geometry>
             <origin xyz="0.01 0.0 0.0"/>
             </collision>
@@ -101,7 +101,7 @@
               <geometry>
                 <box size=" 0.04445 0.1905 0.0635"/>
               </geometry>
-	      <origin xyz="${0.0445/2 + 0.01} 0 ${0.0635/2}"/>
+	      <origin xyz="${0.0445/2 - 0.02} 0 ${0.0635/2}"/>
               <material name="black">
                 <color rgba="0 0 0 1"/>
               </material>
@@ -111,7 +111,7 @@
             <geometry>
               <box size=" 0.04445 0.1905 0.0635"/>
             </geometry>
-	      <origin xyz="${0.0445/2 + 0.01} 0 ${0.0635/2}"/>
+	      <origin xyz="${0.0445/2 - 0.02} 0 ${0.0635/2}"/>
           </collision>
         </link>
 
