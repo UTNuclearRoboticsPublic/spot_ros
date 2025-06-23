@@ -84,6 +84,20 @@ def generate_launch_description():
         DeclareLaunchArgument('data_capture_mode',
                             description='Whether to published received joint trajectories on corresponding action server goal topics',
                             default_value='False'),
+        DeclareLaunchArgument('use_proprietary_meshes',
+            description='Whether to use proprietary meshes',
+            choices=['True', 'False'],
+            default_value='True'),
+        DeclareLaunchArgument(
+            'proprietary_pkg',
+            description='Name of the package containing proprietary meshes',
+            default_value='spot_proprietary_description'),
+        DeclareLaunchArgument(
+            'proprietary_mesh_format',
+            description='File extension format for proprietary mesh files',
+            default_value='dae',
+            choices=['dae', 'stl']
+        ),
     ]
 
     dock_id         = LaunchConfiguration('dock_id')
@@ -94,6 +108,9 @@ def generate_launch_description():
     has_rl_kit      = LaunchConfiguration('has_rl_kit')
     has_realsense   = LaunchConfiguration('has_realsense')
     has_cam_payload = LaunchConfiguration('has_cam_payload')
+    use_proprietary_meshes = LaunchConfiguration('use_proprietary_meshes')
+    proprietary_pkg = LaunchConfiguration('proprietary_pkg')
+    proprietary_mesh_format = LaunchConfiguration('proprietary_mesh_format')
     auto_claim      = LaunchConfiguration('auto_claim')
     auto_power_on   = LaunchConfiguration('auto_power_on')
     auto_stand      = LaunchConfiguration('auto_stand')
@@ -119,6 +136,9 @@ def generate_launch_description():
                 'kinematic_model': kinematic_model,
                 'has_rl_kit':      has_rl_kit,
                 'has_cam_payload': has_cam_payload,
+                'use_proprietary_meshes':   use_proprietary_meshes,
+                'proprietary_pkg':          proprietary_pkg,
+                'proprietary_mesh_format':  proprietary_mesh_format,
                 'auto_claim':      auto_claim,
                 'auto_power_on':   auto_power_on,
                 'auto_stand':      auto_stand,
@@ -138,6 +158,9 @@ def generate_launch_description():
             'kinematic_model': kinematic_model,
             'has_rl_kit':      has_rl_kit,
             'has_cam_payload': has_cam_payload,
+            'use_proprietary_meshes':   use_proprietary_meshes,
+            'proprietary_pkg':          proprietary_pkg,
+            'proprietary_mesh_format':  proprietary_mesh_format,
             'auto_claim':      auto_claim,
             'auto_power_on':   auto_power_on,
             'auto_stand':      auto_stand,
@@ -169,7 +192,11 @@ def generate_launch_description():
                         'has_eap': has_eap,
                         'has_eap_2': has_eap_2,
                         'kinematic_model': kinematic_model,
-                        'has_rl_kit': has_rl_kit,}.items()
+                        'has_rl_kit': has_rl_kit,
+                        'has_cam_payload': has_cam_payload,
+                        'use_proprietary_meshes':   use_proprietary_meshes,
+                        'proprietary_pkg':          proprietary_pkg,
+                        'proprietary_mesh_format':  proprietary_mesh_format,}.items()
     )
 
     # Realsense
