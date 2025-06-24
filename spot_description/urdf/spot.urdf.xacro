@@ -11,7 +11,14 @@
     <xacro:arg name="has_rl_kit" default="False"/>
     <xacro:arg name="has_realsense" default="False"/>
     <xacro:arg name="kinematic_model" default="none"/>
+    <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_pkg" default="spot_propreity_description" />
+    <xacro:arg name="proprietary_mesh_format" default="dae" />
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
+
+    <!-- Determine mesh source -->
+    <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
+    <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
 
     <xacro:unless value="${kinematic_model == 'none'}">
         <link name="base_footprint"/>
@@ -625,16 +632,36 @@
     <!-- Spot Enhanced Autonomy package (EAP) -->
     <xacro:if value="$(arg has_eap)">
         <link name="lidar_assembly">
+          <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/eap_lidar.stl" />
-                </geometry>
+              <geometry>
+		<mesh filename="package://${mesh_pkg}/meshes/accessories/eap_lidar.${mesh_ext}"/>
+              </geometry>
             </visual>
             <collision>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/eap_lidar.stl" />
-                </geometry>
+              <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/eap_lidar.${mesh_ext}"/>
+              </geometry>
             </collision>
+          </xacro:if>
+        
+          <xacro:unless value="$(arg use_proprietary_meshes)">
+            <visual>
+              <geometry>
+                <cylinder radius="0.12" length="0.17"/>
+              </geometry>
+	      <origin xyz="0 0 ${0.17/2}"/>
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
+            </visual>
+            <collision>
+              <geometry>
+                <cylinder radius="0.12" length="0.17"/>
+              </geometry>
+	      <origin xyz="0 0 ${0.17/2}"/>
+            </collision>
+          </xacro:unless>
         </link>
         <joint name="lidar_mount" type="fixed">
             <origin xyz="-0.03 0.0 0.0" rpy="0 0 0" />
@@ -651,16 +678,58 @@
     <!-- Updated Spot Enhanced Autonomy Package (EAP2) -->
     <xacro:if value="$(arg has_eap_2)">
         <link name="eap_2_assembly">
+          <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/EAP2.dae" />
-                </geometry>
+              <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/EAP2.${mesh_ext}" />
+              </geometry>
             </visual>
             <collision>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/EAP2_compressed.stl" />
-                </geometry>
+              <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/EAP2.${mesh_ext}" />
+              </geometry>
             </collision>
+          </xacro:if>
+        
+          <xacro:unless value="$(arg use_proprietary_meshes)">
+            <!-- Base Box (computer) -->
+            <visual name="eap2_base">
+              <geometry>
+                <box size="0.173 0.264 0.064"/>
+              </geometry>
+              <origin xyz="0 -0.01 0.032" rpy="0 0 0"/>
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
+            </visual>
+        
+            <!-- LIDAR Cylinder -->
+            <visual name="eap2_lidar">
+              <geometry>
+                <cylinder radius="0.0765" length="0.182"/>
+              </geometry>
+              <origin xyz="0 0.03 0.155" rpy="0 0 0"/> <!-- base_z/2 + lidar_z/2 -->
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
+            </visual>
+        
+            <!-- Base collision -->
+            <collision name="eap2_base_col">
+              <geometry>
+                <box size="0.173 0.264 0.064"/>
+              </geometry>
+              <origin xyz="0 -0.01 0.032" rpy="0 0 0"/>
+            </collision>
+        
+            <!-- LIDAR collision -->
+            <collision name="eap2_lidar_col">
+              <geometry>
+                <cylinder radius="0.0765" length="0.182"/>
+              </geometry>
+              <origin xyz="0 0.03 0.155" rpy="0 0 0"/>
+            </collision>
+          </xacro:unless>
         </link>
         <joint name="eap_2_mount" type="fixed">
             <origin xyz="0.015 0.0 0.0" rpy="0 0 ${pi/2}" />
