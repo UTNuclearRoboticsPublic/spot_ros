@@ -27,8 +27,8 @@ Please make sure you have the following before attempting to run Spot with Docke
 
 ```bash
 # with a controller attached to the host
-# controller_configuration options are [Logitech, Dualsense]
-docker compose run --rm bringup controller_configuration:=Dualsense
+# controller_configuration options are [Logitech, Dualsense5]
+docker compose run --rm bringup controller_configuration:=Dualsense5
 
 # or with no controller attached to host
 docker compose up bringup_autonomous 
@@ -39,6 +39,19 @@ In general, these will use the standard robot hostname of `192.168.50.3`. Howeve
 ```bash
 docker compose run --rm bringup_autonomous --show-args
 ```
+
+## Including Custom URDF Attachments
+
+The `SPOT_URDF_EXTRAS` environment variable can be used to attach even models that are not included in the image. For instance, if you have access to proprietary meshes of the arm or accessories, you can mount the install folder for those meshes at runtime and load them in. One caveat here is that the packages which you include in this was *cannot* have been built with the `--symlink-install` option, as symlinks break when mounted inside a docker image.
+
+```bash
+export SPOT_URDF_EXTRAS=/colcon_ws/install/your_mesh_pkg/urdf/your_accessory.urdf.xacro
+docker compose run --rm \ 
+    -v /path/to/your/workspace/install/your_mesh_pkg:/colcon_ws/install/your_mesh_pkg \
+    spot_ros bash -lc "source install/setup.bash && rviz2"
+```
+
+Alternatively, you can edit the mounted volumes in the `docker-compose.yaml` file for a more persistent setup.
 
 ## Navigation with Nav2
 
@@ -54,7 +67,7 @@ Walk the robot around to create map, and remember to keep yourself moving relati
 docker compose up save_map
 cp /tmp/spot_nav_map.yaml colcon_ws/src/my_awesome_project/maps/my_place.yaml
 cp /tmp/spot_nav_map.pgm colcon_ws/src/my_awesome_project/maps/my_place.pgm
-# Don't forget to now change the first line of my_place.yaml from 'image: spot_nav_map.pgm' to 'image: my_place.pgm'
+# If you change the name of the file, you now haave to change the first line of my_place.yaml from 'image: spot_nav_map.pgm' to 'image: my_place.pgm'
 ```
 
 ## Manipulation with MoveIt
