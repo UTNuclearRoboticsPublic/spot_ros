@@ -58,7 +58,7 @@ def generate_launch_description():
             'proprietary_mesh_format',
             description='File extension format for proprietary mesh files',
             default_value='dae',
-            choices=['dae', 'stl']
+            choices=['dae', 'stl', 'obj']
         ),
     ]
 
