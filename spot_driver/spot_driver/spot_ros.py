@@ -34,11 +34,11 @@ import math
 import rclpy.action
 import rclpy.duration
 import rclpy.utilities
-import rclpy.callback_groups
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.action.server import ServerGoalHandle
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSHistoryPolicy, QoSReliabilityPolicy, qos_profile_sensor_data
 
 from rcl_interfaces.msg import FloatingPointRange
 from rcl_interfaces.msg import ParameterDescriptor
@@ -666,9 +666,9 @@ class SpotROS(Node):
         self.get_logger().info(f"Sensor Rates: {sensor_rates_dict}")
 
         # Setup timers for the state tasks
-        self.state_timer = self.create_timer(1/status_rates_dict['robot_state'], self.RobotStateCB)
-        self.idle_timer  = self.create_timer(1/status_rates_dict['feedback'   ], self.publishStatus)
-        self.lease_timer = self.create_timer(1/status_rates_dict['lease'      ], self.LeaseCB)
+        self.state_timer = self.create_timer(1/status_rates_dict['robot_state'], self.RobotStateCB , callback_group=MutuallyExclusiveCallbackGroup())
+        self.idle_timer  = self.create_timer(1/status_rates_dict['feedback'   ], self.publishStatus, callback_group=MutuallyExclusiveCallbackGroup())
+        self.lease_timer = self.create_timer(1/status_rates_dict['lease'      ], self.LeaseCB      , callback_group=MutuallyExclusiveCallbackGroup())
 
         # Verify connection
         if self.spot_wrapper.connect(lease_manager):
@@ -715,14 +715,14 @@ class SpotROS(Node):
 
         ## --- Controller Subscriptions --- ##
 
-        self.create_subscription(Twist, '~/cmd_vel'  , self.cmdVelCallback  , 10)
-        self.create_subscription(Pose , '~/body_pose', self.bodyPoseCallback, 10)
-
+        body_callback_group = MutuallyExclusiveCallbackGroup()
+        self.create_subscription(Twist, '~/cmd_vel'  , self.cmdVelCallback  , qos_profile_sensor_data, callback_group=body_callback_group)
+        self.create_subscription(Pose , '~/body_pose', self.bodyPoseCallback, qos_profile_sensor_data, callback_group=body_callback_group)
  
         ## --- Services --- ##
 
         # Use callback group to prevent any services from attempting to execute simultaneously
-        srv_group = rclpy.callback_groups.MutuallyExclusiveCallbackGroup()
+        srv_group = MutuallyExclusiveCallbackGroup()
 
         # Status change services
         self.create_service(Trigger, "~/claim"      , self.handle_claim,          callback_group=srv_group)
