@@ -45,8 +45,8 @@ RUN apt update && apt install -y \
 RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 
 WORKDIR /colcon_ws/src
-RUN --mount=type=ssh git clone git@github.com:UTNuclearRobotics/nrg_spot_manipulation.git -b devel
-RUN --mount=type=ssh git clone git@github.com:UTNuclearRobotics/spot_ros.git -b devel
+RUN git clone -b devel https://github.com/UTNuclearRoboticsPublic/spot_ros.git
+RUN git clone -b devel https://github.com/UTNuclearRoboticsPublic/spot_manipulation.git
 
 RUN python3 -m pip install -r spot_ros/requirements.txt yq
 

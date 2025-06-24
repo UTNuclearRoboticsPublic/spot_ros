@@ -10,8 +10,6 @@ services:
       args:
         SPOT_VERSION: $SPOT_VERSION
         ROS_DISTRO: $TARGET_ROS_DISTRO
-      ssh:
-        - default
       target: spot_ros
     environment:
       # Enable colored output on ros2 launch
