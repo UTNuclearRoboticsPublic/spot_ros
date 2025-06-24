@@ -41,6 +41,7 @@ MoveHandToPose::MoveHandToPose(const std::string& name, const BT::NodeConfigurat
     max_planning_time_ = this->declare_parameter<double>("manipulation.max_planning_time", 5.0);
     planning_group_    = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.1);
+    max_acceleration_scaling_factor_ = this->declare_parameter<double>("manipulation.max_acceleration_scaling_factor", 0.1);
 }
 
 BT::PortsList MoveHandToPose::providedPorts(){
@@ -95,7 +96,7 @@ BT::NodeStatus MoveHandToPose::onStart() {
         move_group_goal.planning_options.replan = false;
         move_group_goal.request.allowed_planning_time = getInput<float>("planning_timeout").value_or(max_planning_time_);
         move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
-        move_group_goal.request.max_acceleration_scaling_factor = 1.0;
+        move_group_goal.request.max_acceleration_scaling_factor = max_acceleration_scaling_factor_;
         move_group_goal.request.goal_constraints.push_back(
             kinematic_constraints::constructGoalConstraints(target_link, target_pose)
         );
@@ -115,6 +116,11 @@ BT::NodeStatus MoveHandToPose::onStart() {
 
         if (std::string planner; getInput("planner", planner)) {
             move_group_goal.request.planner_id = planner;
+        }
+
+        // LIN planner often fails at high velocities
+        if (move_group_goal.request.pipeline_id == "pilz_industrial_motion_planner" && move_group_goal.request.planner_id == "LIN") {
+            move_group_goal.request.max_velocity_scaling_factor = std::max(move_group_goal.request.max_velocity_scaling_factor, 0.2);
         }
 
         // Request the motion
