@@ -187,6 +187,13 @@ class SpotROS(Node):
             ParameterDescriptor(description='Launch the robot pointcloud service instead of interfacing with the LiDAR directly',
                                 type=ParameterType.PARAMETER_BOOL,
                                 read_only=True))
+        
+        self.declare_parameter('obstacle_avoidance_padding', 0.10,
+            ParameterDescriptor(description='Desired padding around the body to use when attempting to avoid obstacles. Described in meters',
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(
+                                        from_value=0.0, to_value=0.5, step=0.0)],
+                                read_only=False))
 
     def __del__(self):
         if self.status_timer is not None:
@@ -642,6 +649,9 @@ class SpotROS(Node):
 
         # Connect to the robot
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
+
+        # Apply mobility parameters
+        self.spot_wrapper.set_mobility_params(obstacle_avoidance_padding=self.get_parameter('obstacle_avoidance_padding').value)
 
         # Dictionary of all param values in the 'rates' namespace
         status_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.status').items() }

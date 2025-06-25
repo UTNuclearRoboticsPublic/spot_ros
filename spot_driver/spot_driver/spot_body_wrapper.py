@@ -335,7 +335,8 @@ class SpotBodyWrapper():
                             footprint_R_body: EulerZXY = EulerZXY(),
                             locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
-                            external_force_params: BodyExternalParamsProto = None) -> None:
+                            external_force_params: BodyExternalParamsProto = None,
+                            obstacle_avoidance_padding: float = 0.10) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -345,6 +346,7 @@ class SpotBodyWrapper():
             stair_hint: Boolean to define stair motion
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
+        self._mobility_params.obstacle_params.obstacle_avoidance_padding = obstacle_avoidance_padding
 
     def get_mobility_params(self) -> MobilityParamsProto:
         """Get mobility params
