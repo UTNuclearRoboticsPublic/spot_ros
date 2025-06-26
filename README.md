@@ -1,5 +1,5 @@
 # Spot ROS
-This repository houses the collection of packages required to run the Spot robot with ROS. The current vesion supports ROS Humble. If you wish to also use the official Spot Arm attachment, then you will also need to clone and build the [nrg_spot_manipulation](https://github.com/UTNuclearRobotics/nrg_spot_manipulation) package.
+This repository houses the collection of packages required to run the Spot robot with ROS. The current vesion supports ROS Humble. If you wish to also use the official Spot Arm attachment, then you will also need to clone and build the [spot_manipulation](https://github.com/UTNuclearRoboticsPublic/spot_manipulation.git) package.
 
 # Launching the Spot Driver
 
