@@ -1,12 +1,12 @@
 # Spot ROS
-This repository houses the collection of packages required to run the Spot robot with ROS. The current vesion supports ROS Humble. If you wish to also use the official Spot Arm attachment, then you will also need to clone and build the [spot_manipulation](https://github.com/UTNuclearRoboticsPublic/spot_manipulation.git) package.
+This repository houses the collection of packages required to run the Spot robot with ROS. The current version supports ROS Humble. If you wish to also use the official Spot Arm attachment, then you will also need to clone and build the [spot_manipulation](https://github.com/UTNuclearRoboticsPublic/spot_manipulation.git) package.
 
 # Launching the Spot Driver
 
 ### Set Environment Variables
 1. **Set Robot Configuration State**
    
-    Spot can have many different attachments and accesories, and this configuration is managed with environment variables. Set the environment variable `SPOT_ACCESSORIES` to a string of space-separated identifiers for each accessory. Currently supported accessories are:
+    Spot can have many different attachments and accessories, and this configuration is managed with environment variables. Set the environment variable `SPOT_ACCESSORIES` to a string of space-separated identifiers for each accessory. Currently supported accessories are:
     
     | Accessory                         | Identifier  |
     |-----------------------------------|-------------|
@@ -60,15 +60,16 @@ Some common arguments are summarized here:
 - `publish_depth_images`, possible values: `True`, `False`
 - `launch_pointcloud_service`, possible values: `True`, `False`
 - `controller_configuration`, possible values: `Dualsense5`, `Logitech`
+- `use_proprietary_meshes`, possible values: `True`, `False`
 ## Gamepad Mapping for Dualsense5
 
-Refer to the table below for the button mappings to command the robot with a Logitech gamepad. The driver must be launched with the bringup launch file for these to have any effect.
+Refer to the table below for the button mappings to command the robot with a DualSense5 gamepad. The driver must be launched with the bringup launch file for these to have any effect.
 
 | Command                 | Button(s)              | Notes                                                                             |
 |-------------------------|------------------------|-----------------------------------------------------------------------------------|
 | Hard EStop              | X+O+◻+△+R1+L1          | This will drop the robot unceremoniously. Only use in emergencies                 |
 | Soft EStop              | O                      | The robot will stop whatever it is doing, sit down, and power off                 |
-| Freeze Estop            | X                      | The robot will stop whatever it is doing and refuse any futher commands           |
+| Freeze Estop            | X                      | The robot will stop whatever it is doing and refuse any further commands           |
 | Claim Lease             | Start/Options          | This is required prior to any command which causes the robot to move              |
 | Release Lease           | Select/Share           | The robot will settle before releasing the lease                                  | 
 | Power On                | △                      | ---                                                                               |
@@ -87,13 +88,13 @@ Refer to the table below for the button mappings to command the robot with a Log
 
 ## Gamepad Mapping for Logitech
 
-Refer to the table below for the button mappings to command the robot with a Logitech gamepad. The driver must be launched with the bringup launch file for these to have any effect.
+Refer to the table below for the button mappings to command the robot with a Logitech gamepad.
 
 | Command                 | Button(s)              | Notes                                                                             |
 |-------------------------|------------------------|-----------------------------------------------------------------------------------|
 | Hard EStop              | A+B+X+Y+RB+LB          | This will drop the robot unceremoniously. Only use in emergencies                 |
 | Soft EStop              | B                      | The robot will stop whatever it is doing, sit down, and power off                 |
-| Freeze Estop            | A                      | The robot will stop whatever it is doing and refuse any futher commands           |
+| Freeze Estop            | A                      | The robot will stop whatever it is doing and refuse any further commands           |
 | Claim Lease             | Start                  | This is required prior to any command which causes the robot to move              |
 | Release Lease           | Back                   | The robot will settle before releasing the lease                                  | 
 | Power On                | Y                      | ---                                                                               |
@@ -135,6 +136,27 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `MoveHandThroughPoses` | `waypoints` `position_tolerance` `angular_tolerance` | --- | Uses MoveIt to command the hand to perform cartesian motions through a set a wayposes. If cartesian motions are not possible, a non-cartesian reconfiguration motion will be commanded to the next pose. If even that is not possible, the node is skipped and tries again with the next one. Always returns `SUCCESS` |
 | `TriggerService` | `service_name` `timeout` `empty` | --- | Calls a service with `std_srvs/Trigger` (or `std_srvs/Empty` if `empty` is True) and waits for `timeout` seconds for a response. Returns the success value of the response (always `SUCCESS` for Empty), or `FAILURE` if no response is received |
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
+
+# Proprietary Mesh Usage
+If you have higher-fidelity meshes available for the arm and accessories (e.g., EAP, EAP2, RL Kit), you can use them by placing them in a separate ROS package, for example, `spot_proprietary_description`, with the following structure:
+```text
+spot_proprietary_description/
+└── meshes/
+    ├── arm/
+    └── accessories/
+```
+
+The mesh files must follow specific naming conventions. Refer to the following files—look for sections tagged with `<xacro:if value="$(arg use_proprietary_meshes)">`—to ensure compatibility:
+
+- **Arm meshes**: `spot_description/urdf/spot.urdf.xacro`
+- **RL Kit**: `spot_description/urdf/accessories/rl_kit.xacro` and `spot_description/urdf/accessories/rl_kit_velodyne_mount.xacro`
+- **Other accessories**: `spot_description/urdf/spot_arm.urdf.xacro`
+
+To use the proprietary meshes, launch `spot_bringup` or any robot description launch file with the following arguments:
+
+- `proprietary_pkg` – e.g., `spot_proprietary_description`
+- `proprietary_mesh_format` – mesh format: `dae`, `stl`, or `obj`
+- `use_proprietary_meshes` – set to `True` to enable them
 
 ## Authors
 Janak Panthi (aka Crasun Jans), Alex Navarro, Kevin Torres, and Blake Anderson
