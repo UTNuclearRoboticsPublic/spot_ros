@@ -382,8 +382,12 @@ class SpotLeaseManager():
     def _releaseLease(self) -> None:
         """Return the lease on the body."""
         if self._lease:
-            self._lease_client.return_lease(self._lease)
-            self._lease = None
+            if not self.robot.is_powered_on():
+                self._logger.info('Releasing global lease')
+                self._lease_client.return_lease(self._lease)
+                self._lease = None
+            else:
+                self._logger.warn('Cannot release lease, the robot is still powered on!')
             self.logger.info("Shutting down lease keepalive")
             if self._lease_keepalive is not None:
                 self._lease_keepalive.shutdown()
@@ -391,12 +395,15 @@ class SpotLeaseManager():
 
     def safe_shut_down(self):
         if self.robot.has_arm():
-            _, _, cmd_id = self.robot_command(RobotCommandBuilder.arm_stow_command())
             try:
+                _, _, cmd_id = self.robot_command(RobotCommandBuilder.arm_stow_command())
                 block_until_arm_arrives(self._robot_command_client, cmd_id, timeout_sec=5.0)
             except:
                 pass
-        powered_off, msg = self.safe_power_off()
+        try:
+            powered_off, msg = self.safe_power_off()
+        except Exception as e:
+            self._logger.error(f'{e}')
         if powered_off:
             self._releaseLease()
             self._releaseEStop()
@@ -428,7 +435,7 @@ class SpotLeaseManager():
 
     def safe_power_off(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit if possible.  Once sitting, disable motor power."""
-        self.robot.power_off(cut_immediately=False, timeout_sec=20)
         if self.robot.is_powered_on():
-            return False, "Robot power off failed."
-        return not self.robot.is_powered_on(), "Success"
+            self.robot.power_off(cut_immediately=False, timeout_sec=20)
+        success = not self.robot.is_powered_on()
+        return success, "Success" if success else "Robot power off failed."
