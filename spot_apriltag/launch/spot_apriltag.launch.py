@@ -21,11 +21,11 @@ def generate_launch_description():
     camera_configs = [
         {
             'camera_names': ['frontleft', 'frontright', 'left', 'right', 'back'],
-            'topic_prefix': '/spot_driver/rgb/',
+            'topic_prefix': '/spot_image_server/rgb/',
         },
         {
-            'camera_names': ['camera'],
-            'topic_prefix': '/spot_manipulation_driver/rgb/',
+            'camera_names': ['hand_rgb'],
+            'topic_prefix': '/spot_image_server/rgb/',
         }
     ]
 
