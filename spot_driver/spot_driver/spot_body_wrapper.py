@@ -486,15 +486,14 @@ class SpotBodyWrapper():
 
         self._is_moving = is_moving
 
-        if (self.is_standing 
-            and not self.is_moving
+        if (self.is_standing and not self._is_moving
             and not self._lease_manager.frozen
-            and self._last_trajectory_command is None
-            and self._last_stand_command is None
-            and self._last_velocity_command_time is None
-            and self._last_docking_command is None
+            and self._last_trajectory_command is not None
+            and self._last_stand_command is not None
+            and self._last_velocity_command_time is not None
+            and self._last_docking_command is not None
             and self.lease is not None):            
-            self.stand(False)
+            self.stand(True)
 
     def sassy_confused(self) -> Tuple[bool, str]:
         """Makes Spot look confused in a bit of a sassy way"""
