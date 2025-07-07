@@ -171,6 +171,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
                 if (using_moveit) {
                     move_group_goal_handle_ = move_group_response_future_.get();
                     move_group_response_future_ = decltype(move_group_response_future_){};
+                    motion_start_time_ = now();
                 } else {
                     bosdyn_goal_handle_ = bosdyn_response_future_.get();
                     bosdyn_response_future_ = decltype(bosdyn_response_future_){};
@@ -208,7 +209,13 @@ BT::NodeStatus MoveHandToPose::onRunning() {
         case action_msgs::msg::GoalStatus::STATUS_CANCELING:
         case action_msgs::msg::GoalStatus::STATUS_ACCEPTED:
         case action_msgs::msg::GoalStatus::STATUS_EXECUTING:
+        {
+            const rclcpp::Duration elapsed_time = now() - motion_start_time_;
+            if (elapsed_time.seconds() > 10.0) {
+                move_group_action_client_->async_cancel_all_goals();
+            }
             return BT::NodeStatus::RUNNING;
+        }
 
         case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
             RCLCPP_WARN(get_logger(), "%s action returned status UNKNOWN, reporting failure", action_name.c_str());

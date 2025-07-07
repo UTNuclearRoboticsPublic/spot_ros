@@ -70,6 +70,7 @@ protected:
     std::string planning_group_{};
     double max_velocity_scaling_factor_{};
     double max_acceleration_scaling_factor_{};
+    rclcpp::Time motion_start_time_;
 
     // Action client
     rclcpp_action::Client<moveit_msgs::action::MoveGroup>::SharedPtr move_group_action_client_;
