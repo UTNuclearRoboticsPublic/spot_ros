@@ -1,3 +1,9 @@
+/**
+ * @author  Janak Panthi (Crasun Jans)
+ * @brief   Utility class for subscribing to Boston Dynamics Spot's camera image
+ * topics and capturing snapshots. Makes available erect images in various
+ * desired formats.
+ */
 #ifndef CAMERA_CLIENT_HPP
 #define CAMERA_CLIENT_HPP
 
