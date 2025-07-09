@@ -16,7 +16,7 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
 sensor_msgs::msg::Image CameraClient::get_ros_image() {
   using namespace std::chrono_literals;
 
-  std::chrono::seconds snapshot_timeout_duration(
+  std::chrono::seconds image_lookup_timeout_secs(
       image_lookup_timeout_secs_); // Configurable timeout
 
   auto start_time = std::chrono::steady_clock::now();
@@ -27,7 +27,7 @@ sensor_msgs::msg::Image CameraClient::get_ros_image() {
 
     // Check timeout
     auto current_time = std::chrono::steady_clock::now();
-    if (current_time - start_time > snapshot_timeout_duration) {
+    if (current_time - start_time > image_lookup_timeout_secs) {
       throw BT::RuntimeError(
           "Failed to get images within allotted timeout for camera: " +
           this->camera_ns);
