@@ -35,39 +35,13 @@ sensor_msgs::msg::Image CameraClient::get_ros_image() {
   return transform_image_(image_);
 }
 
-std::string CameraClient::get_base64_image(
-    const std::vector<std::shared_ptr<CameraClient>> &camera_client_list,
-    const CameraName &camera_name) {
+std::string CameraClient::get_base64_image() {
 
-  auto camera_client = lookup_camera_client(camera_client_list, camera_name);
+  // Lookup ROS image
+  auto img = this->get_ros_image();
 
-  using namespace std::chrono_literals;
-
-  std::chrono::seconds snapshot_timeout_duration(
-      image_lookup_timeout_secs_); // Configurable timeout
-
-  auto start_time = std::chrono::steady_clock::now();
-  sensor_msgs::msg::Image img;
-
-  while (img.encoding.empty()) {
-    rclcpp::spin_some(node_);
-    loop_rate.sleep();
-    img = camera_client->take_snapshot();
-
-    // Check timeout
-    auto current_time = std::chrono::steady_clock::now();
-    if (current_time - start_time > snapshot_timeout_duration) {
-      throw BT::RuntimeError(
-          "Failed to get images within allotted timeout for camera: " +
-          camera_client->camera_ns);
-    }
-  }
-
-  auto transformed_img = camera_client->transform_image_(img);
-
-  const std::string base64_img = convert_msg_to_base64_(transformed_img);
-
-  return base64_img;
+  // Return converted image
+  return convert_msg_to_base64_(img);
 }
 
 void CameraClient::destroy_subscription() {
