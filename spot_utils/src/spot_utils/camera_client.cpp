@@ -1,5 +1,7 @@
 #include "spot_utils/camera_client.hpp"
 namespace spot_utils {
+
+// -- Start of Camera Client Methods -- //
 CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
                            const CamInfo &camera_info)
     : node_(node), node_logger_(node->get_logger()),
@@ -10,7 +12,7 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
       std::bind(&CameraClient::img_sub_cb_, this, std::placeholders::_1));
 }
 
-// Takes a snapshot of the current image and camera information
+// Retrieves ROS image from the camera client
 sensor_msgs::msg::Image CameraClient::get_ros_image() {
   using namespace std::chrono_literals;
 
@@ -35,6 +37,7 @@ sensor_msgs::msg::Image CameraClient::get_ros_image() {
   return transform_image_(image_);
 }
 
+// Retrieves base64 image from the camera client
 std::string CameraClient::get_base64_image() {
 
   // Lookup ROS image
@@ -42,6 +45,13 @@ std::string CameraClient::get_base64_image() {
 
   // Return converted image
   return convert_msg_to_base64_(img);
+}
+
+// Retrieves base64 image url (i.e. MIME type prefix added to base64 encoded
+// image) from the camera client
+std::string CameraClient::get_base64_image_url() {
+  const std::string base64_image = this->get_base64_image();
+  return "data:image/" + imageFormat + ";base64," + base64_image;
 }
 
 void CameraClient::destroy_subscription() {
@@ -107,6 +117,58 @@ void CameraClient::img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg) {
   image_ = *msg;
 }
 
+// Convert cv::Mat to a base64-encoded string with a specified format
+std::string
+CameraClient::convert_mat_to_base64_(const cv::Mat &input,
+                                     const std::string &imageFormat) {
+  // Encode the cv::Mat to a specified image format (e.g., JPEG, PNG)
+  std::vector<unsigned char> buffer;
+  std::vector<int> params;
+
+  // Set encoding parameters for quality, if needed (e.g., JPEG quality)
+  if (imageFormat == "jpeg" || imageFormat == "jpg")
+    params = {cv::IMWRITE_JPEG_QUALITY, 95}; // Adjust quality as needed
+  else if (imageFormat == "png")
+    params = {cv::IMWRITE_PNG_COMPRESSION, 3}; // Adjust compression as needed
+
+  if (!cv::imencode("." + imageFormat, input, buffer, params)) {
+    throw std::runtime_error("Failed to encode image to format: " +
+                             imageFormat);
+  }
+
+  // Convert the binary buffer to a base64 string
+  std::string encodedImage =
+      base64::to_base64(std::string(buffer.begin(), buffer.end()));
+
+  if (encodedImage.empty()) {
+    throw std::runtime_error("Base64 image is empty!");
+  }
+
+  return encodedImage;
+}
+std::string
+CameraClient::convert_msg_to_base64_(const sensor_msgs::msg::Image &ros_image) {
+
+  try {
+    // Create a shared_ptr msg from the image
+    const auto msg = std::make_shared<sensor_msgs::msg::Image>(ros_image);
+
+    // Convert ROS2 Image message to OpenCV image
+    cv_bridge::CvImagePtr cv_ptr;
+    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::RGB8);
+
+    // Get OpenCV Mat from cv_bridge
+    const cv::Mat image = cv_ptr->image;
+
+    return convert_mat_to_base64_(image, "jpeg");
+  } catch (cv_bridge::Exception &e) {
+    throw BT::RuntimeError(std::string("Error during image conversion: ") +
+                           e.what());
+  }
+}
+
+// -- EOF of Camera Client Methods -- //
+
 std::vector<std::shared_ptr<CameraClient>>
 initialize_camera_clients_(const std::shared_ptr<rclcpp::Node> &node,
                            const std::vector<CameraName> &camera_list) {
@@ -159,58 +221,6 @@ CamInfo get_camera_info(const CameraName &camera_name) {
     break;
   }
   return camera_info;
-}
-
-// Convert cv::Mat to a base64-encoded string with a specified format
-std::string
-CameraClient::convert_mat_to_base64_(const cv::Mat &input,
-                                     const std::string &imageFormat) {
-  // Encode the cv::Mat to a specified image format (e.g., JPEG, PNG)
-  std::vector<unsigned char> buffer;
-  std::vector<int> params;
-
-  // Set encoding parameters for quality, if needed (e.g., JPEG quality)
-  if (imageFormat == "jpeg" || imageFormat == "jpg")
-    params = {cv::IMWRITE_JPEG_QUALITY, 95}; // Adjust quality as needed
-  else if (imageFormat == "png")
-    params = {cv::IMWRITE_PNG_COMPRESSION, 3}; // Adjust compression as needed
-
-  if (!cv::imencode("." + imageFormat, input, buffer, params)) {
-    throw std::runtime_error("Failed to encode image to format: " +
-                             imageFormat);
-  }
-
-  // Convert the binary buffer to a base64 string
-  std::string encodedImage =
-      base64::to_base64(std::string(buffer.begin(), buffer.end()));
-
-  // Add the MIME type prefix required for data URLs
-  // return "data:image/" + imageFormat + ";base64," + encodedImage;
-  if (encodedImage.empty()) {
-    throw std::runtime_error("Base64 image is empty!");
-  }
-
-  return encodedImage;
-}
-std::string
-CameraClient::convert_msg_to_base64_(const sensor_msgs::msg::Image &ros_image) {
-
-  try {
-    // Create a shared_ptr msg from the image
-    const auto msg = std::make_shared<sensor_msgs::msg::Image>(ros_image);
-
-    // Convert ROS2 Image message to OpenCV image
-    cv_bridge::CvImagePtr cv_ptr;
-    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::RGB8);
-
-    // Get OpenCV Mat from cv_bridge
-    const cv::Mat image = cv_ptr->image;
-
-    return convert_mat_to_base64_(image, "jpeg");
-  } catch (cv_bridge::Exception &e) {
-    throw BT::RuntimeError(std::string("Error during image conversion: ") +
-                           e.what());
-  }
 }
 
 std::shared_ptr<CameraClient> lookup_camera_client(
