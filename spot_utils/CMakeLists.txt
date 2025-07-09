@@ -11,6 +11,28 @@ find_package(ament_cmake REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 
+# Specify include directories
+include_directories(
+  include
+)
+
+# Add libraries
+add_library(camera_client src/${PROJECT_NAME}/camera_client.cpp)
+
+# Link against ROS dependencies
+ament_target_dependencies(camera_client rclcpp sensor_msgs cv_bridge)
+
+# Install the 'include' directory
+install(DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+)
+
+# Install the libraries
+install(TARGETS
+  camera_client
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
