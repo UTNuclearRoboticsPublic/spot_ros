@@ -19,6 +19,7 @@ find_package(tf2_kdl REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(eigen_stl_containers REQUIRED)
+find_package(spot_utils REQUIRED)
 
 include_directories(
   include
@@ -35,6 +36,7 @@ add_library(${PROJECT_NAME} SHARED
   src/move_hand_through_poses.cpp
   src/gesture_sequence.cpp
   src/toggle_payload.cpp
+  src/get_images.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
@@ -46,6 +48,7 @@ ament_target_dependencies(${PROJECT_NAME}
   tf2_geometry_msgs
   moveit_kinematics
   eigen_stl_containers
+  spot_utils
 )
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_export_dependencies(spot_msgs behaviortree_cpp tf2_kdl moveit_msgs moveit_kinematics )
