@@ -52,6 +52,7 @@ BT::PortsList MoveHandToPose::providedPorts(){
         BT::InputPort<std::string>("backend", "moveit", "Which action service to call for the motion. Options are [moveit, bosdyn]"),
         BT::InputPort<std::string>("pipeline", "The planning pipeline to use for planning"),
         BT::InputPort<std::string>("planner", "The planner to use"),
+        BT::InputPort<std::string>("axis_5dof", "The axis about which to give rotational freedom. Leave blank for 6DoF pose. Options are [x, y, z]. Applies to moveit backend only"),
         BT::InputPort<float>("planning_timeout", "The time to wait for the planner to compute in seconds")
     };
 }
@@ -109,6 +110,15 @@ BT::NodeStatus MoveHandToPose::onStart() {
         move_group_goal.request.workspace_parameters.max_corner.x = +1e9;
         move_group_goal.request.workspace_parameters.max_corner.y = +1e9;
         move_group_goal.request.workspace_parameters.max_corner.z = +1e9;
+
+        const std::string axis_5dof = getInput<std::string>("axis_5dof").value_or("");
+        if (axis_5dof == "x") {
+            move_group_goal.request.goal_constraints.front().orientation_constraints.front().absolute_x_axis_tolerance = M_PI;
+        } else if (axis_5dof == "y") {
+            move_group_goal.request.goal_constraints.front().orientation_constraints.front().absolute_y_axis_tolerance = M_PI;
+        } else if (axis_5dof == "z") {
+            move_group_goal.request.goal_constraints.front().orientation_constraints.front().absolute_z_axis_tolerance = M_PI;
+        }
 
         if (std::string pipeline; getInput("pipeline", pipeline)) {
             move_group_goal.request.pipeline_id = pipeline;
@@ -212,7 +222,8 @@ BT::NodeStatus MoveHandToPose::onRunning() {
         {
             const rclcpp::Duration elapsed_time = now() - motion_start_time_;
             if (elapsed_time.seconds() > 10.0) {
-                move_group_action_client_->async_cancel_all_goals();
+                onHalted();
+                return BT::NodeStatus::FAILURE;
             }
             return BT::NodeStatus::RUNNING;
         }
