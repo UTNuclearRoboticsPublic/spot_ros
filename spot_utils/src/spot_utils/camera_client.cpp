@@ -14,12 +14,15 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
 sensor_msgs::msg::Image CameraClient::get_ros_image() { return image_; }
 
 std::string CameraClient::get_base64_image(
-    const std::shared_ptr<CameraClient> &camera_client,
+    const std::vector<std::shared_ptr<CameraClient>> &camera_client_list,
     const CameraName &camera_name) {
+
+  auto camera_client = lookup_camera_client(camera_client_list, camera_name);
 
   using namespace std::chrono_literals;
 
-  std::chrono::seconds snapshot_timeout_duration(image_lookup_timeout_secs_); // Configurable timeout
+  std::chrono::seconds snapshot_timeout_duration(
+      image_lookup_timeout_secs_); // Configurable timeout
 
   auto start_time = std::chrono::steady_clock::now();
   sensor_msgs::msg::Image img;
@@ -162,7 +165,6 @@ CamInfo get_camera_info_(const CameraName &camera_name) {
   return camera_info;
 }
 
-
 // Convert cv::Mat to a base64-encoded string with a specified format
 std::string
 CameraClient::convert_mat_to_base64(const cv::Mat &input,
@@ -227,6 +229,19 @@ CameraClient::convert_msg_to_base64(const sensor_msgs::msg::Image &ros_image) {
     throw BT::RuntimeError(std::string("Error during image conversion: ") +
                            e.what());
   }
+}
+
+std::shared_ptr<CameraClient> lookup_camera_client(
+    const std::vector<std::shared_ptr<CameraClient>> &camera_client_list,
+    const CameraName &camera_name) {
+
+  for (const auto &camera_client : camera_client_list) {
+    if (camera_client && camera_client->camera_name == camera_name) {
+      return camera_client;
+    }
+  }
+
+  return nullptr; // Return nullptr if not found
 }
 
 } // namespace spot_utils
