@@ -30,18 +30,17 @@ struct CamInfo {
 
 class CameraClient {
 public:
-  std::string camera_ns;
+  std::string camera_ns;  // Namespace for the camera topic
+  CameraName camera_name; // Enum name of the camera
   // Constructor initializes subscriptions and transform listener
   explicit CameraClient(const rclcpp::Node::SharedPtr &node,
                         const CamInfo &camera_info);
 
-  sensor_msgs::msg::Image take_snapshot();
+  sensor_msgs::msg::Image get_ros_image();
+  std::string get_base64_image();
+  std::string get_base64_image_url();
 
   void destroy_subscription();
-
-  // Rotates an image to be erect
-  sensor_msgs::msg::Image
-  transform_image(const sensor_msgs::msg::Image &ros_image);
 
 private:
   rclcpp::Node::SharedPtr node_; // Node
@@ -54,19 +53,19 @@ private:
   float img_scale_factor_ = 1.0;
   int img_height_;
   int img_width_;
-
-  // Callback for image subscription
+  sensor_msgs::msg::Image
+  transform_image_(const sensor_msgs::msg::Image &ros_image);
   void img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg);
+  std::string convert_mat_to_base64_(const cv::Mat &input,
+                                     const std::string &imageFormat);
+  std::string convert_msg_to_base64_(const sensor_msgs::msg::Image &ros_image);
 
 }; // class CameraClient
-
-std::string encode_image_to_base64_(const std::string &image_path);
-CamInfo get_camera_info_(const CameraName &camera_name);
-bool initialize_camera_subscribers_();
-std::unordered_map<std::string, std::string> get_image_dict_();
-std::string convert_msg_to_base64(const sensor_msgs::msg::Image &ros_image);
-std::string convert_mat_to_base64(const cv::Mat &input,
-                                  const std::string &imageFormat);
+std::vector<std::shared_ptr<CameraClient>>
+initialize_camera_clients_(const std::shared_ptr<rclcpp::Node> &node,
+                           const std::vector<CameraName> &camera_list);
+CamInfo get_camera_info(const CameraName &camera_name);
+std::shared_ptr<CameraClient> lookup_camera_client;
 } // namespace spot_utils
 
 #endif // CAMERA_CLIENT_HPP
