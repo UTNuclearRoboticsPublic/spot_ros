@@ -4,6 +4,7 @@ project(spot_msgs)
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(shape_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -35,6 +36,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetVelocity.srv"
   "srv/GestureSequence.srv"
   "srv/GetImages.srv"
+  "srv/TogglePayload.srv"
+  "srv/RegisterPayload.srv"
 
   "msg/ArmJointPosition.msg"
   "msg/BatteryState.msg"
@@ -57,17 +60,19 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/ManipulatorStowState.msg"
   "msg/Metrics.msg"
   "msg/MobilityParams.msg"
+  "msg/PayloadMassVolumeProperties.msg"
   "msg/PowerState.msg"
   "msg/ScalarTrajectory.msg"
   "msg/ScalarTrajectoryPoint.msg"
   "msg/SE3Trajectory.msg"
   "msg/SE3TrajectoryPoint.msg"
+  "msg/SoftwareVersion.msg"
   "msg/SystemFault.msg"
   "msg/SystemFaultState.msg"
   "msg/WiFiState.msg"
   "msg/Gesture.msg"
 
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs shape_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

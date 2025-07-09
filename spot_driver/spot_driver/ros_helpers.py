@@ -42,6 +42,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
+from shape_msgs.msg import SolidPrimitive
 
 from spot_msgs.msg import DockState
 from spot_msgs.msg import FootState, FootStateArray
@@ -52,9 +53,10 @@ from spot_msgs.msg import BehaviorFault, BehaviorFaultState
 from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 from spot_msgs.msg import ManipulatorState
+from spot_msgs.msg import SoftwareVersion, PayloadMassVolumeProperties
 
 from google.protobuf import timestamp_pb2
-from bosdyn.api import geometry_pb2
+from bosdyn.api import geometry_pb2, payload_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
@@ -199,6 +201,45 @@ def populateTransformStamped(time: rclpy.time.Time | ROSTime,
     new_tf.transform.rotation.w = transform.rotation.w
 
     return new_tf
+
+def MsgToPayloadMassVolumeProperties(msg: PayloadMassVolumeProperties) -> PayloadMassVolumePropertiesProto:
+    for box in msg.bounding_boxes:
+        if box.type != SolidPrimitive.BOX:
+            raise RuntimeError(f'SolidPrimitive type of bounding boxes MUST be SolidPrimitive.BOX (i.e. {SolidPrimitive.BOX})')
+
+    return payload_pb2.PayloadMassVolumeProperties(
+            total_mass=msg.total_mass,
+            com_pos_rt_payload=MsgToVec3(msg.center_of_mass).to_proto(),
+            moi_tensor=payload_pb2.MomentOfIntertia(
+                xx=msg.moment_of_inertia[0],
+                yy=msg.moment_of_inertia[1],
+                zz=msg.moment_of_inertia[2],
+                xy=msg.moment_of_inertia[3],
+                xz=msg.moment_of_inertia[4],
+                yz=msg.moment_of_inertia[5]
+            ),
+            bounding_box=[
+                geometry_pb2.Box3WithFrame(
+                    box=geometry_pb2.Box3(
+                        size=geometry_pb2.Vec3(
+                            x = box_msg.dimensions[0],
+                            y = box_msg.dimensions[1],
+                            z = box_msg.dimensions[2],
+                        )
+                    ),
+                    frame_name="payload",
+                    frame_name_tform_box=MsgToPose(box_pose).to_proto()
+                )
+                for (box_msg, box_pose) in zip(msg.bounding_boxes, msg.box_poses)
+            ]
+        )
+
+def MsgToSoftwareVersion(msg: SoftwareVersion) -> SoftwareVersionProto:
+    return robot_id_pb2.SoftwareVersion(
+            major_version=msg.major_version,
+            minor_version=msg.minor_version,
+            patch_level=msg.patch_level
+        )
 
 def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tuple[Image, CameraInfo, TFMessage]:
     """Takes the image, camera, and TF data and populates the necessary ROS messages
