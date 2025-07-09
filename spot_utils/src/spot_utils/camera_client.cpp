@@ -4,9 +4,9 @@ namespace spot_utils {
 // -- Start of Camera Client Methods -- //
 CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
                            const CamInfo &camera_info)
-    : node_(node), node_logger_(node->get_logger()),
-      img_rot_angle_rad_(camera_info.img_rot_angle_rad),
-      camera_ns(camera_info.camera_ns), camera_name(camera_info.camera_name) {
+    : camera_name(camera_info.camera_name), camera_ns(camera_info.camera_ns),
+      node_(node), node_logger_(node->get_logger()),
+      img_rot_angle_rad_(camera_info.img_rot_angle_rad) {
   img_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(
       camera_ns + "/image", 10,
       std::bind(&CameraClient::img_sub_cb_, this, std::placeholders::_1));
@@ -16,10 +16,11 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
 sensor_msgs::msg::Image CameraClient::get_ros_image() {
   using namespace std::chrono_literals;
 
-  std::chrono::seconds image_lookup_timeout_secs(
-      image_lookup_timeout_secs_); // Configurable timeout
+  std::chrono::seconds img_lookup_timeout_secs(
+      img_lookup_timeout_secs_); // Configurable timeout
 
   auto start_time = std::chrono::steady_clock::now();
+  rclcpp::Rate loop_rate(10); // 10 Hz
 
   while (image_.encoding.empty()) {
     rclcpp::spin_some(node_);
@@ -27,8 +28,8 @@ sensor_msgs::msg::Image CameraClient::get_ros_image() {
 
     // Check timeout
     auto current_time = std::chrono::steady_clock::now();
-    if (current_time - start_time > image_lookup_timeout_secs) {
-      throw BT::RuntimeError(
+    if (current_time - start_time > img_lookup_timeout_secs) {
+      throw std::runtime_error(
           "Failed to get images within allotted timeout for camera: " +
           this->camera_ns);
     }
@@ -51,7 +52,7 @@ std::string CameraClient::get_base64_image() {
 // image) from the camera client
 std::string CameraClient::get_base64_image_url() {
   const std::string base64_image = this->get_base64_image();
-  return "data:image/" + imageFormat + ";base64," + base64_image;
+  return "data:image/" + img_format_ + ";base64," + base64_image;
 }
 
 void CameraClient::destroy_subscription() {
@@ -120,20 +121,20 @@ void CameraClient::img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg) {
 // Convert cv::Mat to a base64-encoded string with a specified format
 std::string
 CameraClient::convert_mat_to_base64_(const cv::Mat &input,
-                                     const std::string &imageFormat) {
+                                     const std::string &img_format_) {
   // Encode the cv::Mat to a specified image format (e.g., JPEG, PNG)
   std::vector<unsigned char> buffer;
   std::vector<int> params;
 
   // Set encoding parameters for quality, if needed (e.g., JPEG quality)
-  if (imageFormat == "jpeg" || imageFormat == "jpg")
+  if (img_format_ == "jpeg" || img_format_ == "jpg")
     params = {cv::IMWRITE_JPEG_QUALITY, 95}; // Adjust quality as needed
-  else if (imageFormat == "png")
+  else if (img_format_ == "png")
     params = {cv::IMWRITE_PNG_COMPRESSION, 3}; // Adjust compression as needed
 
-  if (!cv::imencode("." + imageFormat, input, buffer, params)) {
+  if (!cv::imencode("." + img_format_, input, buffer, params)) {
     throw std::runtime_error("Failed to encode image to format: " +
-                             imageFormat);
+                             img_format_);
   }
 
   // Convert the binary buffer to a base64 string
@@ -162,8 +163,8 @@ CameraClient::convert_msg_to_base64_(const sensor_msgs::msg::Image &ros_image) {
 
     return convert_mat_to_base64_(image, "jpeg");
   } catch (cv_bridge::Exception &e) {
-    throw BT::RuntimeError(std::string("Error during image conversion: ") +
-                           e.what());
+    throw std::runtime_error(std::string("Error during image conversion: ") +
+                             e.what());
   }
 }
 
@@ -177,17 +178,17 @@ initialize_camera_clients_(const std::shared_ptr<rclcpp::Node> &node,
   camera_client_list.reserve(camera_list.size());
   try {
     for (const auto &camera_name : camera_list) {
-      CamInfo cam_info = this->get_camera_info(camera_name);
+      CamInfo cam_info = get_camera_info(camera_name);
       camera_client_list.emplace_back(
           std::make_shared<CameraClient>(node, cam_info));
     }
   } catch (const std::exception &e) {
     std::cerr << "Caught exception during camera client initialization: "
               << e.what() << std::endl;
-    return false;
+    return {}; // Return empty vector on failure
   }
 
-  return true;
+  return camera_client_list;
 }
 
 CamInfo get_camera_info(const CameraName &camera_name) {

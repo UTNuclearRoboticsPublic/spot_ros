@@ -29,8 +29,8 @@ struct CamInfo {
 
 class CameraClient {
 public:
-  std::string camera_ns;  // Namespace for the camera topic
   CameraName camera_name; // Enum name of the camera
+  std::string camera_ns;  // Namespace for the camera topic
   // Constructor initializes subscriptions and transform listener
   explicit CameraClient(const rclcpp::Node::SharedPtr &node,
                         const CamInfo &camera_info);
@@ -47,16 +47,17 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr
       img_sub_;                   // Image subscription
   sensor_msgs::msg::Image image_; // Latest image
-  int image_lookup_timeout_secs_ = 10;
+  const int img_lookup_timeout_secs_ = 10;
+  const float img_scale_factor_ = 1.0;
+  const std::string img_format_ = "jpeg";
   float img_rot_angle_rad_; // Angle to rotate the images by, in radians.
-  float img_scale_factor_ = 1.0;
   int img_height_;
   int img_width_;
   sensor_msgs::msg::Image
   transform_image_(const sensor_msgs::msg::Image &ros_image);
   void img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg);
   std::string convert_mat_to_base64_(const cv::Mat &input,
-                                     const std::string &imageFormat);
+                                     const std::string &img_format_);
   std::string convert_msg_to_base64_(const sensor_msgs::msg::Image &ros_image);
 
 }; // class CameraClient
@@ -64,7 +65,9 @@ std::vector<std::shared_ptr<CameraClient>>
 initialize_camera_clients_(const std::shared_ptr<rclcpp::Node> &node,
                            const std::vector<CameraName> &camera_list);
 CamInfo get_camera_info(const CameraName &camera_name);
-std::shared_ptr<CameraClient> lookup_camera_client;
+std::shared_ptr<CameraClient> lookup_camera_client(
+    const std::vector<std::shared_ptr<CameraClient>> &camera_client_list,
+    const CameraName &camera_name);
 } // namespace spot_utils
 
 #endif // CAMERA_CLIENT_HPP
