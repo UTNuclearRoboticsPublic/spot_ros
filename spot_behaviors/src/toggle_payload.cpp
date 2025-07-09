@@ -1,3 +1,6 @@
+#include <fstream>
+#include <sstream>
+#include <filesystem>
 #include "spot_behaviors/toggle_payload.hpp"
 
 namespace spot_behaviors {
@@ -11,8 +14,9 @@ NodeBehaviorBase(name, tf_buffer)
 
 BT::PortsList TogglePayload::providedPorts() {
     return {
-        BT::InputPort<std::string>("guid", "[optional] The guid of the payload to toggle"),
-        BT::InputPort<std::string>("name", "[optional] The name of the payload to toggle"),
+        BT::InputPort<std::string>("payload_guid", "[optional] The guid of the payload to toggle"),
+        BT::InputPort<std::string>("payload_name", "[optional] The name of the payload to toggle"),
+        BT::InputPort<std::string>("secret"      , "The secret used to authorize the payload. Can be the raw value or a path to a file with the secret as the contents"),
         BT::InputPort<bool>("attached", "Whether the payload should be attached or detached after this operation"),
         BT::InputPort<float>("timeout", 2.0f, "Timeout for request in seconds")
     };
@@ -36,9 +40,26 @@ BT::NodeStatus TogglePayload::onStart() {
         RCLCPP_ERROR(get_logger(), "Missing required input [attached]. Aborting");
         return BT::NodeStatus::FAILURE;
     }
-    getInput("guid", request->guid);
-    getInput("name", request->name);
+    getInput("payload_guid", request->guid);
+    getInput("payload_name", request->name);
+
+    std::string secret_value;
+    if (!getInput("secret", secret_value)) {
+        RCLCPP_ERROR(get_logger(), "Missing request input [secret]. Aborting");
+        return BT::NodeStatus::FAILURE;
+    }
+
+    const bool is_path = std::filesystem::exists(secret_value);
+    if (is_path) {
+        std::ifstream file(secret_value);
+        std::stringstream file_buffer;
+        file_buffer << file.rdbuf();
+        request->secret = file_buffer.str();
+    } else {
+        request->secret = secret_value;
+    }
     
+    RCLCPP_INFO(get_logger(), "%sttaching payload %s", request->attached ? "A" : "De", request->guid.empty() ? request->name.c_str() : request->guid.c_str());
     service_future_ = payload_client_->async_send_request(request);
     return BT::NodeStatus::RUNNING;
 }
@@ -57,7 +78,7 @@ BT::NodeStatus TogglePayload::onRunning() {
             if (response->success) {
                 return BT::NodeStatus::SUCCESS;
             } else {
-                RCLCPP_WARN(get_logger(), "Failed to toggle payload: %s", response->message.c_str());
+                RCLCPP_WARN_STREAM(get_logger(), response->message);
                 return BT::NodeStatus::FAILURE;
             }
         }

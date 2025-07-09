@@ -41,9 +41,10 @@ public:
     TogglePayload(const std::string& name, const BT::NodeConfig& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
     /**
-     * We accept 3 inputs ports:
-     *   - guid: The GUID of the payload to toggle
-     *   - name: The name of the payload to toggle
+     * Inputs ports:
+     *   - payload_guid: The GUID of the payload to toggle
+     *   - payload_name: The name of the payload to toggle
+     *   - secret: The value of the authentication secret, or path to a file that contains it
      *   - attached: Whether the payload should be attached or not after this operation
      */
     static BT::PortsList providedPorts();
