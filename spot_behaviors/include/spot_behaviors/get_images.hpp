@@ -1,3 +1,8 @@
+/**
+ * @file    get_images.hpp
+ * @author  Janak Panthi (Crasun Jans)
+ */
+
 #ifndef GET_IMAGES_HPP
 #define GET_IMAGES_HPP
 
