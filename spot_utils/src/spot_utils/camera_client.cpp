@@ -13,7 +13,7 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
 }
 
 // Takes a snapshot of the current image and camera information
-sensor_msgs::msg::Image CameraClient::take_snapshot() { return image_; }
+sensor_msgs::msg::Image CameraClient::get_ros_image() { return image_; }
 
 void CameraClient::destroy_subscription() {
 
@@ -76,6 +76,183 @@ CameraClient::transform_image(const sensor_msgs::msg::Image &ros_image) {
 // Callback for image subscription
 void CameraClient::img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg) {
   image_ = *msg;
+}
+
+std::vector<std::shared_ptr<CameraClient>>
+initialize_camera_clients_(const std::shared_ptr<rclcpp::Node>& node, const std::vector<CameraName> &camera_list) {
+  
+      std::vector<std::shared_ptr<CameraClient>> camera_client_list;
+  camera_client_list.reserve(camera_list.size());
+  try {
+    for (const auto &camera_name : camera_list) {
+      CamInfo cam_info = this->get_camera_info_(camera_name);
+      camera_client_list.emplace_back(
+          std::make_shared<CameraClient>(node, cam_info));
+    }
+  } catch (const std::exception &e) {
+    std::cerr << "Caught exception during camera client initialization: "
+              << e.what() << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
+CamInfo get_camera_info_(const CameraName &camera_name) {
+  CamInfo camera_info;
+
+  switch (camera_name) {
+  case CameraName::FRONTLEFT:
+    camera_info.camera_ns = "/spot_image_server/rgb/frontleft";
+    camera_info.img_rot_angle_rad = -M_PI / 2.0;
+    break;
+  case CameraName::FRONTRIGHT:
+    camera_info.camera_ns = "/spot_image_server/rgb/frontright";
+    camera_info.img_rot_angle_rad = -M_PI / 2.0;
+    break;
+  case CameraName::LEFT:
+    camera_info.camera_ns = "/spot_image_server/rgb/left";
+    camera_info.img_rot_angle_rad = 0;
+    break;
+  case CameraName::RIGHT:
+    camera_info.camera_ns = "/spot_image_server/rgb/right";
+    camera_info.img_rot_angle_rad = M_PI;
+    break;
+  case CameraName::BACK:
+    camera_info.camera_ns = "/spot_image_server/rgb/back";
+    camera_info.img_rot_angle_rad = 0;
+    break;
+  case CameraName::HAND:
+    camera_info.camera_ns = "/spot_image_server/rgb/hand_color";
+    camera_info.img_rot_angle_rad = 0;
+    break;
+  }
+  return camera_info;
+}
+
+std::unordered_map<std::string, std::string> CameraClient::get_image_dict_() {
+
+  if (!(this->initialize_camera_clients_())) {
+    throw BT::RuntimeError("Failed to initialize camera subscribers");
+  }
+  using namespace std::chrono_literals;
+  rclcpp::sleep_for(1s); // Sleep to ensure proper initialization
+
+  std::chrono::seconds snapshot_timeout_duration(10); // Configurable timeout
+  std::unordered_map<std::string, std::string> image_dict;
+
+  RCLCPP_INFO(this->get_logger(),
+              "Attempting to take a snapshot of the environment.");
+  for (size_t i = 0; i < camera_client_list_.size(); ++i) {
+    auto &camera_client = camera_client_list_[i];
+    rclcpp::Rate loop_rate(10); // 10 Hz
+    auto start_time = std::chrono::steady_clock::now();
+    sensor_msgs::msg::Image img;
+
+    while (img.encoding.empty()) {
+      rclcpp::spin_some(node_);
+      loop_rate.sleep();
+      img = camera_client->take_snapshot();
+
+      // Check timeout
+      auto current_time = std::chrono::steady_clock::now();
+      if (current_time - start_time > snapshot_timeout_duration) {
+        throw BT::RuntimeError(
+            "Failed to get images within allotted timeout for camera: " +
+            camera_client->camera_ns);
+      }
+    }
+
+    try {
+      auto transformed_img = camera_client->transform_image(img);
+
+      // Destroy subscription right after to allieviate ROS bandwidth
+      camera_client->destroy_subscription();
+
+      // Base64 encode
+      // const std::string base64_img =
+      //     base64::to_base64(std::string(transformed_img.data.begin(),
+      //     transformed_img.data.end()));
+      const std::string base64_img = convert_msg_to_base64(transformed_img);
+
+      // Store result in dictionary
+      // image_dict[camera_client->camera_ns] = "data:image/jpeg;base64," +
+      // base64_img;
+      image_dict[camera_client->camera_ns] = base64_img;
+    } catch (const std::exception &e) {
+      std::ostringstream error_msg;
+      error_msg << "Failed to transform image for camera: "
+                << camera_client->camera_ns << ". Error: " << e.what();
+      throw BT::RuntimeError(error_msg.str());
+    }
+  }
+  return image_dict;
+}
+
+// Convert cv::Mat to a base64-encoded string with a specified format
+std::string
+CameraClient::convert_mat_to_base64(const cv::Mat &input,
+                                    const std::string &imageFormat) {
+  // Encode the cv::Mat to a specified image format (e.g., JPEG, PNG)
+  std::vector<unsigned char> buffer;
+  std::vector<int> params;
+
+  // Set encoding parameters for quality, if needed (e.g., JPEG quality)
+  if (imageFormat == "jpeg" || imageFormat == "jpg")
+    params = {cv::IMWRITE_JPEG_QUALITY, 95}; // Adjust quality as needed
+  else if (imageFormat == "png")
+    params = {cv::IMWRITE_PNG_COMPRESSION, 3}; // Adjust compression as needed
+
+  if (!cv::imencode("." + imageFormat, input, buffer, params)) {
+    throw std::runtime_error("Failed to encode image to format: " +
+                             imageFormat);
+  }
+
+  // Convert the binary buffer to a base64 string
+  std::string encodedImage =
+      base64::to_base64(std::string(buffer.begin(), buffer.end()));
+
+  // Add the MIME type prefix required for data URLs
+  // return "data:image/" + imageFormat + ";base64," + encodedImage;
+  if (encodedImage.empty()) {
+    throw std::runtime_error("Base64 image is empty!");
+  }
+
+  return encodedImage;
+}
+std::string
+CameraClient::convert_msg_to_base64(const sensor_msgs::msg::Image &ros_image) {
+
+  try {
+    // Create a shared_ptr msg from the image
+    const auto msg = std::make_shared<sensor_msgs::msg::Image>(ros_image);
+
+    // Convert ROS2 Image message to OpenCV image
+    cv_bridge::CvImagePtr cv_ptr;
+    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::RGB8);
+
+    // Get OpenCV Mat from cv_bridge
+    const cv::Mat image = cv_ptr->image;
+
+    // // Save the image to a file
+    // if (!cv::imwrite("transformed_result.jpg", image))
+    // {
+    //     throw std::runtime_error("Failed to write image to file ");
+    // }
+
+    // auto serialized_mat = serializeMatToStringWithFormat(image, "jpeg");
+
+    // Encode the image to base64
+    // std::vector<uchar> buf;
+    // cv::imencode(".jpeg", image, buf);
+    // std::string base64_str = base64::to_base64(reinterpret_cast<const char
+    // *>(buf.data())); std::string base64_str =
+    // base64::to_base64(serialized_mat); return base64_str;
+    return convert_mat_to_base64(image, "jpeg");
+  } catch (cv_bridge::Exception &e) {
+    throw BT::RuntimeError(std::string("Error during image conversion: ") +
+                           e.what());
+  }
 }
 
 } // namespace spot_utils
