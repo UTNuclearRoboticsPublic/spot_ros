@@ -19,6 +19,9 @@ include_directories(
   include
 )
 
+# Enable position-independent code (PIC) generation for all targets (needed for shared libraries).
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Add libraries
 add_library(camera_client src/${PROJECT_NAME}/camera_client.cpp)
 
@@ -40,6 +43,9 @@ install(TARGETS camera_client
   RUNTIME DESTINATION bin  # Executable installation path
   INCLUDES DESTINATION include # Header files
 )
+
+# Export dependencies for downstream packages
+ament_export_dependencies(sensor_msgs cv_bridge)
 
 # Export the group for downstream packages
 ament_export_targets(${PROJECT_NAME} HAS_LIBRARY_TARGET)
