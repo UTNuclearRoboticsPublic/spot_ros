@@ -43,6 +43,7 @@
 #include "spot_behaviors/move_hand_to_pose.hpp"
 #include "spot_behaviors/walk_to_pose.hpp"
 #include "spot_behaviors/get_spot_ik.hpp"
+#include "spot_behaviors/toggle_payload.hpp"
 
 namespace spot_behaviors {
 
@@ -61,6 +62,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(MoveHandToPose);
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
     REGSITER_SPOT_BEHAVIOR(GetSpotIK);
+    REGSITER_SPOT_BEHAVIOR(TogglePayload);
 
     // A manifest of subtrees and their requirements
     static const std::map<std::string, std::vector<std::string>> subtree_requirements{
