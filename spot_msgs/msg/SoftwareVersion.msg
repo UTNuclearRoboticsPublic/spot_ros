@@ -1,0 +1,3 @@
+int32 major_version
+int32 minor_version
+int32 patch_level

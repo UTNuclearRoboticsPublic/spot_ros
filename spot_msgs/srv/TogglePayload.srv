@@ -1,0 +1,23 @@
+# Toggle whether a pre-registered payload is attached to the robot or not
+
+# Payload GUID. This can be found in the robot console payload page
+# If left blank, the name field will be used instead
+string guid
+
+# The name of the payload. Must be unique. Only used if 'guid' is blank
+string name
+
+# Whether the payload should be considered attached or detached after this call
+bool attached
+
+# The secret used to initially register the payload. The BD API does not 
+# allow for dynamic attaching/detaching of payloads without secrets
+string secret
+
+---
+
+# Whether the payload operation was performed successfully
+bool success
+
+# A message explaining the results
+string message

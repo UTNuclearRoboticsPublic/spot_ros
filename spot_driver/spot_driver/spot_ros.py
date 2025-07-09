@@ -54,6 +54,7 @@ from std_srvs.srv import Trigger, SetBool
 from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.api import geometry_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
+from bosdyn.api.payload_pb2 import Payload, MountFrameName
 from bosdyn.client import math_helpers
 from bosdyn.geometry import to_euler_zxy
 
@@ -78,8 +79,8 @@ from spot_msgs.msg import Feedback
 from spot_msgs.msg import MobilityParams
 from spot_msgs.action import NavigateTo, WalkTo
 
-from spot_msgs.srv import Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity
-from spot_msgs.srv import GestureSequence
+from spot_msgs.srv import (Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity,
+                           GestureSequence, TogglePayload, RegisterPayload)
 
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
@@ -415,6 +416,42 @@ class SpotROS(Node):
         """ROS service handler for clearing behavior faults"""
         resp = self.spot_wrapper.clear_behavior_fault(req.id)
         return ClearBehaviorFault.Response(resp[0], resp[1])
+    
+    def handle_register_payload(self, req: RegisterPayload.Request, res: RegisterPayload.Response) -> RegisterPayload.Response:
+        frame_names = {
+            "body": MountFrameName.MOUNT_FRAME_BODY_PAYLOAD,
+            "gripper": MountFrameName.MOUNT_FRAME_GRIPPER_PAYLOAD,
+            "wrist": MountFrameName.MOUNT_FRAME_WR1
+        }
+        
+        payload = Payload(
+            GUID=req.guid,
+            name=req.name,
+            description=req.description,
+            serial_number=req.serial_number,
+            label_prefix=req.label_prefix,
+            is_noncompute_payload=req.is_noncompute_payload,
+            version=MsgToSoftwareVersion(req.version),
+            mount_frame_name=frame_names[req.mount_frame],
+            liveness_timeout_secs=req.liveness_timeout_secs,
+            ipv4_address=req.ipv4_address,
+            link_speed=req.link_speed,
+            mass_volume_properties=MsgToPayloadMassVolumeProperties(req.mass_volume_properties)
+        )
+
+        res.success, res.message = self.spot_wrapper._lease_manager.register_payload(payload, req.secret)
+        return res
+    
+    def handle_toggle_payload(self, req: TogglePayload.Request, res: TogglePayload.Response) -> TogglePayload.Response:
+        if (len(req.guid) == 0) and (len(req.name) > 0):
+            identifier = req.name
+            use_name = True
+        else:
+            identifier = req.guid
+            use_name = False
+
+        res.success, res.message = self.spot_wrapper._lease_manager.toggle_payload(identifier, req.secret, req.attached, use_name)
+        return res
 
     def handle_stair_mode(self, req) -> SetBool.Response:
         """ROS service handler to set a stair mode to the robot."""
@@ -757,6 +794,8 @@ class SpotROS(Node):
         self.create_service(SetLocomotion     , "~/locomotion_mode"     , self.handle_locomotion_mode,      callback_group=srv_group)
         self.create_service(SetVelocity       , "~/max_velocity"        , self.handle_max_vel,              callback_group=srv_group)
         self.create_service(ClearBehaviorFault, "~/clear_behavior_fault", self.handle_clear_behavior_fault, callback_group=srv_group)
+        self.create_service(TogglePayload     , "~/toggle_payload"      , self.handle_toggle_payload,       callback_group=srv_group)
+        self.create_service(RegisterPayload   , "~/register_payload"    , self.handle_register_payload,     callback_group=srv_group)
 
         # Status request services
         self.create_service(ListGraph, "~/list_graph", self.handle_list_graph, callback_group=srv_group)

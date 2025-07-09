@@ -36,6 +36,8 @@ from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
+from bosdyn.client.payload import PayloadClient
+from bosdyn.client.payload_registration import PayloadRegistrationClient
 from bosdyn.client.power import PowerClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder, block_until_arm_arrives
@@ -47,6 +49,8 @@ from bosdyn.api import estop_pb2
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
+
+from .type_hint_helpers import *
 
 # Type hint helpers
 class EStopSystemStatusProto(type[estop_pb2.EstopSystemStatus]): pass
@@ -86,6 +90,8 @@ class SpotLeaseManager():
         self._estop_client = None
         self._estop_endpoint = None
         self._estop_keepalive = None
+        self._payload_client = None
+        self._payload_registration_client = None
 
         # Keep track of who is using the lease
         self._lease_owners = []
@@ -152,6 +158,8 @@ class SpotLeaseManager():
             self._power_client: PowerClient = self._robot.ensure_client(PowerClient.default_service_name)
             self._lease_client: LeaseClient = self._robot.ensure_client(LeaseClient.default_service_name)
             self._estop_client: EstopClient = self._robot.ensure_client(EstopClient.default_service_name)
+            self._payload_registration_client: PayloadRegistrationClient = self._robot.ensure_client(PayloadRegistrationClient.default_service_name)
+            self._payload_client: PayloadClient = self._robot.ensure_client(PayloadClient.default_service_name)
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
@@ -216,6 +224,35 @@ class SpotLeaseManager():
     def is_frozen(self) -> bool:
         """Return whether or not the robot is allowed to accept new command or move"""
         return self._is_frozen
+    
+    def register_payload(self, payload: PayloadProto, secret: str) -> Tuple[bool, Text]:
+        try:
+            self._payload_registration_client.register_payload(payload, secret)
+            return True, 'Payload registered successfully'
+        except Exception as e:
+            return False, f'Error registering payload: {e}'
+    
+    def toggle_payload(self, identifier: str, secret: str, attach: bool, use_name: bool = False) -> Tuple[bool, Text]:
+        if use_name:
+            payloads = self._payload_client.list_payloads()
+            matching_payloads = [payload for payload in payloads if payload.name == identifier]
+            if len(matching_payloads) == 0:
+                return False, f'No payloads were found matching the name {identifier}'
+            elif len(matching_payloads) > 1:
+                return False, f'Found {len(matching_payloads)} payloads with name {identifier}, names must be unique'
+            else:
+                guid = matching_payloads[0].GUID
+        else:
+            guid = identifier
+
+        try:
+            if attach:
+                self._payload_registration_client.attach_payload(guid=guid, secret=secret)
+            else:
+                self._payload_registration_client.detach_payload(guid=guid, secret=secret)
+            return True, 'Payload update successful'
+        except Exception as e:
+            return False, f'Error updating payload: {e}'
     
     def setLeaseQueryResult(self, future: Future) -> None:
         self._lease_proto = future.result()
