@@ -22,6 +22,7 @@ enum class CameraName { FRONTLEFT, FRONTRIGHT, LEFT, RIGHT, BACK, HAND };
 
 // Enum to hold BD Spot's camera namespace and image rotation info
 struct CamInfo {
+  CameraName camera_name;  // Enum name of the camera
   std::string camera_ns;   // Namespace for the camera topic
   float img_rot_angle_rad; // Angle to rotate the image by to get it erect.
                            // Units in radians
@@ -57,6 +58,14 @@ private:
   void img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg);
 
 }; // class CameraClient
+
+std::string encode_image_to_base64_(const std::string &image_path);
+CamInfo get_camera_info_(const CameraName &camera_name);
+bool initialize_camera_subscribers_();
+std::unordered_map<std::string, std::string> get_image_dict_();
+std::string convert_msg_to_base64(const sensor_msgs::msg::Image &ros_image);
+std::string convert_mat_to_base64(const cv::Mat &input,
+                                  const std::string &imageFormat);
 } // namespace spot_utils
 
 #endif // CAMERA_CLIENT_HPP

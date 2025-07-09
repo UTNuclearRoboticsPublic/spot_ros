@@ -4,7 +4,7 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
                            const CamInfo &camera_info)
     : node_(node), node_logger_(node->get_logger()),
       img_rot_angle_rad_(camera_info.img_rot_angle_rad),
-      camera_ns(camera_info.camera_ns)
+      camera_ns(camera_info.camera_ns), camera_name(camera_info.camera_name)
 
 {
   img_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(
@@ -79,9 +79,10 @@ void CameraClient::img_sub_cb_(const sensor_msgs::msg::Image::SharedPtr msg) {
 }
 
 std::vector<std::shared_ptr<CameraClient>>
-initialize_camera_clients_(const std::shared_ptr<rclcpp::Node>& node, const std::vector<CameraName> &camera_list) {
-  
-      std::vector<std::shared_ptr<CameraClient>> camera_client_list;
+initialize_camera_clients_(const std::shared_ptr<rclcpp::Node> &node,
+                           const std::vector<CameraName> &camera_list) {
+
+  std::vector<std::shared_ptr<CameraClient>> camera_client_list;
   camera_client_list.reserve(camera_list.size());
   try {
     for (const auto &camera_name : camera_list) {
@@ -100,6 +101,7 @@ initialize_camera_clients_(const std::shared_ptr<rclcpp::Node>& node, const std:
 
 CamInfo get_camera_info_(const CameraName &camera_name) {
   CamInfo camera_info;
+  camera_info.camera_name = camera_name;
 
   switch (camera_name) {
   case CameraName::FRONTLEFT:
