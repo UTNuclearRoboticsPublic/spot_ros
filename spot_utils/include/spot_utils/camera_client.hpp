@@ -35,6 +35,15 @@ struct CamInfo {
 };
 
 /**
+ * @brief Struct to hold image id, and images in base64 and sensor_msgs::msg::Image format
+ */
+struct StampedImage {
+  std::string id;
+  std::string base64_image;
+  sensor_msgs::msg::Image ros_image;
+};
+
+/**
  * @class CameraClient
  * @brief Class to subscribe to Spot's camera feed and retrieve images in
  * various formats.
