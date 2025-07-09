@@ -8,7 +8,6 @@
 #define CAMERA_CLIENT_HPP
 
 #include "base64/base64.hpp"
-#include <Eigen/Dense>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>

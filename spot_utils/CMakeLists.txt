@@ -11,6 +11,8 @@ find_package(ament_cmake REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 
+# Non-ROS dependencies
+find_package(OpenCV REQUIRED)
 # Specify include directories
 include_directories(
   include
@@ -18,6 +20,9 @@ include_directories(
 
 # Add libraries
 add_library(camera_client src/${PROJECT_NAME}/camera_client.cpp)
+
+# Link against external libraries
+target_link_libraries(camera_client ${OpenCV_LIBRARIES})
 
 # Link against ROS dependencies
 ament_target_dependencies(camera_client rclcpp sensor_msgs cv_bridge)
