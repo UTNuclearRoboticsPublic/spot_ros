@@ -5,6 +5,7 @@
     auto_claim: false
     auto_power_on: false
     auto_stand: false
+    obstacle_avoidance_padding: 0.0
 
     rates:
       sensors:
