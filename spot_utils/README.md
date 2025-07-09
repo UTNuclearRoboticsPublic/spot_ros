@@ -20,4 +20,8 @@ auto frontright_client = lookup_camera_client(camera_clients, FRONTRIGHT);
 // Get images
 sensor_msgs::msg::Image frontleft_ros_img = frontleft_client->get_ros_image();
 std::string frontright_base64_img = frontright_client->get_base64_image();
+
+// Optionally, destroy subscription to alleviate bandwidth
+frontleft_client->destroy_subscription();
+frontright_client->destroy_subscription();
 ```
