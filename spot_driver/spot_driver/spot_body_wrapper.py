@@ -28,6 +28,7 @@
 from typing import Text, Tuple
 from .async_queries import *
 from asyncio import Future
+from threading import Lock
 
 from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
@@ -59,8 +60,8 @@ class SpotBodyWrapper():
         self._lease_manager = None
 
         """ State futures """
-        self._robot_state_future: FutureWrapper = None
         self._robot_state_proto = None
+        self._robot_state_lock = Lock()
 
         """ Point cloud task """
         self._point_cloud_requests = []
@@ -159,7 +160,8 @@ class SpotBodyWrapper():
     @property
     def robot_state(self):
         """Return latest proto from the robot state response"""
-        return self._robot_state_proto
+        with self._robot_state_lock:
+            return self._robot_state_proto
 
     @property
     def lease(self):
@@ -200,15 +202,13 @@ class SpotBodyWrapper():
         """Return the robot time in local time as a proto timestamp"""
         return self._lease_manager.robotToLocalTime(timestamp)
 
-    def setStateResult(self, future: Future) -> None:
-        """ Callback to set the result of an async robot state query """
-        self._robot_state_proto = future.result()
-
     def updateState(self) -> None:
         """Update the robot state"""
-        if self._robot_state_future is None or self._robot_state_future.done():
-            self._robot_state_future = self._lease_manager._robot_state_client.get_robot_state_async()
-            self._robot_state_future.add_done_callback(self.setStateResult)
+        try:
+            with self._robot_state_lock:
+                self._robot_state_proto = self._lease_manager._robot_state_client.get_robot_state()
+        except Exception as e:
+            self._logger.error(f'An error occurred when getting the robot state: {e}')
 
     def setPointCloudResult(self, future: Future) -> None:
         """ Callback to set the result of an async pointcloud query """

@@ -219,8 +219,8 @@ class SpotROS(Node):
     def RobotStateCB(self) -> None:
         """Callback for when the Spot Wrapper gets new robot state data."""
         self.spot_wrapper.updateState()
-        state = self.spot_wrapper.robot_state
 
+        state = self.spot_wrapper.robot_state
         if state is None:
             return
 
