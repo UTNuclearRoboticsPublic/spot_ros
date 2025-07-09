@@ -4,9 +4,7 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
                            const CamInfo &camera_info)
     : node_(node), node_logger_(node->get_logger()),
       img_rot_angle_rad_(camera_info.img_rot_angle_rad),
-      camera_ns(camera_info.camera_ns), camera_name(camera_info.camera_name)
-
-{
+      camera_ns(camera_info.camera_ns), camera_name(camera_info.camera_name) {
   img_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(
       camera_ns + "/image", 10,
       std::bind(&CameraClient::img_sub_cb_, this, std::placeholders::_1));
@@ -132,63 +130,37 @@ CamInfo get_camera_info_(const CameraName &camera_name) {
   return camera_info;
 }
 
-std::unordered_map<std::string, std::string> CameraClient::get_image_dict_() {
+std::string CameraClient::get_base64_image(
+    const std::shared_ptr<CameraClient> &camera_client,
+    const CameraName &camera_name) {
 
-  if (!(this->initialize_camera_clients_())) {
-    throw BT::RuntimeError("Failed to initialize camera subscribers");
-  }
   using namespace std::chrono_literals;
-  rclcpp::sleep_for(1s); // Sleep to ensure proper initialization
 
   std::chrono::seconds snapshot_timeout_duration(10); // Configurable timeout
   std::unordered_map<std::string, std::string> image_dict;
 
-  RCLCPP_INFO(this->get_logger(),
-              "Attempting to take a snapshot of the environment.");
-  for (size_t i = 0; i < camera_client_list_.size(); ++i) {
-    auto &camera_client = camera_client_list_[i];
-    rclcpp::Rate loop_rate(10); // 10 Hz
-    auto start_time = std::chrono::steady_clock::now();
-    sensor_msgs::msg::Image img;
+  auto start_time = std::chrono::steady_clock::now();
+  sensor_msgs::msg::Image img;
 
-    while (img.encoding.empty()) {
-      rclcpp::spin_some(node_);
-      loop_rate.sleep();
-      img = camera_client->take_snapshot();
+  while (img.encoding.empty()) {
+    rclcpp::spin_some(node_);
+    loop_rate.sleep();
+    img = camera_client->take_snapshot();
 
-      // Check timeout
-      auto current_time = std::chrono::steady_clock::now();
-      if (current_time - start_time > snapshot_timeout_duration) {
-        throw BT::RuntimeError(
-            "Failed to get images within allotted timeout for camera: " +
-            camera_client->camera_ns);
-      }
-    }
-
-    try {
-      auto transformed_img = camera_client->transform_image(img);
-
-      // Destroy subscription right after to allieviate ROS bandwidth
-      camera_client->destroy_subscription();
-
-      // Base64 encode
-      // const std::string base64_img =
-      //     base64::to_base64(std::string(transformed_img.data.begin(),
-      //     transformed_img.data.end()));
-      const std::string base64_img = convert_msg_to_base64(transformed_img);
-
-      // Store result in dictionary
-      // image_dict[camera_client->camera_ns] = "data:image/jpeg;base64," +
-      // base64_img;
-      image_dict[camera_client->camera_ns] = base64_img;
-    } catch (const std::exception &e) {
-      std::ostringstream error_msg;
-      error_msg << "Failed to transform image for camera: "
-                << camera_client->camera_ns << ". Error: " << e.what();
-      throw BT::RuntimeError(error_msg.str());
+    // Check timeout
+    auto current_time = std::chrono::steady_clock::now();
+    if (current_time - start_time > snapshot_timeout_duration) {
+      throw BT::RuntimeError(
+          "Failed to get images within allotted timeout for camera: " +
+          camera_client->camera_ns);
     }
   }
-  return image_dict;
+
+  auto transformed_img = camera_client->transform_image(img);
+
+  const std::string base64_img = convert_msg_to_base64(transformed_img);
+
+  return base64_img;
 }
 
 // Convert cv::Mat to a base64-encoded string with a specified format
