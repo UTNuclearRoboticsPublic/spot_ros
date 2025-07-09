@@ -13,6 +13,38 @@ CameraClient::CameraClient(const rclcpp::Node::SharedPtr &node,
 // Takes a snapshot of the current image and camera information
 sensor_msgs::msg::Image CameraClient::get_ros_image() { return image_; }
 
+std::string CameraClient::get_base64_image(
+    const std::shared_ptr<CameraClient> &camera_client,
+    const CameraName &camera_name) {
+
+  using namespace std::chrono_literals;
+
+  std::chrono::seconds snapshot_timeout_duration(image_lookup_timeout_secs_); // Configurable timeout
+
+  auto start_time = std::chrono::steady_clock::now();
+  sensor_msgs::msg::Image img;
+
+  while (img.encoding.empty()) {
+    rclcpp::spin_some(node_);
+    loop_rate.sleep();
+    img = camera_client->take_snapshot();
+
+    // Check timeout
+    auto current_time = std::chrono::steady_clock::now();
+    if (current_time - start_time > snapshot_timeout_duration) {
+      throw BT::RuntimeError(
+          "Failed to get images within allotted timeout for camera: " +
+          camera_client->camera_ns);
+    }
+  }
+
+  auto transformed_img = camera_client->transform_image(img);
+
+  const std::string base64_img = convert_msg_to_base64(transformed_img);
+
+  return base64_img;
+}
+
 void CameraClient::destroy_subscription() {
 
   img_sub_.reset(); // Image subscription
@@ -130,38 +162,6 @@ CamInfo get_camera_info_(const CameraName &camera_name) {
   return camera_info;
 }
 
-std::string CameraClient::get_base64_image(
-    const std::shared_ptr<CameraClient> &camera_client,
-    const CameraName &camera_name) {
-
-  using namespace std::chrono_literals;
-
-  std::chrono::seconds snapshot_timeout_duration(10); // Configurable timeout
-  std::unordered_map<std::string, std::string> image_dict;
-
-  auto start_time = std::chrono::steady_clock::now();
-  sensor_msgs::msg::Image img;
-
-  while (img.encoding.empty()) {
-    rclcpp::spin_some(node_);
-    loop_rate.sleep();
-    img = camera_client->take_snapshot();
-
-    // Check timeout
-    auto current_time = std::chrono::steady_clock::now();
-    if (current_time - start_time > snapshot_timeout_duration) {
-      throw BT::RuntimeError(
-          "Failed to get images within allotted timeout for camera: " +
-          camera_client->camera_ns);
-    }
-  }
-
-  auto transformed_img = camera_client->transform_image(img);
-
-  const std::string base64_img = convert_msg_to_base64(transformed_img);
-
-  return base64_img;
-}
 
 // Convert cv::Mat to a base64-encoded string with a specified format
 std::string

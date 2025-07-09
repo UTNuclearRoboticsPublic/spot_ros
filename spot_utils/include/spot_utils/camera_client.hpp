@@ -49,7 +49,8 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr
       img_sub_;                   // Image subscription
   sensor_msgs::msg::Image image_; // Latest image
-  float img_rot_angle_rad_;       // Angle to rotate the images by, in radians.
+  int image_lookup_timeout_secs_ = 10;
+  float img_rot_angle_rad_; // Angle to rotate the images by, in radians.
   float img_scale_factor_ = 1.0;
   int img_height_;
   int img_width_;
