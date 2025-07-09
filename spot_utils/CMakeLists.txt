@@ -29,15 +29,20 @@ target_link_libraries(camera_client ${OpenCV_LIBRARIES})
 ament_target_dependencies(camera_client rclcpp sensor_msgs cv_bridge)
 
 # Install the 'include' directory
-install(DIRECTORY include/
-  DESTINATION include/${PROJECT_NAME}
+install(DIRECTORY include/${PROJECT_NAME}
+        DESTINATION include)
+
+# Install the library and its headers
+install(TARGETS camera_client
+  EXPORT ${PROJECT_NAME} # Export for visibility with other CMake packages
+  ARCHIVE DESTINATION lib  # Static library installation path
+  LIBRARY DESTINATION lib  # Dynamic library installation path
+  RUNTIME DESTINATION bin  # Executable installation path
+  INCLUDES DESTINATION include # Header files
 )
 
-# Install the libraries
-install(TARGETS
-  camera_client
-  DESTINATION lib/${PROJECT_NAME}
-)
+# Export the group for downstream packages
+ament_export_targets(${PROJECT_NAME} HAS_LIBRARY_TARGET)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
