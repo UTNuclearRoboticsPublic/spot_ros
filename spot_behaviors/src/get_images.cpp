@@ -3,40 +3,34 @@
 namespace spot_behaviors {
 
 GetImages::GetImages(const std::string &name, const BT::NodeConfig &config)
-    : BT::SyncActionNode(name, config), Node(name) {}
+    : BT::SyncActionNode(name, config) 
+{
+  node_ = rclcpp::Node::make_shared(name);
+}
 
 BT::PortsList GetImages::providedPorts() {
   return {
-      BT::InputPort<std::shared_ptr<std::vector<spot_utils::CameraName>>>(
-          "camera_names"),
-      BT::OutputPort<std::shared_ptr<std::vector<spot_utils::StampedImage>>>(
-          "stamped_image_list")};
+      BT::InputPort<std::vector<spot_utils::CameraName>>("camera_names"),
+      BT::OutputPort<std::shared_ptr<std::vector<spot_utils::StampedImage>>>("stamped_image_list")
+  };
 }
 
 BT::NodeStatus GetImages::tick() {
-  rclcpp::spin_some(this->get_node_base_interface());
+  rclcpp::spin_some(node_);
 
-  using CameraNameVecPtr = std::shared_ptr<std::vector<spot_utils::CameraName>>;
-  BT::Expected<CameraNameVecPtr> camera_names_exp =
-      getInput<CameraNameVecPtr>("camera_names");
+  using CameraNameVec = std::vector<spot_utils::CameraName>;
+  BT::Expected<CameraNameVec> camera_names_exp =
+      getInput<CameraNameVec>("camera_names");
 
   if (!camera_names_exp) {
     throw BT::RuntimeError("Input [camera_names] is missing or invalid.");
   }
 
-  CameraNameVecPtr camera_names = camera_names_exp.value();
+  CameraNameVec camera_names = camera_names_exp.value();
 
-  // shared_from_this() will return SyncActionNode ptr so, casting is needed to
-  // get the rclcpp::Node ptr
-  auto node = std::static_pointer_cast<rclcpp::Node>(this->shared_from_this());
+  auto camera_clients = spot_utils::initialize_camera_clients_(node_, camera_names);
 
-  // Initialize camera clients
-  auto camera_clients =
-      spot_utils::initialize_camera_clients_(node, *camera_names);
-
-  // Prepare output
-  auto stamped_image_list =
-      std::make_shared<std::vector<spot_utils::StampedImage>>();
+  auto stamped_image_list = std::make_shared<std::vector<spot_utils::StampedImage>>();
 
   for (const auto &client : camera_clients) {
     spot_utils::StampedImage si;
@@ -45,7 +39,7 @@ BT::NodeStatus GetImages::tick() {
     si.ros_image = client->get_ros_image();
     stamped_image_list->push_back(si);
 
-    client->destroy_subscription(); // Clean up after capture
+    client->destroy_subscription();
   }
 
   setOutput("stamped_image_list", stamped_image_list);
@@ -53,3 +47,4 @@ BT::NodeStatus GetImages::tick() {
 }
 
 } // namespace spot_behaviors
+
