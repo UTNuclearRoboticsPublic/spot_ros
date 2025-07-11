@@ -26,6 +26,18 @@ namespace spot_utils {
 enum class CameraName { FRONTLEFT, FRONTRIGHT, LEFT, RIGHT, BACK, HAND };
 
 /**
+* @brief Unordered Map of string to CameraName enum
+*/
+inline const std::unordered_map<std::string, CameraName> STRING_TO_CAMERA_NAME = {
+    {"FRONTLEFT",  CameraName::FRONTLEFT},
+    {"FRONTRIGHT", CameraName::FRONTRIGHT},
+    {"LEFT",       CameraName::LEFT},
+    {"RIGHT",      CameraName::RIGHT},
+    {"BACK",       CameraName::BACK},
+    {"HAND",       CameraName::HAND}
+};
+
+/**
  * @brief Struct to hold configuration for a specific Spot camera.
  */
 struct CamInfo {
