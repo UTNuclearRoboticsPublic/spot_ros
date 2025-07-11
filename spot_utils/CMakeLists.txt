@@ -34,6 +34,8 @@ ament_target_dependencies(camera_client rclcpp sensor_msgs cv_bridge)
 # Install the 'include' directory
 install(DIRECTORY include/${PROJECT_NAME}
         DESTINATION include)
+install(DIRECTORY include/base64
+        DESTINATION include)
 
 # Install the library and its headers
 install(TARGETS camera_client
