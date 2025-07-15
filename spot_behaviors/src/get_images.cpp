@@ -11,7 +11,7 @@ GetImages::GetImages(const std::string &name, const BT::NodeConfig &config)
 BT::PortsList GetImages::providedPorts() {
   return {
       BT::InputPort<std::vector<spot_utils::CameraName>>("camera_names"),
-      BT::OutputPort<std::shared_ptr<std::vector<spot_utils::StampedImage>>>("stamped_image_list")
+      BT::OutputPort<std::shared_ptr<std::vector<sensor_msgs::msg::Image>>>("image_list")
   };
 }
 
@@ -30,19 +30,16 @@ BT::NodeStatus GetImages::tick() {
 
   auto camera_clients = spot_utils::initialize_camera_clients_(node_, camera_names);
 
-  auto stamped_image_list = std::make_shared<std::vector<spot_utils::StampedImage>>();
+  auto image_list = std::make_shared<std::vector<sensor_msgs::msg::Image>>();
 
   for (const auto &client : camera_clients) {
-    spot_utils::StampedImage si;
-    si.id = client->camera_ns;
-    si.base64_image = client->get_base64_image();
-    si.ros_image = client->get_ros_image();
-    stamped_image_list->push_back(si);
+    const sensor_msgs::msg::Image& img_msg = client->get_ros_image();
+    image_list->push_back(img_msg);
 
     client->destroy_subscription();
   }
 
-  setOutput("stamped_image_list", stamped_image_list);
+  setOutput("image_list", image_list);
   return BT::NodeStatus::SUCCESS;
 }
 

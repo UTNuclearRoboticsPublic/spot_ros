@@ -11,6 +11,7 @@
 #include <spot_utils/camera_client.hpp>
 #include <string>
 #include <behaviortree_cpp/bt_factory.h>
+#include <sensor_msgs/msg/image.hpp>
 #include <sstream>
 
 namespace BT {
@@ -120,11 +121,9 @@ public:
    *   Type: `std::shared_ptr<std::vector<spot_utils::CameraName>>`  
    *   Description: List of Spot camera enums to query.
    *
-   * - Output port: `stamped_image_list`  
-   *   Type: `std::shared_ptr<std::vector<spot_utils::StampedImage>>`  
-   *   Description: List of images captured from the specified cameras. Each image
-   *   includes the camera namespace (`id`), a ROS `sensor_msgs::msg::Image`, and
-   *   a base64-encoded string of the image.
+   * - Output port: `image_list`  
+   *   Type: `std::shared_ptr<std::vector<sensor_msgs::msg::Image>>`  
+   *   Description: List of images captured from the specified cameras.
    *
    * @return PortsList containing the input and output ports.
    */
@@ -137,7 +136,7 @@ public:
    * - Retrieves the list of camera names from the input port.
    * - Initializes one-time camera clients.
    * - Captures and stores the latest image from each camera.
-   * - Populates the output port with a list of stamped images.
+   * - Populates the output port with a list of images.
    *
    * @return SUCCESS if all images are captured and set; FAILURE otherwise.
    */
