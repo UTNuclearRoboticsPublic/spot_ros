@@ -149,22 +149,21 @@ CameraClient::convert_mat_to_base64_(const cv::Mat &input,
 }
 std::string
 CameraClient::convert_msg_to_base64_(const sensor_msgs::msg::Image &ros_image) {
-
   try {
     // Create a shared_ptr msg from the image
     const auto msg = std::make_shared<sensor_msgs::msg::Image>(ros_image);
 
-    // Convert ROS2 Image message to OpenCV image
+    // Convert ROS2 Image message to OpenCV image (in RGB format)
     cv_bridge::CvImagePtr cv_ptr;
-    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::RGB8);
+    cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::RGB8); // Assuming all incoming ROS msgs have this encoding
 
-    // Get OpenCV Mat from cv_bridge
-    const cv::Mat image = cv_ptr->image;
+    // Convert RGB (ROS standard) to BGR (OpenCV default) to avoid color shift
+    cv::Mat bgr_image;
+    cv::cvtColor(cv_ptr->image, bgr_image, cv::COLOR_RGB2BGR);
 
-    return convert_mat_to_base64_(image, "jpeg");
+    return convert_mat_to_base64_(bgr_image, img_format_);
   } catch (cv_bridge::Exception &e) {
-    throw std::runtime_error(std::string("Error during image conversion: ") +
-                             e.what());
+    throw std::runtime_error(std::string("Error during image conversion: ") + e.what());
   }
 }
 
