@@ -64,6 +64,8 @@ private:
     rclcpp::Time request_time_point_{};
 
     geometry_msgs::msg::PoseStamped target_pose_;
+    double trans_err_threshold_ = 0.25;
+    double rot_err_threshold_ = 0.25;
     bool checkGoal() const;
 };
     

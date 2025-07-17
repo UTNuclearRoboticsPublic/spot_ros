@@ -41,7 +41,9 @@ WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config, tf
 
 BT::PortsList WalkToPose::providedPorts() {
     return {
-        BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose")
+        BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose"),
+        BT::InputPort<double>("trans_err_threshold"),
+        BT::InputPort<double>("rot_err_threshold")
     };
 }
 
@@ -57,6 +59,20 @@ BT::NodeStatus WalkToPose::onStart() {
         RCLCPP_ERROR(get_logger(), "\"target_pose\" blackboard entry not available, aborting call for Spot navigation");
         RCLCPP_ERROR(get_logger(), "Error message: %s", target_pose_expected.error().c_str());
         return BT::NodeStatus::FAILURE;
+    }
+
+    BT::Expected<double> trans_err_threshold_exp = getInput<double>("trans_err_threshold");
+    if (trans_err_threshold_exp.has_value()) {
+        trans_err_threshold_ = trans_err_threshold_exp.value();
+        RCLCPP_INFO_STREAM(get_logger(),
+            "Using translational error threshold: " << trans_err_threshold_);
+    }
+    
+    BT::Expected<double> rot_err_threshold_exp = getInput<double>("rot_err_threshold");
+    if (rot_err_threshold_exp.has_value()) {
+        rot_err_threshold_ = rot_err_threshold_exp.value();
+        RCLCPP_INFO_STREAM(get_logger(),
+            "Using rotational error threshold: " << rot_err_threshold_);
     }
 
     // Record the target for goal checking later
@@ -174,7 +190,7 @@ bool WalkToPose::checkGoal() const {
     RCLCPP_INFO(get_logger(), "Translation error: %.2f | Rotation error: %.2f", translation_error, rotation_error);
 
     // Compare to the threshold values (hard coded for now - will change to parameters later)
-    return translation_error < 0.25 && rotation_error < 0.25;
+    return translation_error < trans_err_threshold_ && rotation_error < rot_err_threshold_;
 }
 
 } // namespace spot_behaviors
