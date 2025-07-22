@@ -216,7 +216,7 @@ CamInfo get_camera_info(const CameraName &camera_name) {
     camera_info.img_rot_angle_rad = 0;
     break;
   case CameraName::HAND:
-    camera_info.camera_ns = "/spot_image_server/rgb/hand_color";
+    camera_info.camera_ns = "/spot_image_server/rgb/hand_rgb";
     camera_info.img_rot_angle_rad = 0;
     break;
   }
