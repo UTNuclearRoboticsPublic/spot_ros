@@ -116,7 +116,7 @@ Requirement: Ensure the environment variable `SPOT_ACCESSORIES` includes `RL_KIT
 
 Spot is configured to use the ROS2 navigation stack, Nav2. Official documentation for Nav2 can be found [here](https://docs.nav2.org/). To localize spot within NRG's AHG labspace, make sure the robot is docked (to match the initial location) an execute
 ```bash
-ros2 launch spot_navigation amcl.launch.py
+ros2 launch spot_navigation amcl.launch.py map:=<path_to_map/map.yaml>
 ```
 
 To command the robot using Nav2, run the following in a separate terminal.
