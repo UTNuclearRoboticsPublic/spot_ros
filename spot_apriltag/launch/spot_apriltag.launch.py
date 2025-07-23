@@ -20,14 +20,9 @@ def generate_launch_description():
     # Camera configurations
     camera_configs = [
         {
-            'camera_names': ['frontleft', 'frontright', 'left', 'right', 'back'],
+            'camera_names': ['frontleft', 'frontright', 'left', 'right'],
             'topic_prefix': '/spot_image_server/rgb/',
-        },
-        {
-            'camera_names': ['hand_rgb'],
-            'topic_prefix': '/spot_image_server/rgb/',
-        }
-    ]
+        }] # names are frontleft, frontright, left, right, back, and hand_rgb
 
     # Initialize empty list to hold nodes
     nodes = []
