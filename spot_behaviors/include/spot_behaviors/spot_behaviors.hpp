@@ -44,6 +44,7 @@
 #include "spot_behaviors/walk_to_pose.hpp"
 #include "spot_behaviors/get_spot_ik.hpp"
 #include "spot_behaviors/toggle_payload.hpp"
+#include "spot_behaviors/get_images.hpp"
 
 namespace spot_behaviors {
 
@@ -51,6 +52,8 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     if (!tf_buffer) {
         throw std::runtime_error("Cannot register spot behaviors will a null pointer to tf_buffer!");
     }
+
+    factory.registerNodeType<GetImages>("GetImages");
 
     // Register all of the behaviors in the package
     #define REGSITER_SPOT_BEHAVIOR(name) factory.registerNodeType<name>(#name, tf_buffer)
