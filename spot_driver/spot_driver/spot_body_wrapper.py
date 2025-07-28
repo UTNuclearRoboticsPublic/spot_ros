@@ -25,6 +25,7 @@
 #
 ############################################################################################
 
+import math
 from typing import Text, Tuple
 from .async_queries import *
 from asyncio import Future
@@ -362,6 +363,20 @@ class SpotBodyWrapper():
             v_rot: Angular velocity around the Z axis in radians per second
             cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
         """
+        # The robot will ignore commands too low, so we enforce a floor
+        MIN_SPEED = 0.15 # m/s
+        commanded_speed = math.sqrt(v_x**2 + v_y**2)
+        if (commanded_speed < MIN_SPEED) and (commanded_speed > MIN_SPEED/5):
+            v_x = MIN_SPEED/commanded_speed * v_x
+            v_y = MIN_SPEED/commanded_speed * v_y
+            v_rot = MIN_SPEED/commanded_speed * v_rot
+
+        MIN_ROT_SPEED = 0.20
+        if v_rot < MIN_ROT_SPEED and v_rot > MIN_ROT_SPEED/5:
+            v_x   *= MIN_ROT_SPEED/v_rot
+            v_y   *= MIN_ROT_SPEED/v_rot
+            v_rot *= MIN_ROT_SPEED / v_rot
+
         end_time=time.time() + cmd_duration
         self._lease_manager.robot_command(RobotCommandBuilder.synchro_velocity_command(
                             v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
