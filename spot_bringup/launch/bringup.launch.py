@@ -4,9 +4,9 @@ from launch_ros.actions import Node
 from launch.conditions import IfCondition
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSubstitution, AndSubstitution, NotSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import PushRosNamespace
+from launch_ros.actions import PushRosNamespace, SetRemap
 from spot_description.get_accessories import get_accessories_from_env
 
 def generate_launch_description():
@@ -284,6 +284,7 @@ def generate_launch_description():
         # Run velodyne nodes manually so we have access to parameter reassignment
         actions=[
             PushRosNamespace(LaunchConfiguration('spot_namespace')),
+            SetRemap('velodyne_points', 'unfiltered_velodyne_points'),
             Node(package='velodyne_driver',
                 executable='velodyne_driver_node',
                 output='both',
@@ -300,8 +301,18 @@ def generate_launch_description():
                     PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                     {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
                 ]
+            ),
+
+            Node(
+                package='spot_navigation',
+                executable='filter_pointcloud',
+                output='both',
+                remappings=[
+                    ('cloud_in', 'unfiltered_velodyne_points'),
+                    ('cloud_out','velodyne_points')
+                ]
             )
-        ]
+        ],
     )
 
     ## Launch
