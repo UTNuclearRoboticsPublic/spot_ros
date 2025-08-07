@@ -12,12 +12,14 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(rclcpp_components REQUIRED)
 
 ################################################################################
 # Build executables
 ################################################################################
-add_executable(filter_pointcloud src/filter_pointcloud.cpp)
-ament_target_dependencies(filter_pointcloud rclcpp tf2_ros sensor_msgs)
+add_library(filter_pointcloud SHARED src/filter_pointcloud.cpp)
+ament_target_dependencies(filter_pointcloud rclcpp tf2_ros sensor_msgs rclcpp_components)
+rclcpp_components_register_nodes(filter_pointcloud "spot_navigation::PointcloudFilterComponent")
 
 ################################################################################
 # Install
@@ -34,7 +36,7 @@ install(
 
 install(
   TARGETS filter_pointcloud
-  DESTINATION lib/${PROJECT_NAME}
+  DESTINATION lib
 )
 
 ################################################################################

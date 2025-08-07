@@ -1,6 +1,7 @@
 import os
 from launch import LaunchDescription
-from launch_ros.actions import Node
+from launch_ros.descriptions import ComposableNode
+from launch_ros.actions import Node, ComposableNodeContainer
 from launch.conditions import IfCondition
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, GroupAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -284,32 +285,42 @@ def generate_launch_description():
         # Run velodyne nodes manually so we have access to parameter reassignment
         actions=[
             PushRosNamespace(LaunchConfiguration('spot_namespace')),
-            SetRemap('velodyne_points', 'unfiltered_velodyne_points'),
-            Node(package='velodyne_driver',
-                executable='velodyne_driver_node',
-                output='both',
-                parameters=[
-                    PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
-                    {'device_ip': LaunchConfiguration('velodyne_ip')}
-                ]
-            ),
-
-            Node(package='velodyne_pointcloud',
-                executable='velodyne_transform_node',
-                output='both',
-                parameters=[
-                    PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
-                    {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
-                ]
-            ),
-
-            Node(
-                package='spot_navigation',
-                executable='filter_pointcloud',
-                output='both',
-                remappings=[
-                    ('cloud_in', 'unfiltered_velodyne_points'),
-                    ('cloud_out','velodyne_points')
+            ComposableNodeContainer(
+                name='velodyne_container',
+                namespace='',
+                package='rclcpp_components',
+                executable='component_container',
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package='velodyne_driver',
+                        plugin='velodyne_driver::VelodyneDriver',
+                        name='velodyne_driver_node',
+                        parameters=[
+                            PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
+                            {'device_ip': LaunchConfiguration('velodyne_ip')}
+                        ]
+                    ),
+                    ComposableNode(
+                        package='velodyne_pointcloud',
+                        plugin='velodyne_pointcloud::Transform',
+                        name='velodyne_transform_node',
+                        parameters=[
+                            PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
+                            {'calibration': PathJoinSubstitution([FindPackageShare('velodyne_pointcloud'), 'params', 'VLP16db.yaml'])}
+                        ],
+                        remappings=[
+                            ('velodyne_points', 'unfiltered_velodyne_points')
+                        ]
+                    ),
+                    ComposableNode(
+                        name='spot_pointcloud_filter_component',
+                        package='spot_navigation',
+                        plugin='spot_navigation::PointcloudFilterComponent',
+                        remappings=[
+                            ('cloud_in', 'unfiltered_velodyne_points'),
+                            ('cloud_out','velodyne_points')
+                        ]
+                    )
                 ]
             )
         ],
