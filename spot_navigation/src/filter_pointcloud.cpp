@@ -48,16 +48,17 @@ void filterPointcloud(sensor_msgs::msg::PointCloud2::UniquePtr pointcloud) {
         auto x_span = point_span.subspan(x_offset, 4);
         auto y_span = point_span.subspan(y_offset, 4);
         auto z_span = point_span.subspan(z_offset, 4);
-        if (reverse_bytes) {
-            std::reverse(x_span.begin(), x_span.end());
-            std::reverse(y_span.begin(), y_span.end());
-            std::reverse(z_span.begin(), z_span.end());
-        } 
 
         float x, y, z;
         std::memcpy(&x, x_span.data(), 4);
         std::memcpy(&y, y_span.data(), 4);
         std::memcpy(&z, z_span.data(), 4);
+
+        if (reverse_bytes) {
+            std::reverse(reinterpret_cast<std::byte*>(&x), reinterpret_cast<std::byte*>(&x) + sizeof(float));
+            std::reverse(reinterpret_cast<std::byte*>(&y), reinterpret_cast<std::byte*>(&y) + sizeof(float));
+            std::reverse(reinterpret_cast<std::byte*>(&z), reinterpret_cast<std::byte*>(&z) + sizeof(float));
+        }
             
         if (x < bounding_box.x_max && x > bounding_box.x_min && y < bounding_box.y_max && y > bounding_box.y_min && z < bounding_box.z_max && z > bounding_box.z_min) continue;
         new_size++;
