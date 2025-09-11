@@ -1,4 +1,5 @@
 import os
+import ament_index_python
 
 # All currently supported payloads for Spot
 accessory_to_arg_map = {
@@ -15,5 +16,11 @@ def get_accessories_from_env():
         if accessory in accessory_to_arg_map:
             arg_name = accessory_to_arg_map[accessory]
             spot_accessories_dict[arg_name] = 'True'
+
+    try:
+        ament_index_python.get_package_prefix('spot_proprietary_description')
+        spot_accessories_dict['use_proprietary_meshes'] = 'True'
+    except ament_index_python.PackageNotFoundError:
+        pass
 
     return spot_accessories_dict

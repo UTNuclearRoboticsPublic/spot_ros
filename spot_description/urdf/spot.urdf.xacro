@@ -12,7 +12,7 @@
     <xacro:arg name="has_realsense" default="False"/>
     <xacro:arg name="kinematic_model" default="none"/>
     <xacro:arg name="use_proprietary_meshes" default="false" />
-    <xacro:arg name="proprietary_pkg" default="spot_propreity_description" />
+    <xacro:arg name="proprietary_pkg" default="spot_proprietary_description" />
     <xacro:arg name="proprietary_mesh_format" default="dae" />
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
 
