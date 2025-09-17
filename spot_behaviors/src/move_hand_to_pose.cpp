@@ -188,6 +188,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
                 if (using_moveit) {
                     move_group_goal_handle_ = move_group_response_future_.get();
                     move_group_response_future_ = decltype(move_group_response_future_){};
+                    move_group_action_client_->async_get_result(move_group_goal_handle_);
                     motion_start_time_ = now();
                 } else {
                     bosdyn_goal_handle_ = bosdyn_response_future_.get();
@@ -271,6 +272,11 @@ void MoveHandToPose::onHalted() {
             RCLCPP_FATAL(get_logger(), "Unable to cancel ArmCartesianCommand action request. Robot may move unexpectedly!!!");
         }
     }
+
+    move_group_goal_handle_.reset();
+    move_group_response_future_ = {};
+    bosdyn_response_future_ = {};
+    bosdyn_goal_handle_.reset();
 }
 
 } // namespace spot_behaviors
