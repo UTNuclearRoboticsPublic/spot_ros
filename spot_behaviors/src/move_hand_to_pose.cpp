@@ -95,13 +95,14 @@ BT::NodeStatus MoveHandToPose::onStart() {
 
     // Check to see what frame we want to define the pose for
     const std::string target_link = getInput<std::string>("target_link").value_or("arm0_hand");
+    max_planning_time_ = getInput<float>("planning_timeout").value_or(max_planning_time_);
 
     // Generate the action server goal
     if (backend == "moveit") {
         moveit_msgs::action::MoveGroup::Goal move_group_goal;
         move_group_goal.planning_options.plan_only = false;
         move_group_goal.planning_options.replan = false;
-        move_group_goal.request.allowed_planning_time = getInput<float>("planning_timeout").value_or(max_planning_time_);
+        move_group_goal.request.allowed_planning_time = max_planning_time_;
         move_group_goal.request.max_velocity_scaling_factor = max_velocity_scaling_factor_;
         move_group_goal.request.max_acceleration_scaling_factor = max_acceleration_scaling_factor_;
         move_group_goal.request.goal_constraints.push_back(
@@ -196,7 +197,8 @@ BT::NodeStatus MoveHandToPose::onRunning() {
 
             case rclcpp::FutureReturnCode::TIMEOUT:{
                 const double elapsed_seconds = (now() - request_timestamp_).seconds();
-                if (elapsed_seconds > 2.0){
+                const double network_time_cushion = 0.5;
+                if (elapsed_seconds > (max_planning_time_ + network_time_cushion)){
                     RCLCPP_ERROR(get_logger(), "Timed out waiting for %s action server to respond. Aborting MoveHandToPose behavior", server_name.c_str());
                     onHalted();
                     return BT::NodeStatus::FAILURE;
@@ -227,7 +229,7 @@ BT::NodeStatus MoveHandToPose::onRunning() {
         case action_msgs::msg::GoalStatus::STATUS_EXECUTING:
         {
             const rclcpp::Duration elapsed_time = now() - motion_start_time_;
-            if (elapsed_time.seconds() > 10.0) {
+            if (elapsed_time.seconds() > 15.0) {
                 onHalted();
                 return BT::NodeStatus::FAILURE;
             }
