@@ -2,7 +2,7 @@ import math
 from launch import LaunchDescription
 from launch.conditions import LaunchConfigurationNotEquals
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, IfElseSubstitution, NotEqualsSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node, PushRosNamespace
 
@@ -73,12 +73,12 @@ def generate_launch_description():
         ]
     )
 
-    # Create a lifecycle manager to start AMCL and the Map Server
-    lifecycle_nodes = IfElseSubstitution(
-        NotEqualsSubstitution(LaunchConfiguration('map'), 'none'),
-        if_value='[map_server, amcl]',
-        else_value='[amcl]'
-    )
+    # # Create a lifecycle manager to start AMCL and the Map Server
+    # lifecycle_nodes = IfElseSubstitution(
+    #     NotEqualsSubstitution(LaunchConfiguration('map'), 'none'),
+    #     if_value='[map_server, amcl]',
+    #     else_value='[amcl]'
+    # )
 
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
@@ -87,7 +87,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')},
                     {'autostart': True},
-                    {'node_names': lifecycle_nodes}]
+                    {'node_names': ['map_server', 'amcl']}]
+
     )
 
     return LaunchDescription([

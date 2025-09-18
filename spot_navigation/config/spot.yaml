@@ -127,115 +127,58 @@ spot_nav/controller_server:
     # Progress checker parameters
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.25
+      required_movement_radius: 0.5
       movement_time_allowance: 10.0
     
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.05
-      yaw_goal_tolerance: 0.05
+      xy_goal_tolerance: 0.50
+      yaw_goal_tolerance: 0.1
 
     # DWB parameters
-    # FollowPath:
-    #   plugin: "dwb_core::DWBLocalPlanner"
-    #   debug_trajectory_details: True
-    #   min_vel_x: -0.50
-    #   min_vel_y: -0.20
-    #   max_vel_x: 0.50
-    #   max_vel_y: 0.20
-    #   max_vel_theta: 1.0
-    #   min_speed_xy: 0.2 # Testing this out
-    #   max_speed_xy: 0.50
-    #   min_speed_theta: 0.15
-    #   # Add high threshold velocity for turtlebot 3 issue.
-    #   # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
-    #   acc_lim_x: 1.0
-    #   acc_lim_y: 1.0
-    #   acc_lim_theta: 0.5
-    #   decel_lim_x: -2.5
-    #   decel_lim_y: -2.5
-    #   decel_lim_theta: -3.2
-    #   vx_samples: 15
-    #   vy_samples: 15
-    #   vtheta_samples: 15
-    #   sim_time: 1.7
-    #   linear_granularity: 0.05
-    #   angular_granularity: 0.025
-    #   transform_tolerance: 0.5
-    #   xy_goal_tolerance: 0.15
-    #   trans_stopped_velocity: 0.15
-    #   short_circuit_trajectory_evaluation: False
-    #   stateful: True
-    #   critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-    #   BaseObstacle.scale: 0.02
-    #   PathAlign.scale: 64.0
-    #   PathAlign.forward_point_distance: 0.1
-    #   GoalAlign.scale: 24.0
-    #   GoalAlign.forward_point_distance: 0.1
-    #   PathDist.scale: 32.0
-    #   GoalDist.scale: 24.0
-    #   RotateToGoal.scale: 32.0
-    #   RotateToGoal.slowing_factor: 2.0
-    #   RotateToGoal.lookahead_time: -1.0
-  
     FollowPath:
-      plugin: "nav2_mppi_controller::MPPIController"
-      motion_model: Omni
-
-      time_steps: 56
-      model_dt: 0.05
-      batch_size: 2000
-      vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 0.4
-
-      vx_max: 0.5
-      vx_min: -0.5
-      vy_max: 0.2
-      vy_min: -0.2
-      wz_max: 1.0
-      wz_min: -1.0
-
-      ax_max: 5.0
-      ax_min: -5.0
-      ay_max: 3.0
-      ay_min: -3.0
-      az_max: 3.5
-
-      TrajectoryValidator:
-        plugin: "mppi::DefaultOptimalTrajectoryValidator"
-        collision_lookahead_time: 2.0
-        consider_footprint: true
-
-      # Critic config
-      critics: ["PathFollowCritic", "GoalCritic", "ObstaclesCritic", "GoalAngleCritic", "CostCritic"]
-      PathFollowCritic:
-        enabled: true
-        cost_weight: 1.0
-      GoalCritic:
-        enabled: true
-        cost_weight: 2.0
-      ObstacleCritic:
-        enabled: true
-        cost_weight: 3.0
-        consider_footprint: true
-        cost_scaling_factor: 1.0
-        inflation_radius: 0.25
-      GoalAngleCritic:
-        enabled: true
-        cost_weight: 3.0
-        threshold_to_consider: 0.5
-      CostCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.81
-        critical_cost: 300.0
-        consider_footprint: true
-        collision_cost: 1000000.0
-        near_goal_distance: 1.0
-        trajectory_point_step: 2
-
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: True
+      min_vel_x: -0.50
+      min_vel_y: -0.10
+      max_vel_x: 0.50
+      max_vel_y: 0.10
+      max_vel_theta: 1.0
+      min_speed_xy: 0.2 # Testing this out
+      max_speed_xy: 0.50
+      min_speed_theta: 0.15
+      # Add high threshold velocity for turtlebot 3 issue.
+      # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
+      acc_lim_x: 1.0
+      acc_lim_y: 1.0
+      acc_lim_theta: 0.5
+      decel_lim_x: -2.5
+      decel_lim_y: -2.5
+      decel_lim_theta: -3.2
+      vx_samples: 15
+      vy_samples: 15
+      vtheta_samples: 15
+      sim_time: 1.7
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.5
+      xy_goal_tolerance: 0.15
+      trans_stopped_velocity: 0.15
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 64.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+      
 # controller_server_rclcpp_node:
 #   ros__parameters:
 #     use_sim_time: False
@@ -243,21 +186,21 @@ spot_nav/controller_server:
 spot_nav/local_costmap:
   local_costmap:
     ros__parameters:
-      update_frequency: 5.0
+      update_frequency: 7.0    # Original: 5.0 Hz
       publish_frequency: 2.0
       global_frame: spot_nav/map
       robot_base_frame: base_footprint
       use_sim_time: False
       rolling_window: true
-      width: 3
-      height: 3
+      width: 5   # Original: 3
+      height: 5  # Original: 3
       resolution: 0.05
       footprint: "[[0.52, 0.25], [0.52, -0.25], [-0.52, -0.25], [-0.52, 0.25]]"
       plugins: ["obstacle_layer", "inflation_layer"] # voxel_layer
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
-        inflation_radius: 0.5
+        cost_scaling_factor: 0.6   # Original: 1.0
+        inflation_radius: 0.35     # Original: 0.5m
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -353,8 +296,8 @@ spot_nav/global_costmap:
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 6.0
-        inflation_radius: 0.50
+        cost_scaling_factor: 4.0  # Original: 6.0
+        inflation_radius: 0.25   # Original: 0.5m
       always_send_full_costmap: True
   global_costmap_client:
     ros__parameters:
