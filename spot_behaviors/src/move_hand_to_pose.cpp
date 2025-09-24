@@ -135,13 +135,8 @@ BT::NodeStatus MoveHandToPose::onStart() {
             move_group_goal.request.planner_id = planner;
         }
 
-        // LIN planner often fails at high velocities
-        if (move_group_goal.request.pipeline_id == "pilz_industrial_motion_planner" && move_group_goal.request.planner_id == "LIN") {
-            move_group_goal.request.max_velocity_scaling_factor = std::max(move_group_goal.request.max_velocity_scaling_factor, 0.2);
-        }
-
         // Request the motion
-        RCLCPP_INFO(get_logger(), "Sending move group goal to action server");
+        RCLCPP_INFO(get_logger(), "Sending move group goal to action server [%s]", move_group_goal.request.pipeline_id.c_str());
         move_group_response_future_ = move_group_action_client_->async_send_goal(move_group_goal);
         request_timestamp_ = move_group_goal.request.workspace_parameters.header.stamp;
 
