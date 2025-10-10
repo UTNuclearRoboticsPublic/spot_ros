@@ -38,17 +38,17 @@ FROM spot_sdk AS spot_ros
 RUN apt update && apt install -y \
         ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
         git \
-        jq \
-        openssh-client
+        jq 
+        # openssh-client
 
 # Add GitHub's key to known_hosts to prevent interactive prompt
-RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
+# RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 
 WORKDIR /colcon_ws/src
-RUN git clone -b devel https://github.com/UTNuclearRoboticsPublic/spot_ros.git
-RUN git clone -b devel https://github.com/UTNuclearRoboticsPublic/spot_manipulation.git
+COPY ./spot_core ./spot_core
+COPY ./spot_manipulation ./spot_manipulation
 
-RUN python3 -m pip install -r spot_ros/requirements.txt yq
+RUN python3 -m pip install -r ./spot_core/requirements.txt yq
 
 WORKDIR /colcon_ws
 RUN rosdep update \
@@ -61,7 +61,7 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 ENV ROS_DISTRO=${ROS_DISTRO}
 
-ADD entrypoints /entrypoints
+ADD ./docker/entrypoints /entrypoints
 RUN chmod +x /entrypoints/*
 
 CMD ["bash"]

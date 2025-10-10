@@ -1,3 +1,6 @@
 [submodule "spot_driver/doc/clearpath-sphinx-theme"]
 	path = spot_driver/doc/clearpath-sphinx-theme
 	url = http://github.com/clearpath-docs/clearpath-sphinx-theme.git
+[submodule "spot_manipulation"]
+	path = spot_manipulation
+	url = git@github.com:UTNuclearRoboticsPublic/spot_manipulation.git
