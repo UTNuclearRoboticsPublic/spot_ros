@@ -45,6 +45,7 @@
 #include "spot_behaviors/get_spot_ik.hpp"
 #include "spot_behaviors/toggle_payload.hpp"
 #include "spot_behaviors/get_images.hpp"
+#include "spot_behaviors/get_gripper_holding_state.hpp"
 
 namespace spot_behaviors {
 
@@ -53,6 +54,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
         throw std::runtime_error("Cannot register spot behaviors will a null pointer to tf_buffer!");
     }
 
+    factory.registerNodeType<GetGripperHoldingState>("GetGripperHoldingState");
     factory.registerNodeType<GetImages>("GetImages");
 
     // Register all of the behaviors in the package
