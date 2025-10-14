@@ -20,24 +20,55 @@ GetGripperHoldingState::GetGripperHoldingState(const std::string &name, const BT
 
 BT::PortsList GetGripperHoldingState::providedPorts() {
   return {
+      BT::InputPort<bool>("timeout_secs"),
       BT::OutputPort<bool>("is_holding")
   };
 }
 
 BT::NodeStatus GetGripperHoldingState::tick() {
+    // Retrieve optional timeout parameter
+    BT::Expected<double> timeout_exp = getInput<double>("timeout_secs");
+    double timeout_sec = default_timeout_sec_;
 
-  // Refresh ROS and get the holding state
-  rclcpp::spin_some(node_);
+    if (!timeout_exp) {
+        RCLCPP_WARN(
+            node_->get_logger(),
+            "Timeout not specified to GetGripperHoldingState behavior. Using default %.2f s.",
+            default_timeout_sec_
+        );
+    } else {
+        timeout_sec = timeout_exp.value();
+    }
 
-  if (!gripper_state_received_) {
-    RCLCPP_WARN(node_->get_logger(),
-                "No gripper state received yet from topic %s. Could be due to network delay.", gripper_state_topic_name_);
-    return BT::NodeStatus::FAILURE;
-  }
+    // Define timeout and rate
+    const rclcpp::Time start_time = node_->now();
+    const rclcpp::Duration timeout_duration = rclcpp::Duration::from_seconds(timeout_sec);
+    rclcpp::Rate rate(20.0);  // 20 Hz = 50 ms loop period
 
+    // Refresh until timeout or gripper begins holding
+    while (rclcpp::ok() && (node_->now() - start_time < timeout_duration)) {
+        rclcpp::spin_some(node_);
 
-  setOutput("is_holding", is_holding_);
-  return BT::NodeStatus::SUCCESS;
+        if (gripper_state_received_ && is_holding_) {
+            break;
+        }
+
+        rate.sleep();
+    }
+
+    // If no message was ever received, fail
+    if (!gripper_state_received_) {
+        RCLCPP_WARN(
+            node_->get_logger(),
+            "Timeout (%.2f s) waiting for gripper holding state from topic '%s'.",
+            timeout_sec, gripper_state_topic_name_.c_str()
+        );
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // Otherwise, output the current state (true or false)
+    setOutput("is_holding", is_holding_);
+    return BT::NodeStatus::SUCCESS;
 }
 
 } // namespace spot_behaviors

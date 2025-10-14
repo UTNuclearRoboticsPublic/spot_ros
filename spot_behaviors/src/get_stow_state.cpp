@@ -20,25 +20,58 @@ GetStowState::GetStowState(const std::string &name, const BT::NodeConfig &config
 
 BT::PortsList GetStowState::providedPorts() {
   return {
+      BT::InputPort<bool>("timeout_secs"),
       BT::OutputPort<bool>("is_stowed")
   };
 }
 
 BT::NodeStatus GetStowState::tick() {
+    // Retrieve optional timeout parameter
+    BT::Expected<double> timeout_exp = getInput<double>("timeout_secs");
+    double timeout_sec = default_timeout_sec_;
 
-  // Refresh ROS and get the stowed state
-  rclcpp::spin_some(node_);
+    if (!timeout_exp) {
+        RCLCPP_WARN(
+            node_->get_logger(),
+            "Timeout not specified to GetStowState behavior. Using default %.2f s.",
+            default_timeout_sec_
+        );
+    } else {
+        timeout_sec = timeout_exp.value();
+    }
 
-  if (!stow_state_received_) {
-    RCLCPP_WARN(node_->get_logger(),
-                "No stow state received yet from topic %s. Could be due to network delay.", stow_state_topic_name_);
-    return BT::NodeStatus::FAILURE;
-  }
+    // Define timeout and rate
+    const rclcpp::Time start_time = node_->now();
+    const rclcpp::Duration timeout_duration = rclcpp::Duration::from_seconds(timeout_sec);
+    rclcpp::Rate rate(20.0);  // 20 Hz = 50 ms loop period
 
+    // Refresh until timeout or stowed
+    while (rclcpp::ok() && (node_->now() - start_time < timeout_duration)) {
+        rclcpp::spin_some(node_);
 
-  setOutput("is_stowed", is_stowed_);
-  return BT::NodeStatus::SUCCESS;
+        if (stow_state_received_ && is_stowed_) {
+	    break;
+        }
+
+        rate.sleep();
+    }
+
+    // Timeout reached
+    if (!stow_state_received_) {
+        RCLCPP_WARN(
+            node_->get_logger(),
+            "Timeout (%.2f s) waiting for stow state from topic '%s'.",
+            timeout_sec, stow_state_topic_name_.c_str()
+        );
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // We received updates
+    setOutput("is_stowed", is_stowed_);
+    return BT::NodeStatus::SUCCESS;
+
 }
+
 
 } // namespace spot_behaviors
 

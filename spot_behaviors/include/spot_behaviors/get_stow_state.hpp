@@ -27,6 +27,9 @@ public:
   /**
    * @brief Defines the ports used by this node.
    *
+   * **Input port:**  
+   * `timeout_secs` (`double`) — Optional timeout to read the state in seconds.
+   *
    * **Output port:**  
    * `is_stowed` (`bool`) — True if the arm is stowed.
    *
@@ -46,6 +49,7 @@ private:
   static constexpr const char* stow_state_topic_name_ = "/spot_manipulation_driver/manipulator_state/stow_state";
   bool is_stowed_ = false; ///< Whether the arm is stowed
   bool stow_state_received_ = false; ///< Whether subscription was successful
+  double default_timeout_sec_ = 1.0; ///< How long to read the state
 
 
 };

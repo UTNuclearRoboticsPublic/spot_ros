@@ -27,6 +27,9 @@ public:
   /**
    * @brief Defines the ports used by this node.
    *
+   * **Input port:**  
+   * `timeout_secs` (`double`) — Optional timeout to read the state in seconds.
+   *
    * **Output port:**  
    * `is_holding` (`bool`) — True if the gripper is holding an object.
    *
@@ -46,6 +49,7 @@ private:
   static constexpr const char* gripper_state_topic_name_ = "/spot_manipulation_driver/manipulator_state/is_gripper_carrying_item";
   bool is_holding_ = false; ///< Whether the gripper is holding something
   bool gripper_state_received_ = false; ///< Whether subscription was successful
+  double default_timeout_sec_ = 1.0; ///< How long to read the state
 
 
 };
