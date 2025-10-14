@@ -61,7 +61,7 @@ BT::NodeStatus GetGripperHoldingState::tick() {
         RCLCPP_WARN(
             node_->get_logger(),
             "Timeout (%.2f s) waiting for gripper holding state from topic '%s'.",
-            timeout_sec, gripper_state_topic_name_.c_str()
+            timeout_sec, gripper_state_topic_name_
         );
         return BT::NodeStatus::FAILURE;
     }

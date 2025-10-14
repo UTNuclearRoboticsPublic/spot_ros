@@ -61,7 +61,7 @@ BT::NodeStatus GetStowState::tick() {
         RCLCPP_WARN(
             node_->get_logger(),
             "Timeout (%.2f s) waiting for stow state from topic '%s'.",
-            timeout_sec, stow_state_topic_name_.c_str()
+            timeout_sec, stow_state_topic_name_
         );
         return BT::NodeStatus::FAILURE;
     }
