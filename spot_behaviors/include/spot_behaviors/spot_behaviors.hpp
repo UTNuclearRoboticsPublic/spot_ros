@@ -54,6 +54,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
         throw std::runtime_error("Cannot register spot behaviors will a null pointer to tf_buffer!");
     }
 
+    factory.registerNodeType<GetStowState>("GetStowState");
     factory.registerNodeType<GetGripperHoldingState>("GetGripperHoldingState");
     factory.registerNodeType<GetImages>("GetImages");
 

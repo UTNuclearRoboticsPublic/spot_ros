@@ -40,6 +40,7 @@ add_library(${PROJECT_NAME} SHARED
   src/toggle_payload.cpp
   src/get_images.cpp
   src/get_gripper_holding_state.cpp
+  src/get_stow_state.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp

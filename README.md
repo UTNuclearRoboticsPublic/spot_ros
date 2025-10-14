@@ -138,6 +138,7 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
 | `GetImages` | `camera_names` | `image_list` | Get images from requested cameras. Xml Example: `<GetImages camera_names='LEFT; RIGHT' image_list="{image_list}" />` | 
 | `GetGripperHoldingState` | --- | `is_holding` | Query whether the gripper is holding something. Xml Example: `<GetGripperHoldingState is_holding="{is_holding}" />` | 
+| `GetStowState` | --- | `is_stowed` | Query whether the arm is stowed. Xml Example: `<GetStowState is_stowed="{is_stowed}" />` | 
 
 # Proprietary Mesh Usage
 If you have access to NRG’s private [spot_proprietary](https://github.com/UTNuclearRobotics/spot_proprietary.git) repository, clone and build it to enable higher-fidelity meshes for Spot. These meshes can be activated by passing the launch argument `use_proprietary_meshes:=True` when launching Spot bringup or loading the robot description. Alternatively, if you have your own higher-fidelity meshes for the arm and accessories (e.g., EAP, EAP2, RL Kit), you can use them by placing them in a separate ROS package—such as `spot_proprietary_description`—with the following structure:
