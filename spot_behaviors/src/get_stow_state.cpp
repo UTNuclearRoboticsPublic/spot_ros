@@ -20,7 +20,7 @@ GetStowState::GetStowState(const std::string &name, const BT::NodeConfig &config
 
 BT::PortsList GetStowState::providedPorts() {
   return {
-      BT::InputPort<bool>("timeout_secs"),
+      BT::InputPort<double>("timeout_secs"),
       BT::OutputPort<bool>("is_stowed")
   };
 }
