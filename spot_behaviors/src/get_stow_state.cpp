@@ -67,6 +67,10 @@ BT::NodeStatus GetStowState::tick() {
     }
 
     // We received updates
+    RCLCPP_INFO(
+      node_->get_logger(),
+      is_stowed_ ? "Arm is stowed." : "Arm is not stowed."
+    );
     setOutput("is_stowed", is_stowed_);
     return BT::NodeStatus::SUCCESS;
 

@@ -67,6 +67,10 @@ BT::NodeStatus GetGripperHoldingState::tick() {
     }
 
     // Otherwise, output the current state (true or false)
+    RCLCPP_INFO(
+      node_->get_logger(),
+      is_holding_ ? "Gripper is holding something." : "Gripper is not holding anything."
+    );
     setOutput("is_holding", is_holding_);
     return BT::NodeStatus::SUCCESS;
 }
