@@ -8,11 +8,11 @@ GetStowState::GetStowState(const std::string &name, const BT::NodeConfig &config
   node_ = rclcpp::Node::make_shared(name);
 
   // Subscribe to the stow state topic
-  stow_state_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+  stow_state_sub_ = node_->create_subscription<spot_msgs::msg::ManipulatorStowState>(
   stow_state_topic_name_,
   10,
-  [this](const std_msgs::msg::Bool::SharedPtr msg) {
-    is_stowed_ = msg->data;
+  [this](const spot_msgs::msg::ManipulatorStowState::SharedPtr msg) {
+    is_stowed_ = (msg->state == spot_msgs::msg::ManipulatorStowState::STOWSTATE_STOWED);
     stow_state_received_ = true;
   });
 

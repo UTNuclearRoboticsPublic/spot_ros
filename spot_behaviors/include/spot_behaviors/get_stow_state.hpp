@@ -9,6 +9,7 @@
 #include <behaviortree_cpp/action_node.h>
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
+#include <spot_msgs/msg/manipulator_stow_state.hpp>
 
 namespace spot_behaviors {
 
@@ -45,7 +46,7 @@ public:
 
 private:
   std::shared_ptr<rclcpp::Node> node_; ///< ROS node handle.
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stow_state_sub_; ///< Subscriber to the stow state
+  rclcpp::Subscription<spot_msgs::msg::ManipulatorStowState>::SharedPtr stow_state_sub_; ///< Subscriber to the stow state
   static constexpr const char* stow_state_topic_name_ = "/spot_manipulation_driver/manipulator_state/stow_state";
   bool is_stowed_ = false; ///< Whether the arm is stowed
   bool stow_state_received_ = false; ///< Whether subscription was successful
