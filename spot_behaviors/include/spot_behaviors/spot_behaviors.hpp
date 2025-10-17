@@ -66,16 +66,16 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(CheckHandCollision);
     REGSITER_SPOT_BEHAVIOR(DockRobot);
     REGSITER_SPOT_BEHAVIOR(MoveHandThroughPoses);
-    // REGSITER_SPOT_BEHAVIOR(MoveHandToPose);
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
     REGSITER_SPOT_BEHAVIOR(GetSpotIK);
     REGSITER_SPOT_BEHAVIOR(TogglePayload);
+    factory.registerNodeType<MoveHandToPose>("MoveSpotHandToPose", tf_buffer);
 
     // A manifest of subtrees and their requirements
     static const std::map<std::string, std::vector<std::string>> subtree_requirements{
-        {"safely_stow_arm.xml" , {"MoveHandToPose", "TriggerService", "CheckArmStowed"}},
+        {"safely_stow_arm.xml" , {"MoveSpotHandToPose", "TriggerService", "CheckArmStowed"}},
         {"move_to.xml"         , {"NavigateToPose", "WalkToPose"}},
-        {"move_hand_exact.xml" , {"MoveHandToPose"}}
+        {"move_hand_exact.xml" , {"MoveSpotHandToPose"}}
     };
 
     // Register all the sub-trees in the package
