@@ -20,15 +20,15 @@ namespace spot_navigation {
 
 class PointcloudFilterComponent : public rclcpp::Node {
 public:
-    PointcloudFilterComponent(const rclcpp::NodeOptions& opts) :
-    Node("spot_pointcloud_filter_component", opts),
+    PointcloudFilterComponent(rclcpp::NodeOptions opts = rclcpp::NodeOptions{}) :
+    Node("spot_pointcloud_filter", opts),
     tf_buffer(get_clock()),
     tf_listener(tf_buffer)
     {
         // Parameterize the bounding box bounds, with the default value covering only the arm
         const std::string sensor_frame = declare_parameter("sensor_frame", "velodyne");
-        const std::vector<double> bounding_box_min = declare_parameter("bounding_box_min_in_body", std::vector<double>({-0.20, -0.10, 0.10}));
-        const std::vector<double> bounding_box_max = declare_parameter("bounding_box_max_in_body", std::vector<double>({ 0.65,  0.10, 0.40}));
+        const std::vector<double> bounding_box_min = declare_parameter("bounding_box_min_in_body", std::vector<double>({-0.20, -0.30, -0.50}));
+        const std::vector<double> bounding_box_max = declare_parameter("bounding_box_max_in_body", std::vector<double>({ 0.65,  0.30, 0.40}));
         bounding_box.x_min = bounding_box_min.at(0);
         bounding_box.y_min = bounding_box_min.at(1);
         bounding_box.z_min = bounding_box_min.at(2);
@@ -42,11 +42,11 @@ public:
                 sensor_frame,
                 "body",
                 tf2::TimePointZero,
-                std::chrono::seconds(5)
+                std::chrono::seconds(20)  // extra time for ouster to get online
             );
 
-            if (sensor_tform_body.transform.rotation.w < 0.95) {
-                RCLCPP_ERROR(get_logger(), "Your lidar is not aligned with your robot. This code wasn't meant for that.");
+            if (std::abs(sensor_tform_body.transform.rotation.w) < 0.95) {
+                RCLCPP_ERROR(get_logger(), "Your lidar frame %s is not aligned with your robot. This code wasn't meant for that", sensor_frame.c_str());
                 exit(1);
             }
 
@@ -58,13 +58,14 @@ public:
             bounding_box.z_max += sensor_tform_body.transform.translation.z;
         } catch (tf2::TransformException& e) {
             RCLCPP_ERROR(get_logger(), e.what());
+            exit(1);
         }
 
         using namespace std::placeholders;
         rclcpp::SubscriptionOptions sub_opts;
         sub_opts.use_intra_process_comm = rclcpp::IntraProcessSetting::Enable;
         pointcloud_pub = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_out", 10);
-        pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", rclcpp::SensorDataQoS{}, 
+        pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
         RCLCPP_INFO(get_logger(), "Spot pointcloud filter online");
@@ -133,5 +134,17 @@ private:
 
 } // namespace spot_navigation
 
+#ifdef COMPILE_AS_COMPONENT
 #include <rclcpp_components/register_node_macro.hpp>
 RCLCPP_COMPONENTS_REGISTER_NODE(spot_navigation::PointcloudFilterComponent);
+#endif
+
+#if COMPILE_AS_NODE
+int main(int argc, char* argv[]) {
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<spot_navigation::PointcloudFilterComponent>();
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}
+#endif
