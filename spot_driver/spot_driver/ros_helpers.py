@@ -322,11 +322,11 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
         lease_manager.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)
         return Image(), CameraInfo(), tf_msg
 
-    camera_info_msg = CameraInfo(d=[0]*5,
+    camera_info_msg = CameraInfo(d=[0.0]*5,
                                  distortion_model="plumb_bob",
-                                 k=[0,0,0,0,0,0,0,0,1],
-                                 r=[1,0,0,0,1,0,0,0,1],
-                                 p=[0,0,0,0,0,0,0,0,0,0,1,0])
+                                 k=[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0],
+                                 r=[1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0],
+                                 p=[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0])
 
     local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
     camera_info_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
