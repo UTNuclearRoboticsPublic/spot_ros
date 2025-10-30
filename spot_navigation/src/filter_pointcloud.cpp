@@ -29,7 +29,7 @@ public:
         // Parameterize the bounding box bounds, with the default value covering only the arm
         const std::string sensor_frame = declare_parameter("sensor_frame", "velodyne");
         const std::vector<double> bounding_box_min = declare_parameter("bounding_box_min_in_body", std::vector<double>({-0.20, -0.30, -0.50}));
-        const std::vector<double> bounding_box_max = declare_parameter("bounding_box_max_in_body", std::vector<double>({ 0.65,  0.30, 0.40}));
+        const std::vector<double> bounding_box_max = declare_parameter("bounding_box_max_in_body", std::vector<double>({ 0.80,  0.30, 0.32}));
         bounding_box.x_min = bounding_box_min.at(0);
         bounding_box.y_min = bounding_box_min.at(1);
         bounding_box.z_min = bounding_box_min.at(2);

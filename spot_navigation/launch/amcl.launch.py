@@ -44,7 +44,7 @@ def generate_launch_description():
             {"angle_max":  math.pi},
             {"angle_increment": math.radians(1.0)},
             {"target_frame": "base_footprint"},
-            {"min_height": 0.20},
+            {"min_height": 0.40},
             {"max_height": 1.5}
         ],
         remappings=[
