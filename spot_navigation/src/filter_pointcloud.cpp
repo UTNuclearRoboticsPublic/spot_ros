@@ -6,6 +6,7 @@
 #include <rcpputils/endian.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 
 struct BoundingBox {
     double x_min{};
@@ -68,7 +69,29 @@ public:
         pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
+        region_marker_pub = create_publisher<visualization_msgs::msg::Marker>("~/exclusion_region", rclcpp::QoS(1).transient_local());
+        publishRegionVisualization(sensor_frame);
+
         RCLCPP_INFO(get_logger(), "Spot pointcloud filter online");
+    }
+
+    void publishRegionVisualization(const std::string sensor_frame) {
+        visualization_msgs::msg::Marker region_marker;
+
+        region_marker.action = region_marker.ADD;
+        region_marker.color.a = 0.2f;
+        region_marker.color.g = 1.0f;
+        region_marker.type = region_marker.CUBE;
+        region_marker.scale.x = bounding_box.x_max - bounding_box.x_min;
+        region_marker.scale.y = bounding_box.y_max - bounding_box.y_min;
+        region_marker.scale.z = bounding_box.z_max - bounding_box.z_min;
+        region_marker.header.frame_id = sensor_frame;
+        region_marker.frame_locked = true;
+        region_marker.pose.position.x = 0.5*(bounding_box.x_min + bounding_box.x_max);
+        region_marker.pose.position.y = 0.5*(bounding_box.y_min + bounding_box.y_max);
+        region_marker.pose.position.z = 0.5*(bounding_box.z_min + bounding_box.z_max);
+
+        region_marker_pub->publish(region_marker);
     }
 
     void filterPointcloud(sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud) {
@@ -127,6 +150,7 @@ private:
     tf2_ros::Buffer tf_buffer;
     tf2_ros::TransformListener tf_listener;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr region_marker_pub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub;
 
     BoundingBox bounding_box;
