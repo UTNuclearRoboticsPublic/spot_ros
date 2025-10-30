@@ -176,7 +176,11 @@ def generate_launch_description():
     image_publisher_include = Node(
         package='spot_driver',
         executable='image_server',
-        parameters=[LaunchConfiguration('image_config')]
+        parameters=[
+            {'hostname': LaunchConfiguration('hostname'),
+             'image_config': LaunchConfiguration('image_config')
+             }
+        ]
     )
 
     # State publisher
