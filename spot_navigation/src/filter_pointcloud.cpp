@@ -6,7 +6,7 @@
 #include <rcpputils/endian.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 struct BoundingBox {
     double x_min{};
@@ -17,6 +17,38 @@ struct BoundingBox {
     double z_max{};
 };
 
+consteval auto generateBoundingBoxes() {
+    // All bounding boxes are defined in the body frame
+    BoundingBox body_bounding_box {
+        .x_min = -0.20,
+        .x_max =  0.80,
+        .y_min = -0.30,
+        .y_max =  0.30,
+        .z_min = -0.50,
+        .z_max =  0.15
+    };
+
+    BoundingBox arm_bounding_box {
+        .x_min =  0.00,
+        .x_max =  0.70,
+        .y_min = -0.15,
+        .y_max =  0.15,
+        .z_min =  0.00,
+        .z_max =  0.32
+    };
+
+    BoundingBox stray_point_box {
+        .x_min =  0.60,
+        .x_max =  1.50,
+        .y_min = -0.25,
+        .y_max =  0.25,
+        .z_min = -0.57,
+        .z_max = -0.30
+    };
+
+    return std::array{body_bounding_box, arm_bounding_box, stray_point_box};
+}
+
 namespace spot_navigation {
 
 class PointcloudFilterComponent : public rclcpp::Node {
@@ -26,16 +58,7 @@ public:
     tf_buffer(get_clock()),
     tf_listener(tf_buffer)
     {
-        // Parameterize the bounding box bounds, with the default value covering only the arm
         const std::string sensor_frame = declare_parameter("sensor_frame", "velodyne");
-        const std::vector<double> bounding_box_min = declare_parameter("bounding_box_min_in_body", std::vector<double>({-0.20, -0.30, -0.50}));
-        const std::vector<double> bounding_box_max = declare_parameter("bounding_box_max_in_body", std::vector<double>({ 0.80,  0.30, 0.32}));
-        bounding_box.x_min = bounding_box_min.at(0);
-        bounding_box.y_min = bounding_box_min.at(1);
-        bounding_box.z_min = bounding_box_min.at(2);
-        bounding_box.x_max = bounding_box_max.at(0);
-        bounding_box.y_max = bounding_box_max.at(1);
-        bounding_box.z_max = bounding_box_max.at(2);
 
         // We assume that the lidar is fixed relative to the body and is aligned with the body
         try {
@@ -51,12 +74,14 @@ public:
                 exit(1);
             }
 
-            bounding_box.x_min += sensor_tform_body.transform.translation.x;
-            bounding_box.x_max += sensor_tform_body.transform.translation.x;
-            bounding_box.y_min += sensor_tform_body.transform.translation.y;
-            bounding_box.y_max += sensor_tform_body.transform.translation.y;
-            bounding_box.z_min += sensor_tform_body.transform.translation.z;
-            bounding_box.z_max += sensor_tform_body.transform.translation.z;
+            for (BoundingBox& bbox : bounding_boxes) {
+                bbox.x_min += sensor_tform_body.transform.translation.x;
+                bbox.x_max += sensor_tform_body.transform.translation.x;
+                bbox.y_min += sensor_tform_body.transform.translation.y;
+                bbox.y_max += sensor_tform_body.transform.translation.y;
+                bbox.z_min += sensor_tform_body.transform.translation.z;
+                bbox.z_max += sensor_tform_body.transform.translation.z;
+            }
         } catch (tf2::TransformException& e) {
             RCLCPP_ERROR(get_logger(), e.what());
             exit(1);
@@ -69,29 +94,35 @@ public:
         pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
-        region_marker_pub = create_publisher<visualization_msgs::msg::Marker>("~/exclusion_region", rclcpp::QoS(1).transient_local());
+        region_marker_pub = create_publisher<visualization_msgs::msg::MarkerArray>("~/exclusion_region", rclcpp::QoS(1).transient_local());
         publishRegionVisualization(sensor_frame);
 
         RCLCPP_INFO(get_logger(), "Spot pointcloud filter online");
     }
 
     void publishRegionVisualization(const std::string sensor_frame) {
+        visualization_msgs::msg::MarkerArray marker_array;
         visualization_msgs::msg::Marker region_marker;
 
         region_marker.action = region_marker.ADD;
         region_marker.color.a = 0.2f;
         region_marker.color.g = 1.0f;
-        region_marker.type = region_marker.CUBE;
-        region_marker.scale.x = bounding_box.x_max - bounding_box.x_min;
-        region_marker.scale.y = bounding_box.y_max - bounding_box.y_min;
-        region_marker.scale.z = bounding_box.z_max - bounding_box.z_min;
-        region_marker.header.frame_id = sensor_frame;
         region_marker.frame_locked = true;
-        region_marker.pose.position.x = 0.5*(bounding_box.x_min + bounding_box.x_max);
-        region_marker.pose.position.y = 0.5*(bounding_box.y_min + bounding_box.y_max);
-        region_marker.pose.position.z = 0.5*(bounding_box.z_min + bounding_box.z_max);
+        region_marker.type = region_marker.CUBE;
+        region_marker.header.frame_id = sensor_frame;
 
-        region_marker_pub->publish(region_marker);
+        for (const BoundingBox& bbox : bounding_boxes) {
+            region_marker.scale.x = bbox.x_max - bbox.x_min;
+            region_marker.scale.y = bbox.y_max - bbox.y_min;
+            region_marker.scale.z = bbox.z_max - bbox.z_min;
+            region_marker.pose.position.x = 0.5*(bbox.x_min + bbox.x_max);
+            region_marker.pose.position.y = 0.5*(bbox.y_min + bbox.y_max);
+            region_marker.pose.position.z = 0.5*(bbox.z_min + bbox.z_max);
+            marker_array.markers.push_back(region_marker);
+            region_marker.id++;
+        }
+
+        region_marker_pub->publish(marker_array);
     }
 
     void filterPointcloud(sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud) {
@@ -136,8 +167,15 @@ public:
                 std::reverse(reinterpret_cast<std::byte*>(&y), reinterpret_cast<std::byte*>(&y) + sizeof(float));
                 std::reverse(reinterpret_cast<std::byte*>(&z), reinterpret_cast<std::byte*>(&z) + sizeof(float));
             }
-                
-            if (x < bounding_box.x_max && x > bounding_box.x_min && y < bounding_box.y_max && y > bounding_box.y_min && z < bounding_box.z_max && z > bounding_box.z_min) continue;
+            
+            bool accept_point = true;
+            for (const BoundingBox& bbox : bounding_boxes) {
+                if (x < bbox.x_max && x > bbox.x_min && y < bbox.y_max && y > bbox.y_min && z < bbox.z_max && z > bbox.z_min) {
+                    accept_point = false;
+                    break;
+                }
+            }
+            if (!accept_point) continue;
             new_size++;
             filtered_cloud->data.insert(filtered_cloud->data.end(), data_ptr, std::next(data_ptr, pointcloud->point_step));
         }
@@ -150,10 +188,10 @@ private:
     tf2_ros::Buffer tf_buffer;
     tf2_ros::TransformListener tf_listener;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr region_marker_pub;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr region_marker_pub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub;
 
-    BoundingBox bounding_box;
+    std::array<BoundingBox, 3> bounding_boxes = generateBoundingBoxes();
 };
 
 } // namespace spot_navigation
