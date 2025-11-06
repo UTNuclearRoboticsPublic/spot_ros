@@ -21,6 +21,6 @@
     # (optional) list of tags
     # If defined, 'frames' and 'sizes' must have the same length as 'ids'.
     tag:
-      ids:    [7]         # tag IDs for which to publish transform
-      frames: [affordance_frame]   # frame names
-      sizes:  [0.057]     # tag-specific edge size, overrides the default 'size'
+      ids:    [7, 0]         # tag IDs for which to publish transform
+      frames: [affordance_frame, trashcan_frame]   # frame names
+      sizes:  [0.057, 0.055]     # tag-specific edge size, overrides the default 'size'
