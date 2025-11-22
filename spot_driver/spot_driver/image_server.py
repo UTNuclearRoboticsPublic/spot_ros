@@ -29,10 +29,10 @@ from .type_hint_helpers import *
 
 """ Class for managing camera publishing """
 class CameraPub():
-    def __init__(self, parent: SpotImageServer, namespace: str):
+    def __init__(self, parent: SpotImageServer, namespace: str, rate: int = 1):
         self.parent = parent
-        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
-        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
+        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', rate)
+        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', rate)
         self.lease_manager = parent.lease_manager
 
     def process_data(self, data: ImageResponseProto):
@@ -92,7 +92,7 @@ class SpotImageServer(Node):
             depth_rate = self.params.rates.get_entry(image_source).depth
 
             if rgb_rate > 0:
-                self.camera_pubs[rgb_source] = CameraPub(self, 'rgb/' + image_source)
+                self.camera_pubs[rgb_source] = CameraPub(self, 'rgb/' + image_source, rgb_rate)
                 self.callback_groups.append(MutuallyExclusiveCallbackGroup())
                 self.publish_timers.append(
                     self.create_timer(1/rgb_rate, lambda source=rgb_source: self.update_image_task(source), callback_group=self.callback_groups[-1])
@@ -100,7 +100,7 @@ class SpotImageServer(Node):
                 self.get_logger().info(f'Publishing to rgb/{image_source} at {rgb_rate} Hz')
 
             if depth_rate > 0:
-                self.camera_pubs[depth_source] = CameraPub(self, 'depth/' + image_source)
+                self.camera_pubs[depth_source] = CameraPub(self, 'depth/' + image_source, depth_rate)
                 self.callback_groups.append(MutuallyExclusiveCallbackGroup())
                 self.publish_timers.append(
                     self.create_timer(1/depth_rate, lambda source=depth_source: self.update_image_task(source), callback_group=self.callback_groups[-1])
@@ -239,7 +239,6 @@ class SpotImageServer(Node):
 
         if unique_transforms:
             self.static_tf_broadcaster.sendTransform(unique_transforms)
-            self.get_logger().info(f'Camera static transforms broadcasted ({len(unique_transforms)} unique frames)')
         else:
             self.get_logger().warn('No static camera transforms found to broadcast')
 
