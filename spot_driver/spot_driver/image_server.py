@@ -36,7 +36,11 @@ class CameraPub():
         self.lease_manager = parent.lease_manager
 
     def process_data(self, data: ImageResponseProto):
-        if self.image_pub.get_subscription_count() > 0:
+        # Publish both if either image or camera info has subscribers (necessary for nodes like Apriltag)
+        has_subscribers = (self.image_pub.get_subscription_count() > 0 or 
+                          self.info_pub.get_subscription_count() > 0)
+        
+        if has_subscribers:
             image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
             self.image_pub.publish(image_msg)
             self.info_pub.publish(camera_info_msg)
