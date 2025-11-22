@@ -24,15 +24,15 @@ spot_driver_parameters:
   rates:
     __map_image_sources:
       rgb:
-        type: double
+        type: int
         description: The rate to publish color images from this source. Set to zero to disable continous publishing
-        default_value: 1.0
+        default_value: 1
         validation:
-          gt_eq<>: 0.0
+          gt_eq<>: 0
 
       depth:
-        type: double
+        type: int
         description: The rate to publish depth images from this source. Set to zero to disable continous publishing 
-        default_value: 1.0
+        default_value: 1
         validation:
-          gt_eq<>: 0.0
+          gt_eq<>: 0
