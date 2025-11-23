@@ -2,23 +2,23 @@ spot_image_server:
   ros__parameters:
     rates:
       frontleft:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
       frontright:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
       left:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
       right:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
       back:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
       hand_rgb:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
       hand_tof:
-        rgb: 0
-        depth: 0
+        rgb: 0.0
+        depth: 0.0
