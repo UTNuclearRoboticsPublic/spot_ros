@@ -5,6 +5,7 @@ from asyncio import Future, InvalidStateError
 
 import rclpy
 import rclpy.logging
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.node import Node
 from rclpy.timer import Timer
 from rclpy.time import Time
@@ -31,9 +32,9 @@ from .type_hint_helpers import *
 class CameraPub():
     def __init__(self, parent: SpotImageServer, namespace: str, rate: int = 1):
         self.parent = parent
-        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', rate)
-        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', rate)
         self.lease_manager = parent.lease_manager
+        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', qos_profile=qos_profile_sensor_data) # BEST_EFFORT reliability
+        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace + '/camera_info', qos_profile=qos_profile_sensor_data)
 
     def process_data(self, data: ImageResponseProto):
         # Publish both if either image or camera info has subscribers (necessary for nodes like Apriltag)
