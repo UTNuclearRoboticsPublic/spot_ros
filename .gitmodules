@@ -6,4 +6,4 @@
 	url = git@github.com:UTNuclearRoboticsPublic/spot_manipulation.git
 [submodule "coral_spot_pack"]
 	path = coral_spot_pack
-	url = git@github.com:swanbeck/coral_spot_pack.git
+	url = git@github.com:UTNuclearRobotics/coral_spot_pack.git

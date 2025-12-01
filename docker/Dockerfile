@@ -51,6 +51,7 @@ COPY ./spot_manipulation ./spot_manipulation
 RUN python3 -m pip install -r ./spot_core/requirements.txt yq
 
 WORKDIR /colcon_ws
+RUN apt update
 RUN rosdep update \
     && rosdep install --from-paths src -i -y --skip-keys="gazebo gazebo_ros_pkgs" \
     && rm -rf /var/lib/apt/lists/*

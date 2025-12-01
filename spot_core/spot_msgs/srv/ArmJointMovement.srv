@@ -1,4 +1,6 @@
 float64[6] joint_target
+float64 duration 2.0
+bool relative false
 ---
 bool success
 string message
