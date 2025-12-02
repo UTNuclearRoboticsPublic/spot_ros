@@ -196,6 +196,11 @@ class SpotROS(Node):
                                         from_value=0.0, to_value=0.5, step=0.0)],
                                 read_only=False))
 
+        self.declare_parameter('data_capture_mode', False,
+            ParameterDescriptor(description='Whether we are in the mode to capture manipulation action-server goals.',
+                                type=ParameterType.PARAMETER_BOOL,
+                                read_only=True))
+
     def __del__(self):
         if self.status_timer is not None:
             self.status_timer.destroy()
@@ -226,13 +231,14 @@ class SpotROS(Node):
             return
 
         odom_mode = self.get_parameter('odom_mode').value
+        data_capture_mode = self.get_parameter('data_capture_mode').value
         
         # joint states #
         joint_state = JointStatesToMsg(state.kinematic_state, self.spot_wrapper)
 
         # Add in the virtual joints #
         kinematic_model = self.get_parameter('kinematic_model').value
-        virtual_joint_state = GetVirtualJointValues(state.kinematic_state, kinematic_model)
+        virtual_joint_state = GetVirtualJointValues(state.kinematic_state, kinematic_model, data_capture_mode)
         joint_state.name.extend(virtual_joint_state.name)
         joint_state.position.extend(virtual_joint_state.position)
         joint_state.velocity.extend(virtual_joint_state.velocity)
