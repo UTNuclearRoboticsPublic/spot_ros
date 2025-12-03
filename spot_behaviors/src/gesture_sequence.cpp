@@ -29,22 +29,35 @@ BT::NodeStatus GestureSequence::onStart() {
     }
 
     request_ = std::make_shared<spot_msgs::srv::GestureSequence::Request>();
-    request_->gesture_mode = getInput<std::string>("gesture_mode").value_or("gesture_sequence");
-    request_->gesture_sequence = *getInput<std::shared_ptr<std::vector<spot_msgs::msg::Gesture>>>("gesture_sequence").value();
+    request_->gesture_mode = getInput<std::string>("gesture_mode").value_or("");
 
-    
+    if (request_->gesture_mode == "gesture_sequence") {
+        // Only fetch from blackboard if gesture_mode is "gesture_sequence"
+        auto gestures_opt = getInput<std::shared_ptr<std::vector<spot_msgs::msg::Gesture>>>("gesture_sequence");
+        if (gestures_opt) {
+            request_->gesture_sequence = *gestures_opt.value();
+        } else {
+            RCLCPP_ERROR(get_logger(), "Gesture mode is 'gesture_sequence' but no gesture_sequence was provided.");
+            return BT::NodeStatus::FAILURE;
+        }
+    } else {
+        // Clear to ensure no leftover data
+        request_->gesture_sequence.clear();
+    }
+
+    // Logging
     if (request_->gesture_sequence.empty() && request_->gesture_mode.empty()) {
         RCLCPP_WARN(get_logger(), "Received empty gesture sequence. No gestures will be executed.");
     }
     else if (request_->gesture_mode.empty()) {
-        RCLCPP_INFO(get_logger(), "No sequence_mode specified: Defaulting to sending gesture sequence with %zu gestures.", request_->gesture_sequence.size());
+        RCLCPP_INFO(get_logger(), "No sequence_mode specified: Defaulting to sending gesture sequence with %zu gestures.",
+                    request_->gesture_sequence.size());
     }
     else {
         RCLCPP_INFO(get_logger(), "Initiating %s.", request_->gesture_mode.c_str());
-
     }
 
-    // The following computes the total length of the gesture sequence
+    // Estimate sequence duration
     sequence_duration_ = 5.0f;
     for (const auto& gesture : request_->gesture_sequence) {
         sequence_duration_ += gesture.pose_duration;
@@ -54,6 +67,7 @@ BT::NodeStatus GestureSequence::onStart() {
     request_timestamp_ = now();
     return BT::NodeStatus::RUNNING;
 }
+
 
 BT::NodeStatus GestureSequence::onRunning() {
     if (!service_future_.has_value()) {
