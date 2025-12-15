@@ -431,21 +431,33 @@ class SpotLeaseManager():
                 self._lease_keepalive = None
 
     def safe_shut_down(self):
+        powered_off = False
+        msg = "Power off not attempted"
+
         if self.robot.has_arm():
             try:
-                _, _, cmd_id = self.robot_command(RobotCommandBuilder.arm_stow_command())
-                block_until_arm_arrives(self._robot_command_client, cmd_id, timeout_sec=5.0)
-            except:
-                pass
+                _, _, cmd_id = self.robot_command(
+                    RobotCommandBuilder.arm_stow_command()
+                )
+                block_until_arm_arrives(
+                    self._robot_command_client,
+                    cmd_id,
+                    timeout_sec=5.0
+                )
+            except Exception as e:
+                self._logger.warn(f"Arm stow failed during shutdown: {e}")
+
         try:
             powered_off, msg = self.safe_power_off()
         except Exception as e:
-            self._logger.error(f'{e}')
+            self._logger.error(f"safe_power_off failed: {e}")
+
         if powered_off:
             self._releaseLease()
             self._releaseEStop()
         else:
-            self.logger.warn(f"{msg}") 
+            self._logger.warn(f"Shutdown incomplete: {msg}")
+
         self.robot.time_sync.stop()
         self._is_connected = False
 
