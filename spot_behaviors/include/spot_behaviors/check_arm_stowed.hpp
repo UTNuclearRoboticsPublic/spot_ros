@@ -52,9 +52,6 @@ private:
     // Record the last stow state
     std::optional<bool> arm_is_stowed_;
 
-    // A thread to spin the node and look for messages
-    std::thread spin_thread_;
-
     // Record the last stow state obtained from the message
     void manipulatorStateCallback(spot_msgs::msg::ManipulatorStowState::UniquePtr msg);
 };

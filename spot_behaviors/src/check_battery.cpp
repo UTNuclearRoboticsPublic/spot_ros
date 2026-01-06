@@ -32,9 +32,7 @@ namespace spot_behaviors {
 CheckBattery::CheckBattery(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer) :
     BT::SyncActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
-    {
-        spin_thread_ = std::thread([this](){rclcpp::spin(this->get_node_base_interface());});
-    }
+    {}
 
 BT::PortsList CheckBattery::providedPorts() {
     return {
@@ -53,10 +51,11 @@ BT::NodeStatus CheckBattery::tick() {
 
     // Wait a little for messages to come through
     const float timeout_seconds = getInput<float>("timeout").value_or(2.0);
-    std::mutex mtx;
-    {
-        std::unique_lock<std::mutex> lock(mtx);
-        message_condition_.wait_for(lock, std::chrono::duration<float>(timeout_seconds), [this]{return battery_percentage_.has_value();});
+    auto elapsed_time = [start_time = std::chrono::steady_clock::now()]() {
+        return std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - start_time).count();
+    };
+    while (!battery_percentage_.has_value() && (elapsed_time() < timeout_seconds)) {
+        rclcpp::spin_some(get_node_base_interface());
     }
 
     if (!battery_percentage_.has_value()){
@@ -82,7 +81,6 @@ BT::NodeStatus CheckBattery::tick() {
 
 void CheckBattery::batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg){
     battery_percentage_ = msg->battery_states.at(0).charge_percentage;
-    message_condition_.notify_one();
 }
 
 } // namespace spot_behaviors

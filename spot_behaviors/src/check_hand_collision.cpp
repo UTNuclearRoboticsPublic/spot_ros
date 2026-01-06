@@ -38,7 +38,6 @@ CheckHandCollision::CheckHandCollision(const std::string& name, const BT::NodeCo
             rclcpp::ParametersQoS{},
             std::bind(&CheckHandCollision::collisionStateCallback, this, std::placeholders::_1)
         );
-        spin_thread_ = std::thread([this](){rclcpp::spin(this->get_node_base_interface());});
     }
 
 BT::PortsList CheckHandCollision::providedPorts() {
@@ -46,6 +45,8 @@ BT::PortsList CheckHandCollision::providedPorts() {
 }
 
 BT::NodeStatus CheckHandCollision::tick() {
+    rclcpp::spin_some(get_node_base_interface());
+
     if (!in_collision_.has_value()){
         RCLCPP_ERROR(get_logger(), "No messages received on topic %s", manipulator_sub_->get_topic_name());
         return BT::NodeStatus::FAILURE;
