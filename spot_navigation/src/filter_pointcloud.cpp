@@ -20,10 +20,10 @@ struct BoundingBox {
 consteval auto generateBoundingBoxes() {
     // All bounding boxes are defined in the body frame
     BoundingBox body_bounding_box {
-        .x_min = -0.20,
+        .x_min =  0.00,
         .x_max =  0.80,
-        .y_min = -0.30,
-        .y_max =  0.30,
+        .y_min = -0.40,
+        .y_max =  0.40,
         .z_min = -0.50,
         .z_max =  0.15
     };

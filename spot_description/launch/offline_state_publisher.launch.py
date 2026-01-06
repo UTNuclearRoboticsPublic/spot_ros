@@ -205,7 +205,35 @@ defaults = {
         0.0,
         0.0,
         0.0,
-    ]
+    ],
+    'namaste_carry': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.0041,
+        -1.91044,
+        2.50288,
+        0.067544,
+        -1.8325,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
 }
 
 def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
@@ -283,7 +311,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument('configuration',
             description='The configuration to emulate for the Spot robot',
-            choices=['docked', 'standing', 'ready', 'unstowed', 'namaste', 'carry'],
+            choices=['docked', 'standing', 'ready', 'unstowed', 'namaste', 'carry', 'namaste_carry'],
             default_value='standing'
         )
     ]

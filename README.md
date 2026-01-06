@@ -21,11 +21,10 @@ This repository houses the collection of packages required to run the Spot robot
     export SPOT_ACCESSORIES="ARM RL_KIT" # in any order
     ```
 
-    Additional components can be attached to spot via the `SPOT_URDF_EXTRAS` environment variable. This is a full path to a xacro file which is imported into the robot xacro, and so it must attach to a known link on the robot.
-    At NRG, this would be set as
+    Additional components can be attached to spot via the `SPOT_URDF_EXTRAS` environment variable. This is a full path to a xacro file which is imported into the robot xacro, and so it must attach to a known link on the robot. For example:
 
    ```bash
-   export SPOT_URDF_EXTRAS=$(ros2 pkg prefix --share spot_description)/urdf/accessories/rl_kit_velodyne_mount.xacro
+   export SPOT_URDF_EXTRAS=$(ros2 pkg prefix --share spot_proprietary_description)/urdf/rl_kit_velodyne_mount.xacro
    ```
 
 3. **Set Login Credentials**

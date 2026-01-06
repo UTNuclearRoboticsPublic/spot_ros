@@ -337,13 +337,13 @@ class SpotROS(Node):
 
     def handle_stop(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the stop service"""
-        resp = self.spot_wrapper.stop()
-        return Trigger.Response(res[0], resp[1])
+        res.success, res.message = self.spot_wrapper.stop()
+        return res
 
     def handle_self_right(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the self-right service"""
-        resp = self.spot_wrapper.self_right()
-        return Trigger.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.self_right()
+        return res
 
     def handle_sit(self, _, res: Trigger.Response) -> Trigger.Response:
         """ROS service handler for the sit service"""
@@ -409,13 +409,13 @@ class SpotROS(Node):
 
     def handle_estop_disengage(self, _, res:Trigger.Response) -> Trigger.Response:
         """ROS service handler to disengage the eStop on the robot."""
-        res = self.spot_wrapper._lease_manager.disengageEStop()
-        return Trigger.Response(res[0], res[1])
+        res.success, res.message = self.spot_wrapper._lease_manager.disengageEStop()
+        return res
 
-    def handle_clear_behavior_fault(self, req) -> ClearBehaviorFault.Response:
+    def handle_clear_behavior_fault(self, req, res: ClearBehaviorFault.Response) -> ClearBehaviorFault.Response:
         """ROS service handler for clearing behavior faults"""
-        resp = self.spot_wrapper.clear_behavior_fault(req.id)
-        return ClearBehaviorFault.Response(resp[0], resp[1])
+        res.success, res.message = self.spot_wrapper.clear_behavior_fault(req.id)
+        return res
     
     def handle_register_payload(self, req: RegisterPayload.Request, res: RegisterPayload.Response) -> RegisterPayload.Response:
         frame_names = {
