@@ -177,9 +177,8 @@ def generate_launch_description():
         package='spot_driver',
         executable='image_server',
         parameters=[
-            {'hostname': LaunchConfiguration('hostname'),
-             'image_config': LaunchConfiguration('image_config')
-             }
+            {'hostname': LaunchConfiguration('hostname')},
+            LaunchConfiguration('image_config')
         ]
     )
 
