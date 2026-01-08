@@ -43,14 +43,14 @@ WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config, tf
 BT::PortsList WalkToPose::providedPorts() {
     return {
         BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose"),
-        BT::InputPort<std::string>("speed_profile", "NORMAL", "The type of movement speed desired. Options are [SLOW, NORMAL, FAST]"),
+        BT::InputPort<std::string>("speed_profile", "NORMAL", "The type of movement speed desired. Options are [SLOW, NORMAL, FAST, CURRENT]"),
         BT::InputPort<double>("trans_err_threshold"),
         BT::InputPort<double>("rot_err_threshold")
     };
 }
 
 BT::NodeStatus WalkToPose::onStart() {
-    static const std::set<std::string> valid_profiles{"SLOW", "NORMAL", "FAST"};
+    static const std::set<std::string> valid_profiles{"SLOW", "NORMAL", "FAST", "CURRENT"};
 
     // Check to see that the server and input are in place
     if (!navigation_action_client_->wait_for_action_server(std::chrono::seconds(10))){
@@ -81,7 +81,7 @@ BT::NodeStatus WalkToPose::onStart() {
 
     const std::string profile = getInput<std::string>("speed_profile").value();
     if (!valid_profiles.contains(profile)) {
-        RCLCPP_ERROR(get_logger(), "Invalid speed profile '%s'. Options are [SLOW, NORMAL, FAST]", profile.c_str());
+        RCLCPP_ERROR(get_logger(), "Invalid speed profile '%s'. Options are [SLOW, NORMAL, FAST, CURRENT]", profile.c_str());
         return BT::NodeStatus::FAILURE;
     }
 
@@ -106,6 +106,7 @@ BT::NodeStatus WalkToPose::onStart() {
         navigation_goal.max_vel.linear.y = 2.0;
         navigation_goal.max_vel.angular.z = 1.3;
     }
+    // If profile is "CURRENT" then we leave max_vel as all zeros and the driver will use the current max_vel parameter settings
 
     goal_handle_future_ = navigation_action_client_->async_send_goal(navigation_goal);
     request_time_point_ = now();
@@ -161,7 +162,7 @@ BT::NodeStatus WalkToPose::onRunning() {
                 [[fallthrough]];
             case action_msgs::msg::GoalStatus::STATUS_ABORTED:
             case action_msgs::msg::GoalStatus::STATUS_CANCELED:
-                RCLCPP_WARN(get_logger(), "Navigate action failed, checking if we're within threshold distance of the goal");
+                RCLCPP_WARN(get_logger(), "Navigate action failed with status %s, checking if we're within threshold distance of the goal", goal_status == action_msgs::msg::GoalStatus::STATUS_ABORTED ? "ABORTED" : "CANCELLED");
                 goal_handle_.reset();
                 if (checkGoal()) {
                     RCLCPP_INFO(get_logger(), "Robot is within acceptable tolerance of the goal pose, reporting success");
