@@ -317,13 +317,26 @@ class SpotBodyWrapper():
             return False, Text(e)
         return True, 'Success'
     
-    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_duration: float) -> Tuple[bool, Text]:
-        navigate_command = RobotCommandBuilder.synchro_se2_trajectory_command(
+    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_vel: SE2VelProto, max_duration: float) -> Tuple[bool, Text]:
+        walk_params = spot_command_pb2.MobilityParams()
+        walk_params.CopyFrom(self._mobility_params)
+
+        # Only apply the speed limit if it is non-zero in at least one axis
+        if (max_vel.linear.x != 0 or max_vel.linear.y != 0 or max_vel.angular != 0):
+            walk_params.vel_limit.CopyFrom(
+                geometry_pb2.SE2VelocityLimit(
+                    max_vel=max_vel,
+                    min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
+                )
+            )
+        
+        walk_command = RobotCommandBuilder.synchro_se2_trajectory_command(
             goal_se2=target_pose_in_odom,
-            frame_name=ODOM_FRAME_NAME
+            frame_name=ODOM_FRAME_NAME,
+            params=walk_params
         )
 
-        success, message, command_id = self._lease_manager.robot_command(navigate_command, end_time_secs=time.time() + max_duration)
+        success, message, command_id = self._lease_manager.robot_command(walk_command, end_time_secs=time.time() + max_duration)
         return success, message, command_id
 
     def get_docking_state(self, **kwargs) -> DockStateProto:

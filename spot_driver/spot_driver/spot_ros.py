@@ -542,10 +542,15 @@ class SpotROS(Node):
             resp.message = f"Unable to transform WalkTo target pose from {req.target_pose.header.frame_id} to the odom frame, aborting action: {e}"
             return resp
         
-        # Convert the ROS type to the corresponding protobuf types
+        # Convert the ROS types to the corresponding protobuf types
         target_pose_se2 = geometry_pb2.SE2Pose(
             position=geometry_pb2.Vec2(x=target_pose_in_odom.pose.position.x, y=target_pose_in_odom.pose.position.y),
             angle=2*math.atan2(target_pose_in_odom.pose.orientation.z, target_pose_in_odom.pose.orientation.w)
+        )
+
+        max_vel = geometry_pb2.SE2Velocity(
+            linear=geometry_pb2.Vec2(x=req.max_vel.linear.x, y=req.max_vel.linear.y), 
+            angular=req.max_vel.angular.z
         )
 
         self.get_logger().info(f"Moving robot to position ({target_pose_se2.position.x, target_pose_se2.position.y}) in the odom frame")
@@ -560,7 +565,7 @@ class SpotROS(Node):
 
         # Make the command and make sure it was valid
         try:
-            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_se2, req.maximum_movement_time)
+            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_in_odom=target_pose_se2, max_vel=max_vel, max_duration=req.maximum_movement_time)
             if not command_accepted:
                 return abort(f"Unable to command robot to move. Reason: {message}")
             else:
