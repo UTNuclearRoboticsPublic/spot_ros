@@ -192,8 +192,25 @@ class SpotROS(Node):
         self.declare_parameter('obstacle_avoidance_padding', 0.10,
             ParameterDescriptor(description='Desired padding around the body to use when attempting to avoid obstacles. Described in meters',
                                 type=ParameterType.PARAMETER_DOUBLE,
-                                floating_point_range=[FloatingPointRange(
-                                        from_value=0.0, to_value=0.5, step=0.0)],
+                                floating_point_range=[FloatingPointRange(from_value=0.0, to_value=0.5, step=0.0)],
+                                read_only=False))
+
+        self.declare_parameter('max_vel.x', 0.85,
+            ParameterDescriptor(description="Maximum velocity of the robot in the x-direction. Units of m/s",
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(from_value=0.15, to_value=2.0, step=0.0)],
+                                read_only=False))
+        
+        self.declare_parameter('max_vel.y', 0.5,
+            ParameterDescriptor(description="Maximum velocity of the robot in the y-direction. Units of m/s",
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(from_value=0.15, to_value=2.0, step=0.0)],
+                                read_only=False))
+        
+        self.declare_parameter('max_vel.theta', 1.0,
+            ParameterDescriptor(description="Maximum rotational velocity of the robot. Units of rad/s",
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(from_value=0.20, to_value=1.5, step=0.0)],
                                 read_only=False))
 
     def __del__(self):
@@ -653,6 +670,8 @@ class SpotROS(Node):
             self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
 
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
+        if (self.spot_wrapper is None):
+            return SetParametersResult(successful=True)
 
         for p in params:
             if p.name == 'odom_mode':
@@ -671,6 +690,20 @@ class SpotROS(Node):
                     return SetParametersResult(
                         successful=False,
                         reason="Parameter rates." + p.name + " must be positive.")
+            elif p.name == 'obstacle_avoidance_padding':
+                self.spot_wrapper._mobility_params.obstacle_avoidance_padding = p.value
+            elif p.name == "max_vel.x":
+                self.get_logger().info(f'Setting max-x to {p.value}')
+                self.spot_wrapper._mobility_params.vel_limit.max_vel.linear.x = p.value
+                self.spot_wrapper._max_cmd_x = p.value
+            elif p.name == "max_vel.y":
+                self.get_logger().info(f'Setting max-y to {p.value}')
+                self.spot_wrapper._mobility_params.vel_limit.max_vel.linear.y = p.value
+                self.spot_wrapper._max_cmd_y = p.value
+            elif p.name == "max_vel.theta":
+                self.get_logger().info(f'Setting max-theta to {p.value}')
+                self.spot_wrapper._mobility_params.vel_limit.max_vel.angular = p.value
+                self.spot_wrapper._max_cmd_rot = p.value
         
         return SetParametersResult(successful=True)
 
@@ -693,7 +726,15 @@ class SpotROS(Node):
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
         # Apply mobility parameters
-        self.spot_wrapper.set_mobility_params(obstacle_avoidance_padding=self.get_parameter('obstacle_avoidance_padding').value)
+        self.spot_wrapper.set_mobility_params(
+            obstacle_avoidance_padding=self.get_parameter('obstacle_avoidance_padding').value,
+            speed_limit=geometry_pb2.SE2Velocity(
+                linear=geometry_pb2.Vec2(
+                    x = self.get_parameter('max_vel.x').value,
+                    y = self.get_parameter('max_vel.y').value),
+                angular=self.get_parameter('max_vel.theta').value
+            )    
+        )
 
         # Dictionary of all param values in the 'rates' namespace
         status_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.status').items() }
