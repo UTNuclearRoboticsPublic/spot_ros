@@ -599,7 +599,7 @@ class SpotROS(Node):
             except Exception as e:
                 return abort(f"Execption thrown while getting command feedback: {e}")
             try:
-                if trajectory_feedback.status == WalkTo.Feedback.STATUS_STOPPED:
+                if trajectory_feedback.body_movement_status == WalkTo.Feedback.BODY_STATUS_SETTLED:
                     self.get_logger().info("WalkTo action completed successfully")
                     goal_handle.succeed()
                     resp.success = True

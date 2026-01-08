@@ -334,6 +334,14 @@ class SpotBodyWrapper():
                     min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
                 )
             )
+        # Otherwise, we apply the negative of the configured max-vel as the min-vel
+        # NOTE: We never configure min vel directly in the main mobility params because it interfers with teleop
+        else:
+            max_vel = walk_params.vel_limit.max_vel
+            walk_params.vel_limit.min_vel.CopyFrom(
+                geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
+            )
+            
         
         walk_command = RobotCommandBuilder.synchro_se2_trajectory_command(
             goal_se2=target_pose_in_odom,
