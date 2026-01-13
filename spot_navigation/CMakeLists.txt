@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(spot_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(visualization_msgs REQUIRED)
@@ -20,12 +22,12 @@ find_package(visualization_msgs REQUIRED)
 ################################################################################
 add_library(filter_pointcloud_component SHARED src/filter_pointcloud.cpp)
 target_compile_definitions(filter_pointcloud_component PRIVATE COMPILE_AS_COMPONENT)
-ament_target_dependencies(filter_pointcloud_component rclcpp tf2_ros sensor_msgs rclcpp_components visualization_msgs)
+ament_target_dependencies(filter_pointcloud_component rclcpp tf2_ros sensor_msgs rclcpp_components visualization_msgs tf2_eigen spot_msgs)
 rclcpp_components_register_nodes(filter_pointcloud_component "spot_navigation::PointcloudFilterComponent")
 
 add_executable(filter_pointcloud_node src/filter_pointcloud.cpp)
 target_compile_definitions(filter_pointcloud_node PRIVATE COMPILE_AS_NODE)
-ament_target_dependencies(filter_pointcloud_node rclcpp tf2_ros sensor_msgs rclcpp_components visualization_msgs)
+ament_target_dependencies(filter_pointcloud_node rclcpp tf2_ros sensor_msgs rclcpp_components visualization_msgs tf2_eigen spot_msgs)
 
 ################################################################################
 # Install

@@ -13,6 +13,8 @@
   <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>spot_msgs</depend>
+  <build_depend>tf2_eigen</build_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>octomap_server</exec_depend>
   <exec_depend>pointcloud_to_laserscan</exec_depend>
