@@ -4,50 +4,10 @@
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
 #include <rcpputils/endian.hpp>
+#include <eigen3/Eigen/Geometry>
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-
-struct BoundingBox {
-    double x_min{};
-    double x_max{};
-    double y_min{};
-    double y_max{};
-    double z_min{};
-    double z_max{};
-};
-
-consteval auto generateBoundingBoxes() {
-    // All bounding boxes are defined in the body frame
-    BoundingBox body_bounding_box {
-        .x_min =  0.00,
-        .x_max =  0.80,
-        .y_min = -0.40,
-        .y_max =  0.40,
-        .z_min = -0.50,
-        .z_max =  0.15
-    };
-
-    BoundingBox arm_bounding_box {
-        .x_min =  0.00,
-        .x_max =  0.70,
-        .y_min = -0.15,
-        .y_max =  0.15,
-        .z_min =  0.00,
-        .z_max =  0.32
-    };
-
-    BoundingBox stray_point_box {
-        .x_min =  0.60,
-        .x_max =  1.50,
-        .y_min = -0.25,
-        .y_max =  0.25,
-        .z_min = -0.57,
-        .z_max = -0.30
-    };
-
-    return std::array{body_bounding_box, arm_bounding_box, stray_point_box};
-}
 
 namespace spot_navigation {
 
@@ -61,6 +21,8 @@ public:
         const std::string sensor_frame = declare_parameter("sensor_frame", "velodyne");
 
         // We assume that the lidar is fixed relative to the body and is aligned with the body
+        // and that it is mounted with the NRG elevated lidar mount
+        // TODO: Parameterize angle limits to work with other mounts
         try {
             const geometry_msgs::msg::TransformStamped sensor_tform_body = tf_buffer.lookupTransform(
                 sensor_frame,
@@ -72,15 +34,6 @@ public:
             if (std::abs(sensor_tform_body.transform.rotation.w) < 0.95) {
                 RCLCPP_ERROR(get_logger(), "Your lidar frame %s is not aligned with your robot. This code wasn't meant for that", sensor_frame.c_str());
                 exit(1);
-            }
-
-            for (BoundingBox& bbox : bounding_boxes) {
-                bbox.x_min += sensor_tform_body.transform.translation.x;
-                bbox.x_max += sensor_tform_body.transform.translation.x;
-                bbox.y_min += sensor_tform_body.transform.translation.y;
-                bbox.y_max += sensor_tform_body.transform.translation.y;
-                bbox.z_min += sensor_tform_body.transform.translation.z;
-                bbox.z_max += sensor_tform_body.transform.translation.z;
             }
         } catch (tf2::TransformException& e) {
             RCLCPP_ERROR(get_logger(), e.what());
@@ -94,35 +47,8 @@ public:
         pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
-        region_marker_pub = create_publisher<visualization_msgs::msg::MarkerArray>("~/exclusion_region", rclcpp::QoS(1).transient_local());
-        publishRegionVisualization(sensor_frame);
 
         RCLCPP_INFO(get_logger(), "Spot pointcloud filter online");
-    }
-
-    void publishRegionVisualization(const std::string sensor_frame) {
-        visualization_msgs::msg::MarkerArray marker_array;
-        visualization_msgs::msg::Marker region_marker;
-
-        region_marker.action = region_marker.ADD;
-        region_marker.color.a = 0.2f;
-        region_marker.color.g = 1.0f;
-        region_marker.frame_locked = true;
-        region_marker.type = region_marker.CUBE;
-        region_marker.header.frame_id = sensor_frame;
-
-        for (const BoundingBox& bbox : bounding_boxes) {
-            region_marker.scale.x = bbox.x_max - bbox.x_min;
-            region_marker.scale.y = bbox.y_max - bbox.y_min;
-            region_marker.scale.z = bbox.z_max - bbox.z_min;
-            region_marker.pose.position.x = 0.5*(bbox.x_min + bbox.x_max);
-            region_marker.pose.position.y = 0.5*(bbox.y_min + bbox.y_max);
-            region_marker.pose.position.z = 0.5*(bbox.z_min + bbox.z_max);
-            marker_array.markers.push_back(region_marker);
-            region_marker.id++;
-        }
-
-        region_marker_pub->publish(marker_array);
     }
 
     void filterPointcloud(sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud) {
@@ -167,14 +93,39 @@ public:
                 std::reverse(reinterpret_cast<std::byte*>(&y), reinterpret_cast<std::byte*>(&y) + sizeof(float));
                 std::reverse(reinterpret_cast<std::byte*>(&z), reinterpret_cast<std::byte*>(&z) + sizeof(float));
             }
-            
+
             bool accept_point = true;
-            for (const BoundingBox& bbox : bounding_boxes) {
-                if (x < bbox.x_max && x > bbox.x_min && y < bbox.y_max && y > bbox.y_min && z < bbox.z_max && z > bbox.z_min) {
+            
+            // Check the ray direction. We don't want points pointing forward and down
+            // since it hits the arm and body and creates a "bleeding points" effect
+            static constexpr float deg2rad = M_PIf32 / 180.0f;
+            static constexpr float body_threshold = 32.0f * deg2rad;
+            static constexpr float body_elevation_threshold = -25.0f * deg2rad;
+            static constexpr float arm_threshold = 7.5f * deg2rad;
+            static constexpr float arm_base_elevation_threshold = -18.0f * deg2rad;
+            static constexpr float arm_base_threshold = 17.0f * deg2rad;
+            
+            if (z < 0 && x > 0) {
+                // Check for arm obstruction
+                const float azimuthal_angle = std::abs(std::atan2(y, x));
+                if (azimuthal_angle < arm_threshold) {
                     accept_point = false;
-                    break;
+                } 
+                else if (azimuthal_angle < body_threshold) {
+                    const Eigen::Vector3f ray_dir = Eigen::Vector3f(x, y, z).normalized();
+                    const float elevation_angle = std::asin(ray_dir.z());
+
+                    // Check for body obstruction
+                    if (elevation_angle < body_elevation_threshold) {
+                        accept_point = false;                    
+                    }
+                    // Check for arm base obstruction
+                    else if (azimuthal_angle < arm_base_threshold && elevation_angle < arm_base_elevation_threshold) {
+                        accept_point = false;
+                    }
                 }
             }
+
             if (!accept_point) continue;
             new_size++;
             filtered_cloud->data.insert(filtered_cloud->data.end(), data_ptr, std::next(data_ptr, pointcloud->point_step));
@@ -188,10 +139,7 @@ private:
     tf2_ros::Buffer tf_buffer;
     tf2_ros::TransformListener tf_listener;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr region_marker_pub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub;
-
-    std::array<BoundingBox, 3> bounding_boxes = generateBoundingBoxes();
 };
 
 } // namespace spot_navigation
