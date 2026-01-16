@@ -65,6 +65,7 @@ BT::NodeStatus CheckArmStowed::tick() {
 
 void CheckArmStowed::manipulatorStateCallback(spot_msgs::msg::ManipulatorStowState::UniquePtr msg){
     arm_is_stowed_ = (msg->state == msg->STOWSTATE_STOWED);
+    manipulator_sub_.reset();
 }
 
 } // namespace spot_behaviors
