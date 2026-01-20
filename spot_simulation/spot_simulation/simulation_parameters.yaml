@@ -106,6 +106,33 @@ simulation_parameters:
         validation: 
           gt<>: 0.0
 
+      initial_transform:
+        translation:
+          type: double_array
+          read_only: True
+          description: The initial translation component of the odom -> robot transform
+          default_value: [0.0, 0.0, 0.0]
+          validation:
+            fixed_size<>: 3
+
+        yaw:
+          type: double
+          read_only: True
+          description: The initial yaw rotation in degrees of the robot in the odom frame
+          default_value: 0.0
+
+        pitch:
+          type: double
+          read_only: True
+          description: The initial pitch rotation in degrees of the robot in the odom frame
+          default_value: 0.0
+
+        roll:
+          type: double
+          read_only: True
+          description: The initial roll rotation in degrees of the robot in the odom frame
+          default_value: 0.0
+
   sensors:
     __map_sensor_names:
       sensor_type:
