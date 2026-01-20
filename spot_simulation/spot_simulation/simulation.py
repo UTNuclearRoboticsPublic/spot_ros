@@ -1,3 +1,4 @@
+import sys
 import rclpy
 import open3d
 import numpy as np
@@ -47,13 +48,13 @@ class Simulation(Node):
             self.get_logger().info(f'Loading sensor "{sensor_name}"')
             sensor_config = self.simulation_parameters.sensors.get_entry(sensor_name)
             if sensor_config.sensor_type == 'lidar':
-                self.sensors[sensor_name] = SimulatedLiDAR(sensor_config.lidar_config)
+                self.sensors[sensor_name] = SimulatedLiDAR(sensor_config)
                 self.sensor_pubs[sensor_name] = self.create_publisher(
                     msg_type=PointCloud2,
                     topic=sensor_config.topic,
                     qos_profile=10) # TODO: Respect the best effort parameter
             elif sensor_config.sensor_type == 'depth_camera':
-                self.sensors[sensor_name] = SimulatedDepthCamera(sensor_config.depth_config)
+                self.sensors[sensor_name] = SimulatedDepthCamera(sensor_config)
                 self.sensor_pubs[sensor_name] = self.create_publisher(
                     msg_type=Image,
                     topic=sensor_config.topic,
@@ -107,31 +108,60 @@ class Simulation(Node):
         rays = sensor.generate_rays(self.scene)
         hits = self.scene.cast_rays(rays)
         dists = hits['t_hit']
-        dists += np.random.normal(loc=0.0, scale=sensor.config.noise_std_dev, size=dists.shape).astype(np.float32)
+        dists += np.random.normal(loc=0.0, scale=sensor.sensor_config.noise_std_dev, size=dists.shape).astype(np.float32)
+
+        valid_dists = dists.isfinite() & (dists > sensor.sensor_config.min_range) & (dists < sensor.sensor_config.max_range)
+        dists[valid_dists.logical_not()] = 0.0
+
+        # Flatten depth images to help with math
+        if type(sensor) == SimulatedDepthCamera:
+            rays = rays.reshape((-1, 6))
+            dists = dists.flatten()
         
+        # Handle poor broadcasting ability of Open3D tensors
+        rays[:, 3] *= dists
+        rays[:, 4] *= dists
+        rays[:, 5] *= dists
+        points = rays[:, 0:3] + rays[:, 3:] # defined in the simulation frame
+
+        # Transform points back to sensor frame
+        world_tform_sensor = sensor.pose
+        sensor_tform_world_rot = world_tform_sensor[:3, :3].T()
+        sensor_tform_world_trans = -sensor_tform_world_rot @ world_tform_sensor[:3, 3]
+        local_points = (sensor_tform_world_rot @ points.T()).T() 
+        local_points[:, 0] += sensor_tform_world_trans[0]
+        local_points[:, 1] += sensor_tform_world_trans[1]
+        local_points[:, 2] += sensor_tform_world_trans[2]
+
         if type(sensor) is SimulatedLiDAR:
-            # Handle poor broadcasting ability of Open3D tensors
-            rays[:, 3] *= dists
-            rays[:, 4] *= dists
-            rays[:, 5] *= dists
-            points = rays[:, 0:3] + rays[:, 3:] # defined in the simulation frame
-
-            # Transform points back to sensor frame
-            world_tform_sensor = sensor.pose
-            sensor_tform_world_rot = world_tform_sensor[:3, :3].T()
-            sensor_tform_world_trans = -sensor_tform_world_rot @ world_tform_sensor[:3, 3]
-            local_points = (sensor_tform_world_rot @ points.T()).T() 
-            local_points[:, 0] += sensor_tform_world_trans[0]
-            local_points[:, 1] += sensor_tform_world_trans[1]
-            local_points[:, 2] += sensor_tform_world_trans[2]
-
-            header = Header(frame_id=self.simulation_parameters.sensors.get_entry(sensor_name).frame_id, stamp=self.get_clock().now().to_msg())
+            header = Header(
+                frame_id=sensor.sensor_config.frame_id, 
+                stamp=self.get_clock().now().to_msg()
+            )
             pointcloud = create_cloud_xyz32(header, local_points.numpy())
             self.sensor_pubs[sensor_name].publish(pointcloud)
 
         elif type(sensor) is SimulatedDepthCamera:
-            # TODO: cast rays, create depth image, publish image + camera info
-            ...
+            sensor.camera_info.header.stamp = self.get_clock().now().to_msg()
+
+            # Floating point depth in meters
+            depths = local_points[:, 2].numpy()
+
+            depth_image = Image()
+            depth_image.header = sensor.camera_info.header
+            depth_image.height = sensor.camera_info.height
+            depth_image.width = sensor.camera_info.width
+            depth_image.encoding = sensor.depth_config.encoding
+            np.nan_to_num(depths, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
+            if depth_image.encoding == '16UC1':
+                depth_image.data = (depths * 1000.0).astype(np.uint16).tobytes()
+            elif depth_image.encoding == '32FC1':
+                depth_image.data = depths.tobytes()
+            depth_image.is_bigendian = 0 if sys.byteorder == "little" else 1
+
+            self.sensor_pubs[sensor_name].publish(depth_image)
+            self.sensor_info_pubs[sensor_name].publish(sensor.camera_info)
+
 
 
 def main():

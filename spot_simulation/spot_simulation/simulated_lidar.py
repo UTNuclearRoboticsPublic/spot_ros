@@ -4,8 +4,9 @@ from math import pi
 from rclpy.logging import get_logger
 
 class SimulatedLiDAR:
-    def __init__(self, lidar_config):
-        self.config = lidar_config
+    def __init__(self, sensor_config):
+        self.sensor_config = sensor_config
+        self.lidar_config = sensor_config.lidar_config
         self.pose = open3d.core.Tensor(np.eye(4), dtype=open3d.core.Dtype.Float32)
 
         try:
@@ -13,8 +14,8 @@ class SimulatedLiDAR:
         except:
             self.device = open3d.core.Device(open3d.core.Device.CPU, 0)
 
-        self.horizontal_angles = np.linspace(self.config.min_horizontal_angle, self.config.max_horizontal_angle, self.config.num_horizontal_channels)
-        self.vertical_angles = np.linspace(self.config.min_vertical_angle, self.config.max_vertical_angle, self.config.num_vertical_channels)
+        self.horizontal_angles = np.linspace(self.lidar_config.min_horizontal_angle, self.lidar_config.max_horizontal_angle, self.lidar_config.num_horizontal_channels)
+        self.vertical_angles = np.linspace(self.lidar_config.min_vertical_angle, self.lidar_config.max_vertical_angle, self.lidar_config.num_vertical_channels)
         horizontal_grid, vertical_grid = np.meshgrid(np.deg2rad(self.horizontal_angles), np.deg2rad(self.vertical_angles), indexing='ij')
 
         sin_horizontal_angles = np.sin(horizontal_grid)

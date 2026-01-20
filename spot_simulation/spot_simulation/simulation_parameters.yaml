@@ -167,6 +167,30 @@ simulation_parameters:
         read_only: True
         description: The frame of the sensor data. Also the origin of the sensor rays
 
+      noise_std_dev:
+          type: double
+          read_only: True
+          description: The standard deviation of gaussian noise to apply to range readings
+          default_value: 0.0
+          validation:
+            gt_eq<>: 0.0
+
+      min_range:
+          type: double
+          read_only: True
+          description: The minimum range at which the LiDAR returns readings
+          default_value: 0.0
+          validation:
+            gt_eq<>: 0.0
+
+      max_range:
+        type: double
+        read_only: True
+        description: The maximum range at which the LiDAR returns readings
+        default_value: 0.0
+        validation:
+          gt_eq<>: 0.0
+          
       lidar_config:
         min_horizontal_angle:
           type: double
@@ -192,26 +216,11 @@ simulation_parameters:
           description: The maximum vertical angle in degrees at which the LiDAR returns readings
           default_value: 0.0
 
-        min_range:
-          type: double
-          read_only: True
-          description: The minimum range at which the LiDAR returns readings
-          default_value: 0.0
-          validation:
-            gt_eq<>: 0.0
-
-        max_range:
-          type: double
-          read_only: True
-          description: The maximum range at which the LiDAR returns readings
-          default_value: 0.0
-          validation:
-            gt_eq<>: 0.0
-
         num_vertical_channels:
           type: int
           read_only: True
           description: The number of vertical channels for range readings
+          default_value: 16
           validation: 
             gt_eq<>: 1
 
@@ -219,15 +228,9 @@ simulation_parameters:
           type: int
           read_only: True
           description: The number of horizontal channels for range readings
+          default_value: 512
           validation: 
             gt_eq<>: 1
-
-        noise_std_dev:
-          type: double
-          read_only: True
-          description: The standard deviation of gaussian noise to apply to range readings
-          validation:
-            gt_eq<>: 0.0
 
       depth_config:
         fx:
@@ -275,3 +278,11 @@ simulation_parameters:
           read_only: True
           description: The topic on which to publish CameraInfo messages
           default_value: ""
+
+        encoding:
+          type: string
+          read_only: True
+          description: The encoding for the depth image
+          default_value: 32FC1
+          validation:
+            one_of<>: [["32FC1", "16UC1"]]
