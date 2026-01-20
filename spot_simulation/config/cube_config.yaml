@@ -6,6 +6,8 @@ spot_simulation:
       cube:
         object_type: box
         dimensions: [1.0, 0.5, 0.75]
+        location: [2.0, 0.0, 0.375]
+        yaw: 90.0
 
       floor:
         object_type: box
