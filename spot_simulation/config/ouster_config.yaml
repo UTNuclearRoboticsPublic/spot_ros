@@ -1,0 +1,17 @@
+spot_simulation:
+  ros__parameters:
+    sensor_names: [ouster]
+
+    sensors:
+      ouster:
+        sensor_type: lidar
+        frame_id: os_sensor
+        lidar_config:
+          min_vertical_angle: -45.0
+          max_vertical_angle:  45.0
+          min_range: 0.10
+          max_range: 100.0
+          num_vertical_channels: 128
+          num_horizontal_channels: 512
+          noise_std_dev: 0.01
+          best_effort: False

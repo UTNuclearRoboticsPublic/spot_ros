@@ -1,0 +1,12 @@
+spot_simulation:
+  ros__parameters:
+    object_names: [cube, floor]
+
+    objects:
+      cube:
+        object_type: box
+        dimensions: [1.0, 0.5, 0.75]
+
+      floor:
+        object_type: box
+        dimensions: [100.0, 100.0, 0.01]
