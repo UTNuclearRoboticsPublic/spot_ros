@@ -1,0 +1,203 @@
+simulation_parameters:
+  object_names:
+    type: string_array
+    read_only: True
+    validation:
+      unique<>: []
+  
+  sensor_names:
+    type: string_array
+    read_only: True
+    validation:
+      unique<>: []
+
+  robot_names:
+    type: string_array
+    read_only: True
+    validation:
+      unique<>: []
+
+  objects:
+    __map_object_names:
+      object_type:
+        type: string
+        read_only: True
+        description: The type of object to add. Options are [mesh, box, cylinder]
+        validation:
+          one_of<>: [[mesh, box, cylinder]]
+
+      dimensions:
+        type: double_array
+        read_only: True
+        description: "The dimensions of a primitive being added. Formed as [x, y, z] for box and [h, r] for cylinders"
+        default_value: [0.0]
+        validation:
+          size_lt<>: 4
+
+      mesh_scale:
+        type: double
+        read_only: True
+        description: The scale of the mesh object
+        default_value: 1.0
+        validation:
+          gt<>: 0.0
+
+      file_path:
+        type: string
+        read_only: True
+        description: Path to a mesh resource to load into the simulation
+        default_value: ""
+
+      location:
+        type: double_array
+        read_only: True
+        description: Position of the object in the simulation frame
+        default_value: [0.0, 0.0, 0.0]
+        validation:
+          fixed_size<>: [3]
+
+      yaw:
+        type: double
+        read_only: True
+        description: The yaw rotation in degrees of the object in the simulation frame
+        default_value: 0.0
+
+      pitch:
+        type: double
+        read_only: True
+        description: The pitch rotation in degrees of the object in the simulation frame
+        default_value: 0.0
+
+      roll:
+        type: double
+        read_only: True
+        description: The roll rotation in degrees of the object in the simulation frame
+        default_value: 0.0
+
+      parent:
+        type: string
+        read_only: True
+        description: The parent object for the pose of this object. If omitted will default to the simulation frame
+        default_value: ""
+
+  robots:
+    __map_robot_names:
+      urdf_path:
+        type: string
+        read_only: True
+        description: Path to a URDF or xacro file describing the robot
+
+      namespace:
+        type: string
+        read_only: True
+        description: Namespace to prepend to common interfaces such as /cmd_vel and /odom
+
+      xacro_args:
+        type: string
+        read_only: True
+        description: Xacro args in the form 'arg1:=val1 arg2:=val2'
+        default_value: ""
+
+      update_rate:
+        type: double
+        read_only: True
+        description: The rate at which the robot state should publish
+        default_value: 10.0
+        validation: 
+          gt<>: 0.0
+
+  sensors:
+    __map_sensor_names:
+      sensor_type:
+        type: string
+        read_only: True
+        description: The type of sensor. Options are [lidar, depth_camera, rgb_camera] # only lidar supported for now
+        validation:
+          one_of<>: [[lidar, depth_camera, rgb_camera]]
+
+      update_rate:
+        type: double
+        read_only: True
+        description: The rate at which the sensor should publish
+        default_value: 10.0
+        validation: 
+          gt<>: 0.0
+
+      frame_id:
+        type: string
+        read_only: True
+        description: The frame of the sensor data. Also the origin of the sensor rays
+
+      lidar_config:
+        min_horizontal_angle:
+          type: double
+          read_only: True
+          description: The minimum horizontal angle in degrees at which the LiDAR returns readings
+          default_value: -180.0
+        
+        max_horizontal_angle:
+          type: double
+          read_only: True
+          description: The maximum horizontal angle in degrees at which the LiDAR returns readings
+          default_value: 180.0
+
+        min_vertical_angle:
+          type: double
+          read_only: True
+          description: The minimum vertical angle in degrees at which the LiDAR returns readings
+          default_value: 0.0
+        
+        max_vertical_angle:
+          type: double
+          read_only: True
+          description: The maximum vertical angle in degrees at which the LiDAR returns readings
+          default_value: 0.0
+
+        min_range:
+          type: double
+          read_only: True
+          description: The minimum range at which the LiDAR returns readings
+          default_value: 0.0
+          validation:
+            gt_eq<>: 0.0
+
+        max_range:
+          type: double
+          read_only: True
+          description: The maximum range at which the LiDAR returns readings
+          default_value: 0.0
+          validation:
+            gt_eq<>: 0.0
+
+        num_vertical_channels:
+          type: int
+          read_only: True
+          description: The number of vertical channels for range readings
+          validation: 
+            gt_eq<>: 1
+
+        num_horizontal_channels:
+          type: int
+          read_only: True
+          description: The number of horizontal channels for range readings
+          validation: 
+            gt_eq<>: 1
+
+        noise_std_dev:
+          type: double
+          read_only: True
+          description: The standard deviation of gaussian noise to apply to range readings
+          validation:
+            gt_eq<>: 0.0
+
+        topic:
+          type: string
+          read_only: True
+          description: The topic on which to publish the LiDAR pointcloud
+          default_value: '/lidar_points'
+        
+        best_effort:
+          type: bool
+          read_only: True
+          description: Whether or not to publish the pointcloud with Best Effort reliability
+          default_value: False

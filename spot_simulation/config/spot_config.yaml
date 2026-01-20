@@ -1,0 +1,9 @@
+spot_simulation:
+  ros__parameters:
+    robot_names: [spot]
+
+    robots:
+      spot:
+        urdf_path: package://spot_description/urdf/spot.urdf.xacro
+        namespace: spot_driver
+        xacro_args: "has_arm:=True has_rl_kit:=True"
