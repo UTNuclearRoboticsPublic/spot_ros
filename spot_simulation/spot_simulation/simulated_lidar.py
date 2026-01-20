@@ -32,7 +32,7 @@ class SimulatedLiDAR:
         rays_numpy = np.stack([ray_origins, ray_directions], axis=1)
         self.ray_definitions = open3d.core.Tensor(rays_numpy.reshape(-1, 6), dtype=open3d.core.Dtype.Float32)
 
-    def generate_rays(self):
+    def generate_rays(self, _):
         rays = open3d.core.Tensor.zeros(shape=list(self.ray_definitions.shape), dtype=open3d.core.Dtype.Float32, device=self.device)
 
         # Set origin to current sensor position
