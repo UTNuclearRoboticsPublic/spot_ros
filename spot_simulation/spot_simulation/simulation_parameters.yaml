@@ -150,6 +150,18 @@ simulation_parameters:
         validation: 
           gt<>: 0.0
 
+      topic:
+        type: string
+        read_only: True
+        description: The topic on which to publish the LiDAR pointcloud
+        default_value: '/lidar_points'
+      
+      best_effort:
+        type: bool
+        read_only: True
+        description: Whether or not to publish the pointcloud with Best Effort reliability
+        default_value: False
+
       frame_id:
         type: string
         read_only: True
@@ -217,14 +229,49 @@ simulation_parameters:
           validation:
             gt_eq<>: 0.0
 
-        topic:
+      depth_config:
+        fx:
+          type: double
+          read_only: True
+          description: The x-direction focal length of the camera
+          default_value: 0.0
+
+        fy:
+          type: double
+          read_only: True
+          description: The y-direction focal length of the camera
+          default_value: 0.0
+
+        cx:
+          type: double
+          read_only: True
+          description: The x-direction principal point of the camera
+          default_value: 0.0
+
+        cy:
+          type: double
+          read_only: True
+          description: The y-direction principal point of the camera
+          default_value: 0.0
+
+        horizontal_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the x-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        vertical_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the y-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        info_topic:
           type: string
           read_only: True
-          description: The topic on which to publish the LiDAR pointcloud
-          default_value: '/lidar_points'
-        
-        best_effort:
-          type: bool
-          read_only: True
-          description: Whether or not to publish the pointcloud with Best Effort reliability
-          default_value: False
+          description: The topic on which to publish CameraInfo messages
+          default_value: ""

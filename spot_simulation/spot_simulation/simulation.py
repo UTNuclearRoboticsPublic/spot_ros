@@ -5,13 +5,14 @@ from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.duration import Duration
 from std_msgs.msg import Header
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, Image, CameraInfo
 from scipy.spatial.transform import Rotation
 from tf2_ros import TransformListener, Buffer, TransformException
 from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
 from .simulated_robot import SimulatedRobot
 from .simulated_lidar import SimulatedLiDAR
 from .simulated_object import SimulatedObject
+from .simulated_depth_camera import SimulatedDepthCamera
 from .simulation_parameters import simulation_parameters as simulation_parameter_module
 
 SimulationParameters = simulation_parameter_module.Params
@@ -32,6 +33,7 @@ class Simulation(Node):
         self.ids     = {} # All geometry ids in the scene
         self.scene = open3d.t.geometry.RaycastingScene()
         self.sensor_pubs = {}
+        self.sensor_info_pubs = {} # For cameras
         self.callback_timers = [] # Timers set to update various things
 
         self.idx = 0
@@ -48,10 +50,21 @@ class Simulation(Node):
                 self.sensors[sensor_name] = SimulatedLiDAR(sensor_config.lidar_config)
                 self.sensor_pubs[sensor_name] = self.create_publisher(
                     msg_type=PointCloud2,
-                    topic=sensor_config.lidar_config.topic,
-                    qos_profile=10)
-                self.updateSensorTransform(sensor_name)
-                self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name)))
+                    topic=sensor_config.topic,
+                    qos_profile=10) # TODO: Respect the best effort parameter
+            elif sensor_config.sensor_type == 'depth_camera':
+                self.sensors[sensor_name] = SimulatedDepthCamera(sensor_config.depth_config)
+                self.sensor_pubs[sensor_name] = self.create_publisher(
+                    msg_type=Image,
+                    topic=sensor_config.topic,
+                    qos_profile=10
+                )
+                self.sensor_info_pubs[sensor_name] = self.create_publisher(
+                    msg_type=CameraInfo,
+                    topic=sensor_config.depth_config.info_topic,
+                    qos_profile=10
+                )
+            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name)))
                 
         for robot_name in self.simulation_parameters.robot_names:
             self.get_logger().info(f'Loading robot "{robot_name}"')
@@ -91,27 +104,34 @@ class Simulation(Node):
         if not self.updateSensorTransform(sensor_name): return
 
         sensor = self.sensors.get(sensor_name)
-        rays = sensor.generate_rays()
+        rays = sensor.generate_rays(self.scene)
         hits = self.scene.cast_rays(rays)
         dists = hits['t_hit']
         dists += np.random.normal(loc=0.0, scale=sensor.config.noise_std_dev, size=dists.shape).astype(np.float32)
-        rays[:, 3] *= dists
-        rays[:, 4] *= dists
-        rays[:, 5] *= dists
-        points = rays[:, 0:3] + rays[:, 3:] # defined in the simulation frame
+        
+        if type(sensor) is SimulatedLiDAR:
+            # Handle poor broadcasting ability of Open3D tensors
+            rays[:, 3] *= dists
+            rays[:, 4] *= dists
+            rays[:, 5] *= dists
+            points = rays[:, 0:3] + rays[:, 3:] # defined in the simulation frame
 
-        # Transform points back to sensor frame
-        world_tform_sensor = sensor.pose
-        sensor_tform_world_rot = world_tform_sensor[:3, :3].T()
-        sensor_tform_world_trans = -sensor_tform_world_rot @ world_tform_sensor[:3, 3]
-        local_points = (sensor_tform_world_rot @ points.T()).T() 
-        local_points[:, 0] += sensor_tform_world_trans[0]
-        local_points[:, 1] += sensor_tform_world_trans[1]
-        local_points[:, 2] += sensor_tform_world_trans[2]
+            # Transform points back to sensor frame
+            world_tform_sensor = sensor.pose
+            sensor_tform_world_rot = world_tform_sensor[:3, :3].T()
+            sensor_tform_world_trans = -sensor_tform_world_rot @ world_tform_sensor[:3, 3]
+            local_points = (sensor_tform_world_rot @ points.T()).T() 
+            local_points[:, 0] += sensor_tform_world_trans[0]
+            local_points[:, 1] += sensor_tform_world_trans[1]
+            local_points[:, 2] += sensor_tform_world_trans[2]
 
-        header = Header(frame_id=self.simulation_parameters.sensors.get_entry(sensor_name).frame_id, stamp=self.get_clock().now().to_msg())
-        pointcloud = create_cloud_xyz32(header, local_points.numpy())
-        self.sensor_pubs[sensor_name].publish(pointcloud)
+            header = Header(frame_id=self.simulation_parameters.sensors.get_entry(sensor_name).frame_id, stamp=self.get_clock().now().to_msg())
+            pointcloud = create_cloud_xyz32(header, local_points.numpy())
+            self.sensor_pubs[sensor_name].publish(pointcloud)
+
+        elif type(sensor) is SimulatedDepthCamera:
+            # TODO: cast rays, create depth image, publish image + camera info
+            ...
 
 
 def main():

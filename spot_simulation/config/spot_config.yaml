@@ -1,6 +1,7 @@
 spot_simulation:
   ros__parameters:
     robot_names: [spot]
+    sensor_names: [ouster, hand_depth_camera]
 
     robots:
       spot:
@@ -9,3 +10,12 @@ spot_simulation:
         xacro_args: "has_arm:=True has_rl_kit:=True"
         initial_transform:
           translation: [0.0, 0.0, 0.51]
+
+    sensors:
+      hand_depth_camera:
+        fx: 213.809
+        fy: 213.809
+        cx: 107.442
+        cy: 87.193
+        horizontal_resolution: 224
+        vertical_resolution: 171
