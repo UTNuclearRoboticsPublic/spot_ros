@@ -19,6 +19,13 @@ class SimulatedRobot:
         self.vel = np.array([[0, 0, 0], [0, 0, 0]], dtype=float)
         self.pose = np.eye(4)
 
+        self.pose[:3,  3] = np.array(robot_config.initial_transform.translation)
+        self.pose[:3, :3] = Rotation.from_euler(
+            seq="ZYX",
+            angles=[robot_config.initial_transform.yaw, robot_config.initial_transform.pitch, robot_config.initial_transform.roll],
+            degrees=True
+        ).as_matrix()
+
         self.cmd_vel_sub = node.create_subscription(
             msg_type=Twist,
             topic=f'{robot_config.namespace}/cmd_vel',

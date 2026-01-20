@@ -7,3 +7,5 @@ spot_simulation:
         urdf_path: package://spot_description/urdf/spot.urdf.xacro
         namespace: spot_driver
         xacro_args: "has_arm:=True has_rl_kit:=True"
+        initial_transform:
+          translation: [0.0, 0.0, 0.51]
