@@ -1,0 +1,18 @@
+<launch>
+
+    <include file="$(find-pkg-share spot_moveit_config)/launch/fake_controller.launch.py">
+        <arg name="rviz" value="False"/>
+    </include>
+
+    <node pkg="tf2_ros" exec="static_transform_publisher"
+        args="--frame-id body --child-frame-id base_footprint --z -0.57"/>
+
+    <node pkg="spot_simulation" exec="simulation">
+        <param from="$(find-pkg-share spot_simulation)/config/spot_config.yaml"/>
+        <param from="$(find-pkg-share spot_simulation)/config/ouster_config.yaml"/>
+        <param from="$(find-pkg-share spot_simulation)/config/cube_config.yaml"/>
+    </node>
+
+    <node pkg="rviz2" exec="rviz2" args="-d $(find-pkg-share spot_simulation)/rviz/simulation.rviz"/>
+
+</launch>
