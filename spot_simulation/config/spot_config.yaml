@@ -10,6 +10,7 @@ spot_simulation:
         xacro_args: "has_arm:=True has_rl_kit:=True"
         initial_transform:
           translation: [0.0, 0.0, 0.51]
+        update_rate: 100.0
 
     sensors:
       hand_depth_camera:
