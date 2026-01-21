@@ -1,6 +1,6 @@
 spot_simulation:
   ros__parameters:
-    object_names: [cube, floor]
+    object_names: [cube, room]
 
     objects:
       cube:
@@ -9,6 +9,7 @@ spot_simulation:
         location: [2.0, 0.0, 0.375]
         yaw: 90.0
 
-      floor:
+      room:
         object_type: box
-        dimensions: [100.0, 100.0, 0.01]
+        dimensions: [10.0, 10.0, 4.5]
+        location: [0.0, 0.0, 2.25]
