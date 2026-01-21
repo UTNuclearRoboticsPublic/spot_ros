@@ -28,13 +28,13 @@ class Simulation(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
             
-        self.objects = {} # List of objects in the scene
-        self.robots  = {} # Spot robot
-        self.sensors = {} # List of sensors in the scene or on the robot
-        self.ids     = {} # All geometry ids in the scene
+        self.objects: dict[str, SimulatedObject] = {} # List of objects in the scene
+        self.robots: dict[str, SimulatedRobot]  = {} # Spot robot
+        self.sensors: dict[str, SimulatedLiDAR|SimulatedDepthCamera] = {} # List of sensors in the scene or on the robot
+        self.sensor_cb_groups: dict[str] = {}
         self.scene = open3d.t.geometry.RaycastingScene()
-        self.sensor_pubs = {}
-        self.sensor_info_pubs = {} # For cameras
+        self.sensor_pubs: dict[str, Publisher] = {}
+        self.sensor_info_pubs: dict[str, Publisher] = {} # For cameras
         self.callback_timers = [] # Timers set to update various things
 
         self.idx = 0
@@ -42,7 +42,7 @@ class Simulation(Node):
         for object_name in self.simulation_parameters.object_names:
             self.get_logger().info(f'Loading object "{object_name}": ')
             self.objects[object_name] = SimulatedObject(self.simulation_parameters.objects.get_entry(object_name))
-            self.ids[object_name] = self.scene.add_triangles(self.objects[object_name].geometry)
+            self.scene.add_triangles(self.objects[object_name].geometry)
             
         for sensor_name in self.simulation_parameters.sensor_names:
             self.get_logger().info(f'Loading sensor "{sensor_name}"')
