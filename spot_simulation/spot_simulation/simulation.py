@@ -73,12 +73,22 @@ class Simulation(Node):
             self.robots[robot_name] = SimulatedRobot(robot_config, self)
             self.callback_timers.append(self.create_timer(1.0/robot_config.update_rate, lambda name=robot_name: self.robots[name].publish_state()))
 
+        self.reset_server = self.create_service(Trigger, "~/reset_simulation", self.resetRobotTransforms)
+
         self.update_dt = 0.01
         self.callback_timers.append(self.create_timer(self.update_dt, self.updateRobotTransforms))
 
     def updateRobotTransforms(self):
         for robot in self.robots.values():
             robot.update_state(self.update_dt)
+
+    def resetRobotTransforms(self, req: Trigger.Request, resp: Trigger.Response) -> Trigger.Response:
+        for robot in self.robots.values():
+            robot.pose = robot.initial_pose.copy()
+            robot.vel = robot.initial_vel.copy()
+        resp.success = True
+        resp.message = "Simulation Reset"
+        return resp
 
     def updateSensorTransform(self, sensor_name: str) -> bool:
         sensor = self.sensors.get(sensor_name)

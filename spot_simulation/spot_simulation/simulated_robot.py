@@ -26,6 +26,9 @@ class SimulatedRobot:
             degrees=True
         ).as_matrix()
 
+        self.initial_pose = self.pose.copy()
+        self.initial_vel = self.vel.copy()
+
         self.cmd_vel_sub = node.create_subscription(
             msg_type=Twist,
             topic=f'{robot_config.namespace}/cmd_vel',
