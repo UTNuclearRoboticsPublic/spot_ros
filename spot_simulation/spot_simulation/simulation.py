@@ -5,7 +5,11 @@ import numpy as np
 from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.duration import Duration
+from rclpy.publisher import Publisher
 from std_msgs.msg import Header
+from std_srvs.srv import Trigger
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import PointCloud2, Image, CameraInfo
 from scipy.spatial.transform import Rotation
 from tf2_ros import TransformListener, Buffer, TransformException
@@ -65,7 +69,8 @@ class Simulation(Node):
                     topic=sensor_config.depth_config.info_topic,
                     qos_profile=10
                 )
-            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name)))
+            self.sensor_cb_groups[sensor_name] = MutuallyExclusiveCallbackGroup()
+            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_cb_groups[sensor_name]))
                 
         for robot_name in self.simulation_parameters.robot_names:
             self.get_logger().info(f'Loading robot "{robot_name}"')
@@ -73,10 +78,10 @@ class Simulation(Node):
             self.robots[robot_name] = SimulatedRobot(robot_config, self)
             self.callback_timers.append(self.create_timer(1.0/robot_config.update_rate, lambda name=robot_name: self.robots[name].publish_state()))
 
-        self.reset_server = self.create_service(Trigger, "~/reset_simulation", self.resetRobotTransforms)
+        self.reset_server = self.create_service(Trigger, "~/reset_simulation", self.resetRobotTransforms, callback_group=MutuallyExclusiveCallbackGroup())
 
         self.update_dt = 0.01
-        self.callback_timers.append(self.create_timer(self.update_dt, self.updateRobotTransforms))
+        self.callback_timers.append(self.create_timer(self.update_dt, self.updateRobotTransforms, MutuallyExclusiveCallbackGroup()))
 
     def updateRobotTransforms(self):
         for robot in self.robots.values():
@@ -176,8 +181,10 @@ class Simulation(Node):
 
 def main():
     rclpy.init()
+    exec = MultiThreadedExecutor()
     simulation = Simulation()
-    rclpy.spin(simulation)
+    exec.add_node(simulation)
+    exec.spin()
 
 if __name__ == '__main__':
     main()
