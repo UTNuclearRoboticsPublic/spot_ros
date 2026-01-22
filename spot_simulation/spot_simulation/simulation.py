@@ -4,10 +4,12 @@ import open3d
 import numpy as np
 from rclpy.node import Node
 from rclpy.time import Time
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy
 from rclpy.duration import Duration
 from rclpy.publisher import Publisher
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
+from visualization_msgs.msg import MarkerArray
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import PointCloud2, Image, CameraInfo
@@ -43,10 +45,17 @@ class Simulation(Node):
 
         self.idx = 0
 
+        latching_qos = QoSProfile(depth=1)
+        latching_qos.durability = QoSDurabilityPolicy.TRANSIENT_LOCAL
+        self.geometry_markers = self.create_publisher(MarkerArray, '~/simulation_geometry', latching_qos)
+
+        environment_markers = MarkerArray()
         for object_name in self.simulation_parameters.object_names:
             self.get_logger().info(f'Loading object "{object_name}": ')
             self.objects[object_name] = SimulatedObject(self.simulation_parameters.objects.get_entry(object_name))
             self.scene.add_triangles(self.objects[object_name].geometry)
+            environment_markers.markers.append(self.objects[object_name].marker)
+        self.geometry_markers.publish(environment_markers)
             
         for sensor_name in self.simulation_parameters.sensor_names:
             self.get_logger().info(f'Loading sensor "{sensor_name}"')
