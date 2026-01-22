@@ -4,11 +4,12 @@
         <arg name="rviz" value="False"/>
     </include>
 
-    <node pkg="tf2_ros" exec="static_transform_publisher"
-        args="--frame-id body --child-frame-id base_footprint --z -0.57"/>
+    <include file="$(find-pkg-share spot_description)/launch/fake_camera_transforms.launch.py">
+        <arg name="has_arm" value="True"/>
+    </include>
 
     <node pkg="tf2_ros" exec="static_transform_publisher"
-        args="--frame-id arm0_hand --child-frame-id hand_depth_sensor --x -0.058 --z -0.004 --qw 0.749 --qy 0.663"/>
+        args="--frame-id body --child-frame-id base_footprint --z -0.52"/>
 
     <node pkg="spot_simulation" exec="simulation">
         <param from="$(find-pkg-share spot_simulation)/config/spot_config.yaml"/>
