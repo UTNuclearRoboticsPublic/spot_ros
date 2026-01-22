@@ -39,6 +39,7 @@ setup(
     entry_points={
         'console_scripts': [
             f'simulation = {package_name}.simulation:main',
+            f'simulated_servers = {package_name}.simulated_servers:main'
         ],
     },
 )
