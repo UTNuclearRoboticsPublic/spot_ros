@@ -1,7 +1,10 @@
 <launch>
 
+    <arg name="launch_rviz" default="true" description="Whether or not to launch the simulation rviz configuration"/>
+    <arg name="params" default="$(find-pkg-share spot_simulation)/config/spot_config.yaml" description="Path to the parameter file to load for spot"/>
+
     <include file="$(find-pkg-share spot_moveit_config)/launch/fake_controller.launch.py">
-        <arg name="rviz" value="False"/>
+        <arg name="rviz" value="false"/>
     </include>
 
     <include file="$(find-pkg-share spot_description)/launch/fake_camera_transforms.launch.py">
@@ -12,10 +15,12 @@
         args="--frame-id body --child-frame-id base_footprint --z -0.52"/>
 
     <node pkg="spot_simulation" exec="simulation">
-        <param from="$(find-pkg-share spot_simulation)/config/spot_config.yaml"/>
         <param from="$(find-pkg-share spot_simulation)/config/cube_config.yaml"/>
+        <param from="$(var params)"/>
     </node>
 
-    <node pkg="rviz2" exec="rviz2" args="-d $(find-pkg-share spot_simulation)/rviz/simulation.rviz"/>
+    <node pkg="spot_simulation" exec="simulated_servers"/>
+
+    <node pkg="rviz2" exec="rviz2" args="-d $(find-pkg-share spot_simulation)/rviz/simulation.rviz" if="$(var launch_rviz)"/>
 
 </launch>
