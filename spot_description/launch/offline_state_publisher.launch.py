@@ -1,6 +1,6 @@
 import launch
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, IncludeLaunchDescription
 
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
@@ -323,8 +323,15 @@ def generate_launch_description():
     xacro_path = PathJoinSubstitution([FindPackageShare('spot_description'), 'urdf', 'spot.urdf.xacro'])
     urdf_param = ParameterValue(Command(['xacro ', xacro_path, *xacro_command_args]), value_type=str)
 
+    # Camera transforms
+    camera_transforms = IncludeLaunchDescription(
+        launch_description_source=PathJoinSubstitution([FindPackageShare('spot_description'), 'launch', 'fake_camera_transforms.launch.py']),
+        launch_arguments=[('has_arm', LaunchConfiguration('has_arm'))]
+    )
+
     return launch.LaunchDescription([
         *launch_args,
+        camera_transforms,
 
         OpaqueFunction(function=launch_joint_states, kwargs={'name': LaunchConfiguration('configuration'), 'urdf':urdf_param}),
 
