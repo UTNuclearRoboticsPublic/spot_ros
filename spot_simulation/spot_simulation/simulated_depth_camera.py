@@ -17,6 +17,7 @@ class SimulatedDepthCamera:
                       [0.0,        0.0     ,        1.0     ]]))
         
         self.camera_info = CameraInfo()
+        self.camera_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
         self.camera_info.k = self.intrinsic_matrix.numpy().astype(float).flatten().tolist()
         self.camera_info.p = np.hstack((self.intrinsic_matrix.numpy(), np.zeros((3, 1), dtype=float))).astype(float).flatten().tolist()
         self.camera_info.r = np.eye(3).flatten().tolist()
