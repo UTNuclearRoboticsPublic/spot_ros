@@ -126,12 +126,14 @@ class Simulation(Node):
         dists += np.random.normal(loc=0.0, scale=sensor.sensor_config.noise_std_dev, size=dists.shape).astype(np.float32)
 
         valid_dists = dists.isfinite() & (dists > sensor.sensor_config.min_range) & (dists < sensor.sensor_config.max_range)
-        dists[valid_dists.logical_not()] = 0.0
 
         # Flatten depth images to help with math
         if type(sensor) == SimulatedDepthCamera:
             rays = rays.reshape((-1, 6))
+            dists[valid_dists.logical_not()] = 0.0
             dists = dists.flatten()
+        else:
+            dists[valid_dists.logical_not()] = np.inf
         
         # Handle poor broadcasting ability of Open3D tensors
         rays[:, 3] *= dists
@@ -170,8 +172,10 @@ class Simulation(Node):
             np.nan_to_num(depths, nan=0.0, posinf=0.0, neginf=0.0, copy=False)
             if depth_image.encoding == '16UC1':
                 depth_image.data = (depths * 1000.0).astype(np.uint16).tobytes()
+                depth_image.step = sensor.depth_config.horizontal_resolution * 2
             elif depth_image.encoding == '32FC1':
                 depth_image.data = depths.tobytes()
+                depth_image.step = sensor.depth_config.horizontal_resolution * 4
             depth_image.is_bigendian = 0 if sys.byteorder == "little" else 1
 
             self.sensor_pubs[sensor_name].publish(depth_image)
