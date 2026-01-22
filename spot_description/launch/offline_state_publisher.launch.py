@@ -329,9 +329,17 @@ def generate_launch_description():
         launch_arguments=[('has_arm', LaunchConfiguration('has_arm'))]
     )
 
+    # Base footprint
+    base_footprint_pub = Node(
+        package='tf2_ros', 
+        executable='static_transform_publisher', 
+        arguments=['--frame-id', 'body', '--child-frame-id', 'base_footprint', '--z', '-0.52']
+    ),
+
     return launch.LaunchDescription([
         *launch_args,
         camera_transforms,
+        base_footprint_pub,
 
         OpaqueFunction(function=launch_joint_states, kwargs={'name': LaunchConfiguration('configuration'), 'urdf':urdf_param}),
 
