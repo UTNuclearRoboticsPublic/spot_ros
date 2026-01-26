@@ -45,9 +45,9 @@ class SimulatedObject:
             # Box origin by default is its front, bottom, left corner
             self.geometry = self.geometry.translate(-np.array(self.config.dimensions)*0.5)
             self.marker.type = Marker.CUBE
-            self.marker.scale.x = self.config.dimsensions[0]
-            self.marker.scale.y = self.config.dimsensions[1]
-            self.marker.scale.z = self.config.dimsensions[2]
+            self.marker.scale.x = self.config.dimensions[0]
+            self.marker.scale.y = self.config.dimensions[1]
+            self.marker.scale.z = self.config.dimensions[2]
 
         elif self.config.object_type == 'cylinder':
             assert len(self.config.dimensions) == 2, 'Cylinder object type must have 2 dimensions'
@@ -56,9 +56,9 @@ class SimulatedObject:
                 radius=self.config.dimensions[1]
             )
             self.marker.type = Marker.CYLINDER
-            self.marker.scale.x = self.config.dimsensions[1]
-            self.marker.scale.y = self.config.dimsensions[1]
-            self.marker.scale.z = self.config.dimsensions[0]
+            self.marker.scale.x = self.config.dimensions[1]
+            self.marker.scale.y = self.config.dimensions[1]
+            self.marker.scale.z = self.config.dimensions[0]
 
         elif self.config.object_type == 'mesh':
             assert len(self.config.file_path), 'No mesh file passed for mesh object'
