@@ -3,7 +3,7 @@ from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDesc
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
-from launch_ros.actions import PushRosNamespace, SetRemap
+from launch_ros.actions import PushRosNamespace, SetRemap, Node
 
 def generate_launch_description():
     config_arg = DeclareLaunchArgument(
@@ -17,11 +17,19 @@ def generate_launch_description():
         description='The topic on which to look for pointcloud data. Default "/velodyne_points"',
         default_value='/velodyne_points'
     )
+
+    twist_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        parameters=[PathJoinSubstitution([FindPackageShare('spot_navigation'), 'config', 'twist_mux.yaml'])],
+        remappings=[
+            ('/cmd_vel_out', '/spot_driver/cmd_vel')
+        ]
+    )
     
     nav_include = GroupAction(
         actions=[
             PushRosNamespace("spot_nav"),
-            SetRemap(src='cmd_vel'   , dst='/spot_driver/cmd_vel'),
             SetRemap(src='/tf'       , dst='/tf'),
             SetRemap(src='/tf_static', dst='/tf_static'),
             SetRemap(src='/velodyne_points', dst=LaunchConfiguration('cloud_in')),
@@ -41,4 +49,5 @@ def generate_launch_description():
         config_arg,
         pointcloud_arg,
         nav_include,
+        twist_mux
     ])

@@ -9,7 +9,7 @@ octomap_server_node:
       distance: 0.05
       plane_distance: 0.10
     latch: true
-    occupancy_max_z: 2.0
+    occupancy_max_z: 1.5
     resolution: 0.05
     sensor_model:
       hit: 0.7

@@ -47,7 +47,7 @@ def generate_launch_description():
                 {"angle_increment": math.radians(1.0)},
                 {"target_frame": "base_footprint"},
                 {"min_height": 0.20},
-                {"max_height": 1.5}
+                {"max_height": 1.0}
             ],
             remappings=[
                 ("cloud_in", LaunchConfiguration('cloud_in')),
