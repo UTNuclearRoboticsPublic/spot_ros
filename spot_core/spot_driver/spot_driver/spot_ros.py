@@ -117,6 +117,11 @@ class SpotROS(Node):
                                 type=ParameterType.PARAMETER_STRING,
                                 read_only=True))
 
+        self.declare_parameter('broadcast_body_parent_frames', True,
+            ParameterDescriptor(description='Whether to publish body parent frames (odom -> gpe -> base_footprint) in the tf tree.',
+                                type=ParameterType.PARAMETER_BOOL,
+                                read_only=False))
+
         self.declare_parameter('estop_timeout', 9.0,
             ParameterDescriptor(description='The E-Stop engages if we lose connection for this long.',
                                 type=ParameterType.PARAMETER_INTEGER,
@@ -243,6 +248,9 @@ class SpotROS(Node):
 
         self.joint_state_pub.publish(joint_state)
         if len(tf_msg.transforms) > 0:
+            broadcast_body_parent_frames = self.get_parameter('broadcast_body_parent_frames').value
+            if not broadcast_body_parent_frames:
+                tf_msg.transforms = [t for t in tf_msg.transforms if t.header.frame_id not in ['odom', 'gpe', 'base_footprint']]
             self.tf_broadcaster.sendTransform(tf_msg.transforms)
         
         # Odom Twist #

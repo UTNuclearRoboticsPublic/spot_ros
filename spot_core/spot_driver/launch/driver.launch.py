@@ -57,7 +57,10 @@ def generate_launch_description():
                         default_value='False'),
     DeclareLaunchArgument('robot_state_update_rate',
                           description='The update rate of the robot state (including TF) in Hz',
-                          default_value='10.0')
+                          default_value='10.0'),
+    DeclareLaunchArgument('broadcast_body_parent_frames',
+                        description='Whether to publish body parent frames (odom -> gpe -> base_footprint) in the tf tree.',
+                        default_value='True'),
   ]
 
   has_arm = LaunchConfiguration('has_arm')
@@ -110,7 +113,10 @@ def generate_launch_description():
                              value_type=bool),
         ParameterDescription(name='rates.status.robot_state',
                              value=LaunchConfiguration('robot_state_update_rate'),
-                             value_type=float)
+                             value_type=float),
+        ParameterDescription(name='broadcast_body_parent_frames',
+                             value=LaunchConfiguration('broadcast_body_parent_frames'),
+                             value_type=bool),
       ],
       output='screen',
       on_exit=Shutdown()

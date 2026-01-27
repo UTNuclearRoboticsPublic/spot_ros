@@ -1,4 +1,12 @@
 services:
+  update:
+    image: nrg/spot_update:${TARGET_ROS_DISTRO}
+    build:
+      context: .
+      dockerfile: ./docker/update_source.Dockerfile
+      args:
+        ROS_DISTRO: ${TARGET_ROS_DISTRO}
+
   spot_ros:
     container_name: spot_ros
     image: nrg/spot_ros:${TARGET_ROS_DISTRO}

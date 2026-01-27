@@ -73,6 +73,9 @@ def generate_launch_description():
         DeclareLaunchArgument('launch_velodyne',
                             description='Launch the velodyne driver regardless of accessory settings',
                             default_value='True'),
+        DeclareLaunchArgument('broadcast_body_parent_frames',
+                            description='Publish the body parent frames (odom -> gpe -> base_footprint) in the tf tree.',
+                            default_value='True'),
 
         # Other configurations
         DeclareLaunchArgument('manipulation_action_namespace',
@@ -115,6 +118,7 @@ def generate_launch_description():
     auto_power_on   = LaunchConfiguration('auto_power_on')
     auto_stand      = LaunchConfiguration('auto_stand')
     launch_pointcloud_service = LaunchConfiguration('launch_pointcloud_service')
+    broadcast_body_parent_frames = LaunchConfiguration('broadcast_body_parent_frames')
 
     body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
     arm_params  = PathJoinSubstitution([FindPackageShare('spot_manipulation_driver'), 'config', 'spot_arm.yaml'])
@@ -142,7 +146,8 @@ def generate_launch_description():
                 'auto_claim':      auto_claim,
                 'auto_power_on':   auto_power_on,
                 'auto_stand':      auto_stand,
-                'launch_pointcloud_service': launch_pointcloud_service
+                'launch_pointcloud_service': launch_pointcloud_service,
+                'broadcast_body_parent_frames': broadcast_body_parent_frames,
             }.items()
     )
 
@@ -167,6 +172,7 @@ def generate_launch_description():
             'launch_pointcloud_service': launch_pointcloud_service,
             'action_namespace': LaunchConfiguration('manipulation_action_namespace'),
             'data_capture_mode': LaunchConfiguration('data_capture_mode'),
+            'broadcast_body_parent_frames': broadcast_body_parent_frames,
             },
             body_params,
             arm_params
