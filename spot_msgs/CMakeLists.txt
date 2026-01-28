@@ -3,6 +3,7 @@ project(spot_msgs)
 
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -72,7 +73,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WiFiState.msg"
   "msg/Gesture.msg"
 
-  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs shape_msgs
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs nav_msgs std_srvs sensor_msgs tf2_msgs trajectory_msgs shape_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

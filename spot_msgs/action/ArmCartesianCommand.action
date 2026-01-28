@@ -12,6 +12,10 @@ std_msgs/Header header
 # Ignored for all axes marked as force control axes.
 geometry_msgs/Pose[] waypoints
 
+# Joint waypoints corresponding to the pose waypoints above [Optional]
+# Nunmber of waypoints should equal the number of cartesian poses.
+trajectory_msgs/JointTrajectory joint_waypoints
+
 # Wrench trajectory for the cartesian commands.
 # Ignored for all axes marked as position control axes.
 geometry_msgs/Wrench[] wrench_trajectory
