@@ -270,7 +270,7 @@
         <axis xyz="0.0 1.0 0.0"/>
         <parent link="${name}_wrist_roll"/>
         <child link="${name}_fingers"/>
-        <limit effort="1000" velocity="1000.00" lower="-1.57" upper="0.0"/>
+        <limit effort="1000" velocity="1000.00" lower="-1.58" upper="0.0"/>
     </joint>
 
     <link name="${name}.link_wr1"/>

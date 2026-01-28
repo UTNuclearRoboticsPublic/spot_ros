@@ -1,53 +1,17 @@
 #include <span>
+#include <mutex>
+#include <thread>
 #include <ranges>
 #include <cstring>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
 #include <rcpputils/endian.hpp>
+#include <eigen3/Eigen/Geometry>
+#include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-
-struct BoundingBox {
-    double x_min{};
-    double x_max{};
-    double y_min{};
-    double y_max{};
-    double z_min{};
-    double z_max{};
-};
-
-consteval auto generateBoundingBoxes() {
-    // All bounding boxes are defined in the body frame
-    BoundingBox body_bounding_box {
-        .x_min =  0.00,
-        .x_max =  0.80,
-        .y_min = -0.40,
-        .y_max =  0.40,
-        .z_min = -0.50,
-        .z_max =  0.15
-    };
-
-    BoundingBox arm_bounding_box {
-        .x_min =  0.00,
-        .x_max =  0.70,
-        .y_min = -0.15,
-        .y_max =  0.15,
-        .z_min =  0.00,
-        .z_max =  0.32
-    };
-
-    BoundingBox stray_point_box {
-        .x_min =  0.60,
-        .x_max =  1.50,
-        .y_min = -0.25,
-        .y_max =  0.25,
-        .z_min = -0.57,
-        .z_max = -0.30
-    };
-
-    return std::array{body_bounding_box, arm_bounding_box, stray_point_box};
-}
+#include <spot_msgs/msg/manipulator_stow_state.hpp>
 
 namespace spot_navigation {
 
@@ -58,34 +22,32 @@ public:
     tf_buffer(get_clock()),
     tf_listener(tf_buffer)
     {
-        const std::string sensor_frame = declare_parameter("sensor_frame", "velodyne");
+        sensor_frame_ = declare_parameter("sensor_frame", "velodyne");
+        critical_links.back() = declare_parameter("tool_frame", "arm0_hand");
 
         // We assume that the lidar is fixed relative to the body and is aligned with the body
+        // and that it is mounted with the NRG elevated lidar mount
+        /** TODO: Parameterize angle limits to work with other mounts **/
         try {
-            const geometry_msgs::msg::TransformStamped sensor_tform_body = tf_buffer.lookupTransform(
-                sensor_frame,
-                "body",
+            const geometry_msgs::msg::TransformStamped sensor_tform_arm_base = tf_buffer.lookupTransform(
+                sensor_frame_,
+                "arm0_base_link",
                 tf2::TimePointZero,
                 std::chrono::seconds(20)  // extra time for ouster to get online
             );
 
-            if (std::abs(sensor_tform_body.transform.rotation.w) < 0.95) {
-                RCLCPP_ERROR(get_logger(), "Your lidar frame %s is not aligned with your robot. This code wasn't meant for that", sensor_frame.c_str());
+            if (std::abs(sensor_tform_arm_base.transform.rotation.w) < 0.95) {
+                RCLCPP_ERROR(get_logger(), "Your lidar frame %s is not aligned with your robot. This code wasn't meant for that", sensor_frame_.c_str());
                 exit(1);
-            }
-
-            for (BoundingBox& bbox : bounding_boxes) {
-                bbox.x_min += sensor_tform_body.transform.translation.x;
-                bbox.x_max += sensor_tform_body.transform.translation.x;
-                bbox.y_min += sensor_tform_body.transform.translation.y;
-                bbox.y_max += sensor_tform_body.transform.translation.y;
-                bbox.z_min += sensor_tform_body.transform.translation.z;
-                bbox.z_max += sensor_tform_body.transform.translation.z;
             }
         } catch (tf2::TransformException& e) {
             RCLCPP_ERROR(get_logger(), e.what());
             exit(1);
         }
+
+        // Start a thread to keep track of the arm positions
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        arm_update_thread_ = std::thread(&PointcloudFilterComponent::updateTransforms, this);
 
         using namespace std::placeholders;
         rclcpp::SubscriptionOptions sub_opts;
@@ -94,35 +56,40 @@ public:
         pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
-        region_marker_pub = create_publisher<visualization_msgs::msg::MarkerArray>("~/exclusion_region", rclcpp::QoS(1).transient_local());
-        publishRegionVisualization(sensor_frame);
+        stow_state_sub_ = create_subscription<spot_msgs::msg::ManipulatorStowState>("/spot_manipulation_driver/manipulator_state/stow_state", 1, 
+            [this](spot_msgs::msg::ManipulatorStowState::SharedPtr state){arm_stowed_ = state->state == state->STOWSTATE_STOWED;});
 
         RCLCPP_INFO(get_logger(), "Spot pointcloud filter online");
     }
 
-    void publishRegionVisualization(const std::string sensor_frame) {
-        visualization_msgs::msg::MarkerArray marker_array;
-        visualization_msgs::msg::Marker region_marker;
+    void updateTransforms() {
+        while (rclcpp::ok()) {
+            for (std::size_t link_idx = 0; link_idx < critical_links.size(); link_idx++) {
+                const std::string& frame = critical_links[link_idx];
+                geometry_msgs::msg::TransformStamped sensor_tform_link= tf_buffer.lookupTransform(
+                    sensor_frame_,
+                    frame,
+                    tf2::TimePointZero
+                );
+                tf2::fromMsg(sensor_tform_link.transform.translation, critical_link_locs[link_idx]);
+            }
 
-        region_marker.action = region_marker.ADD;
-        region_marker.color.a = 0.2f;
-        region_marker.color.g = 1.0f;
-        region_marker.frame_locked = true;
-        region_marker.type = region_marker.CUBE;
-        region_marker.header.frame_id = sensor_frame;
+            {
+                std::lock_guard guard(arm_update_mtx_);
+                arm_min_pt.x() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.x();})->x();
+                arm_min_pt.y() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.y();})->y();
+                arm_min_pt.z() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.z();})->z();
+                arm_max_pt.x() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.x();})->x();
+                arm_max_pt.y() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.y();})->y();
+                arm_max_pt.z() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.z();})->z();
 
-        for (const BoundingBox& bbox : bounding_boxes) {
-            region_marker.scale.x = bbox.x_max - bbox.x_min;
-            region_marker.scale.y = bbox.y_max - bbox.y_min;
-            region_marker.scale.z = bbox.z_max - bbox.z_min;
-            region_marker.pose.position.x = 0.5*(bbox.x_min + bbox.x_max);
-            region_marker.pose.position.y = 0.5*(bbox.y_min + bbox.y_max);
-            region_marker.pose.position.z = 0.5*(bbox.z_min + bbox.z_max);
-            marker_array.markers.push_back(region_marker);
-            region_marker.id++;
+                // Add a buffer since frame locations are at the link centers
+                arm_max_pt += 0.10 * Eigen::Vector3d::Ones();
+                arm_min_pt -= 0.10 * Eigen::Vector3d::Ones();
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
         }
-
-        region_marker_pub->publish(marker_array);
     }
 
     void filterPointcloud(sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud) {
@@ -167,14 +134,72 @@ public:
                 std::reverse(reinterpret_cast<std::byte*>(&y), reinterpret_cast<std::byte*>(&y) + sizeof(float));
                 std::reverse(reinterpret_cast<std::byte*>(&z), reinterpret_cast<std::byte*>(&z) + sizeof(float));
             }
-            
+
             bool accept_point = true;
-            for (const BoundingBox& bbox : bounding_boxes) {
-                if (x < bbox.x_max && x > bbox.x_min && y < bbox.y_max && y > bbox.y_min && z < bbox.z_max && z > bbox.z_min) {
+            
+            // Check the ray direction. We don't want points pointing forward and down
+            // since it hits the arm and body and creates a "bleeding points" effect
+            static constexpr float deg2rad = M_PIf32 / 180.0f;
+            static constexpr float body_threshold = 32.0f * deg2rad;
+            static constexpr float body_elevation_threshold = -25.0f * deg2rad;
+            static constexpr float arm_threshold = 7.5f * deg2rad;
+            static constexpr float arm_base_elevation_threshold = -18.0f * deg2rad;
+            static constexpr float arm_base_threshold = 17.0f * deg2rad;
+            
+            if (z < 0 && x > 0) {
+                // Check for arm obstruction
+                const float azimuthal_angle = std::abs(std::atan2(y, x));
+                if (azimuthal_angle < arm_threshold) {
                     accept_point = false;
-                    break;
+                } 
+                else if (azimuthal_angle < body_threshold) {
+                    const Eigen::Vector3f ray_dir = Eigen::Vector3f(x, y, z).normalized();
+                    const float elevation_angle = std::asin(ray_dir.z());
+
+                    // Check for body obstruction
+                    if (elevation_angle < body_elevation_threshold) {
+                        accept_point = false;                    
+                    }
+                    // Check for arm base obstruction
+                    else if (azimuthal_angle < arm_base_threshold && elevation_angle < arm_base_elevation_threshold) {
+                        accept_point = false;
+                    }
                 }
             }
+
+            // If the arm is deployed, we also need to check against that
+            // For computationaly feasibility, we just check against the entire arm AABB
+            if (accept_point && !arm_stowed_) {
+                const Eigen::Array3d ray_dir = Eigen::Vector3d(x, y, z).normalized().array();
+                std::lock_guard guard(arm_update_mtx_);
+
+                // Ray-BoundingBox intersection algorithm
+                double tmin = -std::numeric_limits<float>::infinity();
+                double tmax = std::numeric_limits<float>::infinity();
+                for (std::size_t idx = 0; idx < 3; idx++){  // x, y, z
+                    // Check for the special case of zero values
+                    if (ray_dir[idx] == 0.0) {
+                        if (arm_min_pt[idx] > 0 || arm_max_pt[idx] < 0){
+                            break;
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    // Get the scalar distance to the bounding box on this axis 
+                    double t1 = arm_min_pt[idx] / ray_dir[idx];
+                    double t2 = arm_max_pt[idx] / ray_dir[idx];
+                    auto [tmin_new, tmax_new] = std::minmax(t1, t2);
+
+                    tmin = std::max(tmin, tmin_new);
+                    tmax = std::min(tmax, tmax_new);
+                }
+
+                if (tmin < tmax && tmax > 0){
+                    accept_point = false;
+                }
+            }
+
             if (!accept_point) continue;
             new_size++;
             filtered_cloud->data.insert(filtered_cloud->data.end(), data_ptr, std::next(data_ptr, pointcloud->point_step));
@@ -188,10 +213,23 @@ private:
     tf2_ros::Buffer tf_buffer;
     tf2_ros::TransformListener tf_listener;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr region_marker_pub;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub;
+    rclcpp::Subscription<spot_msgs::msg::ManipulatorStowState>::SharedPtr stow_state_sub_;
+    
+    std::string tool_frame_; // Optional tool frame if something is attached to the end effector
+    std::string sensor_frame_;  // LiDAR frame
+    std::array<std::string, 4> critical_links {
+        "arm0_base_link",
+        "arm0_wrist_roll",
+        "arm0_elbow_pitch"
+    };
+    std::array<Eigen::Vector3d, 4> critical_link_locs{};
+    bool arm_stowed_ = true;
 
-    std::array<BoundingBox, 3> bounding_boxes = generateBoundingBoxes();
+    std::thread arm_update_thread_;
+    std::mutex arm_update_mtx_;
+    Eigen::Vector3d arm_min_pt;
+    Eigen::Vector3d arm_max_pt;
 };
 
 } // namespace spot_navigation
