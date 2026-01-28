@@ -1,5 +1,6 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include "spot_behaviors/stable_joint_motion.hpp"
+#include <moveit/kinematic_constraints/utils.h>
 
 namespace spot_behaviors {
 
@@ -10,20 +11,21 @@ StableJointMotion::StableJointMotion(
 StatefulActionNode(name, config),
 NodeBehaviorBase(name, tf_buffer)
 {
-    // TODO: Set all services and clients
+    moveit_plan_client_ = create_client<moveit_msgs::srv::GetMotionPlan>("/spot_moveit/plan_kinematic_path");
+
 }
 
 BT::PortsList StableJointMotion::providedPorts() {
     return {
-        BT::InputPort<geometry_msgs::msg::PoseArray::SharedPtr>("waypoints", "The poses to move the arm through"),
+        BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("goal_pose", "The poses to move the arm through"),
         BT::InputPort<std::string>("target_link", "The link on the robot for which the path is to be executed"),
-        BT::InputPort<double>("max_planning_time", 10.0, "The maximum allowable time before abandoning the planning request and returning FAILURE"),
-
-        BT::OutputPort<geometry_msgs::msg::PoseArray::SharedPtr>("remaining_poses", "The poses not yet visited by the plan")
+        BT::InputPort<double>("max_planning_time", 10.0, "The maximum allowable time before abandoning the planning request and returning FAILURE")
     };
 }
 
 BT::NodeStatus StableJointMotion::onStart() {
+    bosdyn_action_client_ = rclcpp_action::create_client<spot_msgs::action::ArmCartesianCommand>(shared_from_this(), "/spot_manipulation_driver/arm_cartesian_command");
+    
     if (!robot_model_loader_) {
         robot_model_loader_ = std::make_shared<robot_model_loader::RobotModelLoader>(shared_from_this());
         robot_model_ = robot_model_loader_->getModel();
@@ -46,35 +48,55 @@ BT::NodeStatus StableJointMotion::onStart() {
     }
 
     // Create a Cartesian path request
-    auto cartesian_req = std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>();
-    cartesian_req->avoid_collisions = true;
-    cartesian_req->group_name = "arm";
-    cartesian_req->header = waypoints_->header;
-    cartesian_req->waypoints = waypoints_->poses;
-    cartesian_req->max_step = 0.05;
-    cartesian_req->link_name = target_link_;
+    auto motion_req = std::make_shared<moveit_msgs::srv::GetMotionPlan::Request>();
+    auto& req = motion_req->motion_plan_request;
+    req.allowed_planning_time = max_planning_time_;
+    req.group_name = "arm";
+    req.max_velocity_scaling_factor = 0.3; // For testing
+    req.max_acceleration_scaling_factor = 0.3; // For testing
+    req.start_state.is_diff = true;
+    req.workspace_parameters.max_corner.x =
+    req.workspace_parameters.max_corner.y =
+    req.workspace_parameters.max_corner.z = 1e9;
+    req.workspace_parameters.min_corner.x =
+    req.workspace_parameters.min_corner.y =
+    req.workspace_parameters.min_corner.z = -1e9;
 
-    cartesian_path_future_ = cartesian_path_client_->async_send_request(cartesian_req);
+    geometry_msgs::msg::PoseStamped goal_pose;
+    goal_pose.pose = waypoints_->poses.back();
+    goal_pose.header = waypoints_->header;
+    req.goal_constraints.push_back(
+        kinematic_constraints::constructGoalConstraints("arm0_hand", goal_pose)
+    );
+
+    moveit_plan_future_ = moveit_plan_client_->async_send_request(motion_req);
     cartesian_request_timestamp_ = now();
     return BT::NodeStatus::SUCCESS;
 }
     
 BT::NodeStatus StableJointMotion::onRunning() {
-    if (cartesian_path_future_) {
-        return checkActiveCartesianRequest();
+    // Check if we're waiting on MoveIt to respond
+    if (moveit_plan_future_) {
+        return checkActiveMoveitPlanningRequest();
     }
 
-    // TODO: Create a goal for the StableJointMotion action request
+    // Check if we're waiting on Spot to respond
+    else if (bosdyn_response_future_.valid()) {
+        return checkRequestStatus();
+    }
 
-    // TODO: Check the state of the running StableJointMotion action request
+    // Check if we're actively executing the plan
+    else if (bosdyn_goal_handle_) {
+        return checkActiveGoalStatus();
+    }
 
     // None of the expected cases were true - return failure
     RCLCPP_ERROR(get_logger(), "Behavior is in an unspecified state! Returning failure");
     return BT::NodeStatus::FAILURE;
 }
 
-BT::NodeStatus StableJointMotion::checkActiveCartesianRequest() {
-    auto status = rclcpp::spin_until_future_complete(this->get_node_base_interface(), cartesian_path_future_->future, std::chrono::milliseconds(5));
+BT::NodeStatus StableJointMotion::checkActiveMoveitPlanningRequest() {
+    auto status = rclcpp::spin_until_future_complete(this->get_node_base_interface(), moveit_plan_future_->future, std::chrono::milliseconds(5));
     switch (status) {
         case rclcpp::FutureReturnCode::TIMEOUT: {
             const auto max_duration = std::chrono::duration<double>(max_planning_time_ + 1);
@@ -94,35 +116,28 @@ BT::NodeStatus StableJointMotion::checkActiveCartesianRequest() {
         }
 
         case rclcpp::FutureReturnCode::SUCCESS: {
-            moveit_msgs::srv::GetCartesianPath::Response::SharedPtr resp = cartesian_path_future_->get();
-            cartesian_path_future_.reset();
-            if (resp->error_code.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
+            moveit_msgs::srv::GetMotionPlan::Response::SharedPtr resp = moveit_plan_future_->get();
+            moveit_plan_future_.reset();
+            if (resp->motion_plan_response.error_code.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS) {
                 RCLCPP_ERROR(get_logger(), "Unable to find a cartesian path through the poses");
                 return BT::NodeStatus::FAILURE;
             }
 
-            const int num_waypoints_achieved = static_cast<int>(resp->fraction*waypoints_->poses.size());
-            if (num_waypoints_achieved == 0) {
-                RCLCPP_WARN(get_logger(), "Unable to reach the first waypoint. Reporting FAILURE");
-                return BT::NodeStatus::FAILURE;
-            } else {
-                RCLCPP_INFO(get_logger(), "Found a carteisan path for %d (%.2f%%) of the waypoints", num_waypoints_achieved, 100.0*resp->fraction);
-                moveit_msgs::msg::GenericTrajectory::SharedPtr generic_trajectory = generateGenericTrajectory(resp);
-                geometry_msgs::msg::PoseArray::SharedPtr remaining_poses = std::make_shared<geometry_msgs::msg::PoseArray>();
-                remaining_poses->header = waypoints_->header;
-                std::ranges::copy(waypoints_->poses | std::views::drop(num_waypoints_achieved), std::back_inserter(remaining_poses->poses));
-                setOutput("remaining_poses", remaining_poses);
-                return BT::NodeStatus::RUNNING;
-            }
+            spot_msgs::action::ArmCartesianCommand::Goal::SharedPtr spot_arm_motion_goal = generateGenericTrajectory(resp);
+            bosdyn_action_client_->async_send_goal(*spot_arm_motion_goal);
+            request_timestamp_ = now();
+            return BT::NodeStatus::RUNNING;
         }
     }
 }
 
-moveit_msgs::msg::GenericTrajectory::SharedPtr StableJointMotion::generateGenericTrajectory(moveit_msgs::srv::GetCartesianPath::Response::SharedPtr resp) {
-    auto generic_trajectory = std::make_shared<moveit_msgs::msg::GenericTrajectory>();
-    generic_trajectory->joint_trajectory.push_back(resp->solution.joint_trajectory);
-    moveit_msgs::msg::CartesianTrajectory& cartesian_trajectory = generic_trajectory->cartesian_trajectory.emplace_back();
-    for (const trajectory_msgs::msg::JointTrajectoryPoint& joint_pos : resp->solution.joint_trajectory.points) {
+spot_msgs::action::ArmCartesianCommand::Goal::SharedPtr StableJointMotion::generateGenericTrajectory(moveit_msgs::srv::GetMotionPlan::Response::SharedPtr resp) {
+    auto spot_arm_command = std::make_shared<spot_msgs::action::ArmCartesianCommand::Goal>();
+    spot_arm_command->joint_waypoints = resp->motion_plan_response.trajectory.joint_trajectory;
+    spot_arm_command->x_axis_mode = spot_arm_command->AXIS_MODE_POSITION;
+    spot_arm_command->y_axis_mode = spot_arm_command->AXIS_MODE_POSITION;
+    spot_arm_command->z_axis_mode = spot_arm_command->AXIS_MODE_POSITION;
+    for (const trajectory_msgs::msg::JointTrajectoryPoint& joint_pos : spot_arm_command->joint_waypoints.points) {
         // Update the arm state
         moveit::core::JointModelGroup* arm_group = robot_model_->getJointModelGroup("arm");
         robot_state_->setJointGroupPositions(arm_group, joint_pos.positions);
@@ -132,31 +147,81 @@ moveit_msgs::msg::GenericTrajectory::SharedPtr StableJointMotion::generateGeneri
 
         // Get the end effector position and set it in the trajectory
         const Eigen::Isometry3d ee_pose = robot_state_->getGlobalLinkTransform("arm0_hand");
-        cartesian_trajectory.tracked_frame = "arm0_hand";
-        moveit_msgs::msg::CartesianTrajectoryPoint& traj_point = cartesian_trajectory.points.emplace_back();
-        traj_point.time_from_start = joint_pos.time_from_start;
-        traj_point.point.pose = tf2::toMsg(ee_pose);
-
-        // Get the end effector velocity and set it in the trajectory
-        Eigen::MatrixXd jacobian = robot_state_->getJacobian(arm_group);
-        Eigen::VectorXd joint_velocities;
-        robot_state_->copyJointGroupVelocities(arm_group, joint_velocities);
-        auto ee_vel = jacobian * joint_velocities;
-        traj_point.point.velocity.linear.x = ee_vel[0];
-        traj_point.point.velocity.linear.y = ee_vel[1];
-        traj_point.point.velocity.linear.z = ee_vel[2];
-        traj_point.point.velocity.angular.x = ee_vel[3];
-        traj_point.point.velocity.angular.y = ee_vel[4];
-        traj_point.point.velocity.angular.z = ee_vel[5];
+        spot_arm_command->waypoints.push_back(tf2::toMsg(ee_pose));
+        spot_arm_command->timestamps.push_back(rclcpp::Duration(joint_pos.time_from_start).seconds());
     }
 
-    return generic_trajectory;
+    return spot_arm_command;
+}
+
+BT::NodeStatus StableJointMotion::checkRequestStatus() {
+    rclcpp::FutureReturnCode code = rclcpp::spin_until_future_complete(shared_from_this(), bosdyn_response_future_, std::chrono::seconds(0));
+    switch (code) {
+        case rclcpp::FutureReturnCode::SUCCESS:
+            bosdyn_response_future_ = decltype(bosdyn_response_future_){};
+            bosdyn_goal_handle_ = bosdyn_response_future_.get();
+            motion_start_time_ = now();
+            return BT::NodeStatus::RUNNING;
+
+        case rclcpp::FutureReturnCode::INTERRUPTED:
+            RCLCPP_WARN(get_logger(), "Motion request cancelled");
+            return BT::NodeStatus::FAILURE;
+
+        case rclcpp::FutureReturnCode::TIMEOUT:{
+            const float elapsed_time = (now() - request_timestamp_).seconds();
+            if (elapsed_time > 5.0) {
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5, "Waiting for response from Spot driver");
+            }
+            return BT::NodeStatus::RUNNING;
+        }
+    }
+
+    // None of the expected cases were true - return failure
+    RCLCPP_ERROR(get_logger(), "Behavior is in an unspecified state! Returning failure");
+    return BT::NodeStatus::FAILURE;
+}
+
+BT::NodeStatus StableJointMotion::checkActiveGoalStatus() {
+    // Check if the action is ongoing, or if it has concluded
+    rclcpp::spin_some(this->get_node_base_interface());
+    const std::string action_name = bosdyn_goal_handle_ ? "MoveGroup" : "ArmCartesianCommand";
+    const int8_t goal_status = bosdyn_goal_handle_->get_status();
+    
+    switch (goal_status){
+        case action_msgs::msg::GoalStatus::STATUS_CANCELING:
+        case action_msgs::msg::GoalStatus::STATUS_ACCEPTED:
+        case action_msgs::msg::GoalStatus::STATUS_EXECUTING:
+        {
+            const rclcpp::Duration elapsed_time = now() - motion_start_time_;
+            if (elapsed_time.seconds() > 10.0) {
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5, "Waiting for Spot driver to complete motion");
+            }
+            return BT::NodeStatus::RUNNING;
+        }
+
+        case action_msgs::msg::GoalStatus::STATUS_UNKNOWN:
+            RCLCPP_WARN(get_logger(), "%s action returned status UNKNOWN, reporting failure", action_name.c_str());
+            [[fallthrough]];
+        case action_msgs::msg::GoalStatus::STATUS_ABORTED:
+        case action_msgs::msg::GoalStatus::STATUS_CANCELED:
+            RCLCPP_WARN(get_logger(), "%s action failed", action_name.c_str());
+            bosdyn_goal_handle_.reset();
+            return BT::NodeStatus::FAILURE;
+
+        case action_msgs::msg::GoalStatus::STATUS_SUCCEEDED:
+            RCLCPP_INFO(get_logger(), "StableJointMotion: %s Action complete", action_name.c_str());
+            bosdyn_goal_handle_.reset();
+            return BT::NodeStatus::SUCCESS;
+    }
+
+    RCLCPP_ERROR(get_logger(), "%s action returned unknown status code \"%d\", reporting failure", action_name.c_str(), +goal_status);
+    return BT::NodeStatus::FAILURE;
 }
 
 void StableJointMotion::onHalted() {
-    if (cartesian_path_future_) {
-        cartesian_path_client_->remove_pending_request(*cartesian_path_future_);
-        cartesian_path_future_.reset();
+    if (moveit_plan_future_) {
+        moveit_plan_client_->remove_pending_request(*moveit_plan_future_);
+        moveit_plan_future_.reset();
     }
 }
 

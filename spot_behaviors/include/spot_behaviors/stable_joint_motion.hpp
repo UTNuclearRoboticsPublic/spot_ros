@@ -31,6 +31,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <behaviortree_cpp/action_node.h>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <moveit_msgs/srv/get_motion_plan.hpp>
 #include <moveit_msgs/srv/get_cartesian_path.hpp>
 
 #include <moveit/robot_model/robot_model.h>
@@ -38,8 +39,7 @@
 #include <moveit/robot_model_loader/robot_model_loader.h>
 
 #include "spot_behaviors/node_behavior_base.hpp"
-// #include "spot_msgs/action/stable_joint_motion.hpp"
-#include "moveit_msgs/msg/generic_trajectory.hpp" // remove after action type is defined
+#include "spot_msgs/action/arm_cartesian_command.hpp"
 
 namespace spot_behaviors{
 
@@ -89,7 +89,6 @@ protected:
     std::string planning_group_{};
     double max_velocity_scaling_factor_{};
     double max_acceleration_scaling_factor_{};
-    rclcpp::Time motion_start_time_;
     std::string target_link_;
     geometry_msgs::msg::PoseArray::SharedPtr waypoints_;
 
@@ -99,28 +98,32 @@ protected:
     moveit::core::RobotStatePtr robot_state_;
 
     // Service client
-    rclcpp::Client<moveit_msgs::srv::GetCartesianPath>::SharedPtr cartesian_path_client_;
-    std::optional<rclcpp::Client<moveit_msgs::srv::GetCartesianPath>::FutureAndRequestId> cartesian_path_future_;
+    rclcpp::Client<moveit_msgs::srv::GetMotionPlan>::SharedPtr moveit_plan_client_;
+    std::optional<rclcpp::Client<moveit_msgs::srv::GetMotionPlan>::FutureAndRequestId> moveit_plan_future_;
     rclcpp::Time cartesian_request_timestamp_{};
 
     // Action client
-    // rclcpp_action::Client<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_action_client_;
+    rclcpp_action::Client<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_action_client_;
 
     // Action client future handle - only used while waiting for a request to be accepted or jejected
-    // std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr> bosdyn_response_future_;
+    std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr> bosdyn_response_future_;
     rclcpp::Time request_timestamp_{};
 
     // Action client goal handle - nullptr if no request is active
-    // rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_goal_handle_;
+    rclcpp_action::ClientGoalHandle<spot_msgs::action::ArmCartesianCommand>::SharedPtr bosdyn_goal_handle_;
+    rclcpp::Time motion_start_time_{};
 
-    template<typename ActionType>
-    BT::NodeStatus checkRequestStatus(std::shared_future<typename rclcpp_action::ClientGoalHandle<ActionType>::SharedPtr> shared_future);
+    // Check the status of an active motion goal request (NOTE: not the goal itself, but the request for the goal)
+    BT::NodeStatus checkRequestStatus();
 
     // Check the status of an ongoing cartesian request
-    BT::NodeStatus checkActiveCartesianRequest();
+    BT::NodeStatus checkActiveMoveitPlanningRequest();
+
+    // Check the status of an active motion
+    BT::NodeStatus checkActiveGoalStatus();
 
     // Given a cartesian joint trajectory, generate a generic trajectory with both joint and end effector positions
-    moveit_msgs::msg::GenericTrajectory::SharedPtr generateGenericTrajectory(moveit_msgs::srv::GetCartesianPath::Response::SharedPtr resp);
+    spot_msgs::action::ArmCartesianCommand::Goal::SharedPtr generateGenericTrajectory(moveit_msgs::srv::GetMotionPlan::Response::SharedPtr resp);
 };
 
 } // namespace spot_behaviors
