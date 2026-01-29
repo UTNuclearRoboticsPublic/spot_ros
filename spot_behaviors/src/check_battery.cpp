@@ -81,6 +81,7 @@ BT::NodeStatus CheckBattery::tick() {
 
 void CheckBattery::batteryCallback(spot_msgs::msg::BatteryStateArray::UniquePtr msg){
     battery_percentage_ = msg->battery_states.at(0).charge_percentage;
+    battery_sub_.reset();
 }
 
 } // namespace spot_behaviors
