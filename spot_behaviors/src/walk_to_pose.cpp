@@ -37,7 +37,7 @@ WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config, tf
     BT::StatefulActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
 {
-    navigation_action_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(this, "/spot_driver/walk_to");
+    navigation_action_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(this, action_server_name_);
 }
 
 BT::PortsList WalkToPose::providedPorts() {
@@ -121,7 +121,7 @@ BT::NodeStatus WalkToPose::onRunning() {
             case rclcpp::FutureReturnCode::TIMEOUT:{
                 const rclcpp::Duration duration = now() - request_time_point_; 
                 if (duration > std::chrono::seconds(1)){
-                    RCLCPP_ERROR(get_logger(), "Timed out waiting for response from /spot_driver/walk_to server. Aborting");
+                    RCLCPP_ERROR(get_logger(), "Timed out waiting for response from %s server. Aborting", action_server_name_.c_str());
                     navigation_action_client_->async_cancel_all_goals();
                     goal_handle_future_ = decltype(goal_handle_future_){};
                     return BT::NodeStatus::FAILURE;
@@ -130,7 +130,7 @@ BT::NodeStatus WalkToPose::onRunning() {
             }
 
             case rclcpp::FutureReturnCode::INTERRUPTED:
-                RCLCPP_ERROR(get_logger(), "Request interrupted waiting for response from /spot_driver/walk_to server. Aborting");
+                RCLCPP_ERROR(get_logger(), "Request interrupted waiting for response from %s server. Aborting", action_server_name_.c_str());
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return BT::NodeStatus::FAILURE;
 
