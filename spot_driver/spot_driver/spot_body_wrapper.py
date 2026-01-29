@@ -49,6 +49,11 @@ from google.protobuf.duration_pb2 import Duration as PB2Duration
 from .spot_lease_manager import SpotLeaseManager
 from .type_hint_helpers import *
 
+# Manual cmd_vel velocity limits
+MAX_CMD_X = 1.0
+MAX_CMD_Y = 1.0
+MAX_CMD_ROT = 1.0
+
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
     def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
@@ -81,10 +86,9 @@ class SpotBodyWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-        # Manual cmd_vel velocity limits
-        self._max_cmd_x = 1.0
-        self._max_cmd_y = 1.0
-        self._max_cmd_rot = 1.0
+        self._max_cmd_x = MAX_CMD_X
+        self._max_cmd_y = MAX_CMD_Y
+        self._max_cmd_rot = MAX_CMD_ROT
 
     def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
