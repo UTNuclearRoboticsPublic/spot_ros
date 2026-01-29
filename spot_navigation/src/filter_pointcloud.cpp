@@ -140,32 +140,44 @@ public:
             // Check the ray direction. We don't want points pointing forward and down
             // since it hits the arm and body and creates a "bleeding points" effect
             static constexpr float deg2rad = M_PIf32 / 180.0f;
-            static constexpr float body_threshold = 32.0f * deg2rad;
+            static constexpr float body_threshold = 35.0f * deg2rad;
             static constexpr float body_elevation_threshold = -25.0f * deg2rad;
             static constexpr float arm_threshold = 7.5f * deg2rad;
-            static constexpr float arm_base_elevation_threshold = -18.0f * deg2rad;
-            static constexpr float arm_base_threshold = 17.0f * deg2rad;
+            static constexpr float arm_base_elevation_threshold = -14.0f * deg2rad;
+            static constexpr float arm_base_threshold = 18.5f * deg2rad;
+            static constexpr float lidar_cable_threshold = (180.0f - 22.5f) * deg2rad;
+            static constexpr float lidar_elevation_threshold = -20.0f * deg2rad;
             
-            if (z < 0 && x > 0) {
+            if (z < 0) {
                 // Check for arm obstruction
                 const float azimuthal_angle = std::abs(std::atan2(y, x));
                 if (azimuthal_angle < arm_threshold) {
                     accept_point = false;
                 } 
-                else if (azimuthal_angle < body_threshold) {
-                    const Eigen::Vector3f ray_dir = Eigen::Vector3f(x, y, z).normalized();
-                    const float elevation_angle = std::asin(ray_dir.z());
+                
+                const Eigen::Vector3f ray_dir = Eigen::Vector3f(x, y, z).normalized();
+                const float elevation_angle = std::asin(ray_dir.z());
 
-                    // Check for body obstruction
-                    if (elevation_angle < body_elevation_threshold) {
-                        accept_point = false;                    
+                // Frontal obstructions (arm and forward legs)
+                if (x > 0) {
+                    if (azimuthal_angle < body_threshold) {
+                        // Check for body obstruction
+                        if (elevation_angle < body_elevation_threshold) {
+                            accept_point = false;                    
+                        }
+                        // Check for arm base obstruction
+                        else if (azimuthal_angle < arm_base_threshold && elevation_angle < arm_base_elevation_threshold) {
+                            accept_point = false;
+                        }
                     }
-                    // Check for arm base obstruction
-                    else if (azimuthal_angle < arm_base_threshold && elevation_angle < arm_base_elevation_threshold) {
+                } 
+                // Rear obstructions (lidar cable)
+                else {
+                    if ((azimuthal_angle > lidar_cable_threshold) && (elevation_angle < lidar_elevation_threshold)) {
                         accept_point = false;
                     }
                 }
-            }
+            } 
 
             // If the arm is deployed, we also need to check against that
             // For computationaly feasibility, we just check against the entire arm AABB
