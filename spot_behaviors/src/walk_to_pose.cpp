@@ -79,7 +79,8 @@ BT::NodeStatus WalkToPose::onStart() {
             "Using rotational error threshold: " << rot_err_threshold_);
     }
 
-    const std::string profile = getInput<std::string>("speed_profile").value();
+    std::string profile = getInput<std::string>("speed_profile").value();
+    std::ranges::for_each(profile, [](char& c){c = std::toupper(c);});
     if (!valid_profiles.contains(profile)) {
         RCLCPP_ERROR(get_logger(), "Invalid speed profile '%s'. Options are [SLOW, NORMAL, FAST, CURRENT]", profile.c_str());
         return BT::NodeStatus::FAILURE;
