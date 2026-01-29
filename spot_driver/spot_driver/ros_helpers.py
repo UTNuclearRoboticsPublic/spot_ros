@@ -59,7 +59,7 @@ from google.protobuf import timestamp_pb2
 from bosdyn.api import geometry_pb2, payload_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
-from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
+from bosdyn.client.math_helpers import SE3Pose, SE2Pose, Quat, Vec3, SE2Velocity
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot, get_a_tform_b, BODY_FRAME_NAME
 
 """Dictionaries for mapping BD joint names to more friendly names"""
@@ -167,6 +167,29 @@ def PoseToMsg(pose: SE3Pose):
             x = pose.rot.x,
             y = pose.rot.y,
             z = pose.rot.z
+        )
+    )
+
+def MsgToSE2Pose(msg: Pose) -> SE2Pose:
+    return SE2Pose.flatten(MsgToPose(msg))
+
+def SE2PoseToMsg(pose: SE2Pose) -> Pose:
+    return PoseToMsg(SE3Pose.from_se2(pose))
+
+def MsgToSE2Vel(msg: Twist) -> SE2Velocity:
+    return SE2Velocity(x = msg.linear.x, y = msg.linear.y, angular=msg.angular.z)
+
+def SE2VelToMsg(vel: SE2Velocity) -> Twist:
+    return Twist(
+        linear=Vector3(
+            x = vel.linear_velocity_x,
+            y = vel.linear_velocity_y,
+            z = 0
+        ),
+        angular=Vector3(
+            x = 0,
+            y = 0,
+            z = vel.angular_velocity
         )
     )
 

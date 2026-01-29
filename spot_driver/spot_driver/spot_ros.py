@@ -560,15 +560,8 @@ class SpotROS(Node):
             return resp
         
         # Convert the ROS types to the corresponding protobuf types
-        target_pose_se2 = geometry_pb2.SE2Pose(
-            position=geometry_pb2.Vec2(x=target_pose_in_odom.pose.position.x, y=target_pose_in_odom.pose.position.y),
-            angle=2*math.atan2(target_pose_in_odom.pose.orientation.z, target_pose_in_odom.pose.orientation.w)
-        )
-
-        max_vel = geometry_pb2.SE2Velocity(
-            linear=geometry_pb2.Vec2(x=req.max_vel.linear.x, y=req.max_vel.linear.y), 
-            angular=req.max_vel.angular.z
-        )
+        target_pose_se2 = MsgToSE2Pose(target_pose_in_odom.pose).to_proto()
+        max_vel = MsgToSE2Vel(req.max_vel).to_proto()
 
         self.get_logger().info(f"Moving robot to position ({target_pose_se2.position.x, target_pose_se2.position.y}) in the odom frame")
 
