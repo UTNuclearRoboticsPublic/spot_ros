@@ -334,7 +334,7 @@ def generate_launch_description():
         package='tf2_ros', 
         executable='static_transform_publisher', 
         arguments=['--frame-id', 'body', '--child-frame-id', 'base_footprint', '--z', '-0.52']
-    ),
+    )
 
     return launch.LaunchDescription([
         *launch_args,
