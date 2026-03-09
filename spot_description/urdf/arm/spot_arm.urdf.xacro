@@ -3,27 +3,61 @@
     <xacro:macro name="spot_arm" params="name" >
 
     <xacro:arg name="has_realsense" default="False" />
+    <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_pkg" default="spot_proprietary_description" />
+    <xacro:arg name="proprietary_mesh_format" default="dae" />
 
-    <link name="${name}_base_link"/>
+    <!-- Determine mesh source -->
+  <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
+  <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
+
+    <link name="${name}_base_link">
+	<xacro:if value="$(arg use_proprietary_meshes)">
+        <visual>
+            <geometry>
+                <!-- Add a small scale increase to cover up body mesh imperfections -->
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.base_link.${mesh_ext}" scale="1.02 1.02 1.02"/>
+            </geometry>
+            <origin xyz="-0.001 0.0002 -0.116" rpy="0 0.03 0"/>
+        </visual>
+        </xacro:if>
+	<xacro:unless value="$(arg use_proprietary_meshes)">
+        <visual>
+            <geometry>
+                <cylinder radius="0.08" length="0.05"/>
+            </geometry>
+            <origin xyz="-0.02 0 -0.08"/>
+            <material name="black">
+              <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+        </xacro:unless>
+        <collision>
+            <geometry>
+                <cylinder radius="0.08" length="0.05"/>
+            </geometry>
+            <origin xyz="-0.02 0 -0.08"/>
+        </collision>
+    </link>
 
     <link name="${name}_shoulder_yaw">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.obj"/>
-        </geometry>
-        <material name="arm0.link_sh0">
-            <color rgba="0.2 0.2 0.2 1"/>
-        </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_sh0.${mesh_ext}"/>
+            </geometry>
+            <material name="arm0.link_sh0">
+                <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.obj"/>
-        </geometry>
-        <material name="arm0.link_sh0">
-            <color rgba="1 0.2 0.2 1"/>
-        </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_sh0.obj"/>
+            </geometry>
+            <material name="arm0.link_sh0">
+                <color rgba="1 0.2 0.2 1"/>
+            </material>
         </collision>
     </link>
     <joint name="${name}_shoulder_yaw" type="revolute">
@@ -36,22 +70,22 @@
 
     <link name="${name}_shoulder_pitch">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh1.obj"/>
-        </geometry>
-        <material name="arm0.link_sh1">
-            <color rgba="0.2 0.2 0.2 1"/>
-        </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_sh1.obj"/>
+            </geometry>
+            <material name="arm0.link_sh1">
+                <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_sh1.obj"/>
-        </geometry>
-        <material name="arm0.link_sh1">
-            <color rgba="1 0.2 0.2 1"/>
-        </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_sh1.obj"/>
+            </geometry>
+            <material name="arm0.link_sh1">
+                <color rgba="1 0.2 0.2 1"/>
+            </material>
         </collision>
     </link>
     <joint name="${name}_shoulder_pitch" type="revolute">
@@ -64,21 +98,21 @@
 
     <link name="${name}_shoulder_roll">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.obj"/>
-        </geometry>
-            <material name="arm0.link_hr0">
-            <color rgba="0.2 0.2 0.2 1"/>
-            </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_hr0.${mesh_ext}"/>
+            </geometry>
+                <material name="arm0.link_hr0">
+                    <color rgba="0.2 0.2 0.2 1"/>
+                </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_hr0.obj"/>
+            </geometry>
             <material name="arm0.link_hr0">
-            <color rgba="1 0.2 0.2 1"/>
+                <color rgba="1 0.2 0.2 1"/>
             </material>
         </collision>
     </link>
@@ -87,26 +121,26 @@
         <axis xyz="1 0 0"/>
         <parent link="${name}_shoulder_pitch"/>
         <child link="${name}_shoulder_roll"/>
-	<limit effort="0" velocity="0" lower="0" upper="0"/>
+        <limit effort="0" velocity="0" lower="0" upper="0"/>
     </joint>
 
     <link name="${name}_elbow_pitch">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_el0.${mesh_ext}"/>
+            </geometry>
             <material name="arm0.link_el0">
-            <color rgba="0.2 0.2 0.2 1"/>
+                <color rgba="0.2 0.2 0.2 1"/>
             </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_el0.obj"/>
+            </geometry>
             <material name="arm0.link_el0">
-            <color rgba="1 0.2 0.2 1"/>
+                <color rgba="1 0.2 0.2 1"/>
             </material>
         </collision>
     </link>
@@ -120,21 +154,21 @@
 
     <link name="${name}_elbow_roll">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_el1.${mesh_ext}"/>
+            </geometry>
             <material name="arm0.link_el1">
-            <color rgba="0.2 0.2 0.2 1"/>
+                <color rgba="0.2 0.2 0.2 1"/>
             </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_el1.obj"/>
+            </geometry>
             <material name="arm0.link_el1">
-            <color rgba="1 0.2 0.2 1"/>
+                <color rgba="1 0.2 0.2 1"/>
             </material>
         </collision>
     </link>
@@ -148,21 +182,21 @@
 
     <link name="${name}_wrist_pitch">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_wr0.${mesh_ext}"/>
+            </geometry>
             <material name="arm0.link_wr0">
-            <color rgba="0.2 0.2 0.2 1"/>
+                <color rgba="0.2 0.2 0.2 1"/>
             </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_wr0.obj"/>
+            </geometry>
             <material name="arm0.link_wr0">
-            <color rgba="1 0.2 0.2 1"/>
+                <color rgba="1 0.2 0.2 1"/>
             </material>
         </collision>
     </link>
@@ -176,21 +210,21 @@
 
     <link name="${name}_wrist_roll">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.obj"/>
-        </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_wr1.${mesh_ext}"/>
+            </geometry>
             <material name="arm0.link_wr1">
-            <color rgba="0.2 0.2 0.2 1"/>
+                <color rgba="0.2 0.2 0.2 1"/>
             </material>
         </visual>
-        <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.obj"/>
-        </geometry>
+            <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_wr1.obj"/>
+            </geometry>
             <material name="arm0.link_wr1">
-            <color rgba="1 0.2 0.2 1"/>
+                <color rgba="1 0.2 0.2 1"/>
             </material>
         </collision>
     </link>
@@ -213,22 +247,22 @@
 
     <link name="${name}_fingers">
         <visual>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.obj"/>
-        </geometry>
-        <material name="arm0.link_fngr">
-            <color rgba="0.2 0.2 0.2 1"/>
-        </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/arm/arm0.link_fngr.${mesh_ext}"/>
+            </geometry>
+            <material name="arm0.link_fngr">
+                <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </visual>
         <collision>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
-        <geometry>
-            <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.obj"/>
-        </geometry>
-        <material name="arm0.link_fngr">
-            <color rgba="0.2 0.2 0.2 1"/>
-        </material>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://spot_description/meshes/arm/arm0.link_fngr.obj"/>
+            </geometry>
+            <material name="arm0.link_fngr">
+                <color rgba="0.2 0.2 0.2 1"/>
+            </material>
         </collision>
     </link>
     <joint name="${name}_fingers" type="revolute">
@@ -236,7 +270,7 @@
         <axis xyz="0.0 1.0 0.0"/>
         <parent link="${name}_wrist_roll"/>
         <child link="${name}_fingers"/>
-        <limit effort="1000" velocity="1000.00" lower="-1.57" upper="0.0"/>
+        <limit effort="1000" velocity="1000.00" lower="-1.58" upper="0.0"/>
     </joint>
 
     <link name="${name}.link_wr1"/>
@@ -253,19 +287,13 @@
         <origin xyz = "0.19557 0.0 0.0"/>
     </joint>
 
-    <link name="hand_color_image_sensor"/>
-    <joint name="color_image_joint" type="fixed">
+    <link name="${name}_mounting_frame"/>
+    <joint name="${name}_wrist_to_mounting_frame" type="fixed">
         <parent link = "${name}_wrist_roll"/>
-        <child  link = "hand_color_image_sensor"/>
-        <origin xyz  = "0.14 0.02 0.022" rpy="-1.42 0 -1.57"/>
+        <child  link = "${name}_mounting_frame"/>
+        <origin xyz = "0.1103 0 -0.036"/>
     </joint>
 
-    <link name="hand_depth_sensor"/>
-    <joint name="depth_sensor_joint" type="fixed">
-        <parent link = "${name}_wrist_roll"/>
-        <child  link = "hand_depth_sensor"/>
-        <origin xyz  = "0.14 0.0 0.01" rpy="0 1.42 0"/>
-    </joint>
     </xacro:macro>
 <!-- Transmissions -->
   <transmission name="tran1">

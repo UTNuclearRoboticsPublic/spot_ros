@@ -1,8 +1,18 @@
+#include <type_traits>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <moveit/kinematic_constraints/utils.h>
 #include "spot_behaviors/move_hand_through_poses.hpp"
 
 namespace spot_behaviors{
+
+template<typename T> requires (!HasNewFeatures<T>) 
+void printWarningOnHumble() {
+    RCLCPP_WARN(rclcpp::get_logger("MoveHandThroughPoses"), "The parameters 'max_velocity_scaling_factor', 'cartesian_speed_limited_link' and 'max_cartesian_speed' were added in MoveIt for ROS2 Iron, and so are not going to be respected!");
+}
+
+template<typename T> requires(HasNewFeatures<T>)
+void printWarningOnHumble() {}
+
 
 MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer):
     BT::StatefulActionNode(name, config),
@@ -17,6 +27,8 @@ MoveHandThroughPoses::MoveHandThroughPoses(const std::string& name, const BT::No
     planning_group_              = this->declare_parameter<std::string>("manipulation.planning_group", "arm");
     max_velocity_scaling_factor_ = this->declare_parameter<double>("manipulation.max_velocity_scaling_factor", 0.05);
     max_end_effector_velocity_   = this->declare_parameter<double>("manipulation.max_end_effector_velocity", 0.03);
+
+    printWarningOnHumble<moveit_msgs::srv::GetCartesianPath::Request>();
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -222,7 +234,6 @@ BT::NodeStatus MoveHandThroughPoses::checkTrajectoryExecutionStatus() {
         case action_msgs::msg::GoalStatus::STATUS_ABORTED:
         case action_msgs::msg::GoalStatus::STATUS_CANCELED:
             RCLCPP_WARN(get_logger(), "TrajectoryExecution action failed");
-            abortPoseIncrement();
             traj_execution_goal_handle_.reset();
             return next_idx_ >= waypoints_.poses.size() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::RUNNING;
             
@@ -343,6 +354,16 @@ void MoveHandThroughPoses::cancelOngoingMoveGroupRequest() {
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
 
+template<typename T> requires (!HasNewFeatures<T>)
+void MoveHandThroughPoses::setIronVals(typename T::SharedPtr) {}
+
+template<typename T> requires (HasNewFeatures<T>)
+void MoveHandThroughPoses::setIronVals(typename T::SharedPtr req) {
+    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
+    req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
+    req->max_cartesian_speed = max_end_effector_velocity_;
+}
+
 bool MoveHandThroughPoses::makeNewPathRequest() {
     auto req = std::make_shared<moveit_msgs::srv::GetCartesianPath::Request>();
     auto next_poses = waypoints_.poses | std::views::drop(next_idx_);
@@ -353,10 +374,10 @@ bool MoveHandThroughPoses::makeNewPathRequest() {
     req->waypoints = std::vector(next_poses.begin(), next_poses.end());
     req->max_step = 0.01;
     req->avoid_collisions = true;
-    req->max_velocity_scaling_factor = 0.6*max_velocity_scaling_factor_;
-    req->cartesian_speed_limited_link = getInput<std::string>("target_link").value_or("arm0_hand");
-    req->max_cartesian_speed = max_end_effector_velocity_;
 
+    // Only set these parts if we're in a compatible ROS version
+    setIronVals<moveit_msgs::srv::GetCartesianPath::Request>(req);
+    
     path_computation_response_timestamp_ = now();
     path_computation_response_future_ = path_computation_client_->async_send_request(req);
     RCLCPP_INFO(get_logger(), "Making request to calculate cartesian path through %zd waypoints", req->waypoints.size());

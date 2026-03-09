@@ -1,8 +1,14 @@
 import os
 from glob import glob
 from setuptools import setup
+from generate_parameter_library_py.setup_helper import generate_parameter_module
 
 package_name = 'spot_driver'
+
+generate_parameter_module(
+  "image_server_parameters", # python module name for parameter library
+  "spot_driver/image_server_parameters.yaml", # path to input yaml file
+)
 
 setup(
     name=package_name,
@@ -32,7 +38,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'driver = spot_driver.spot_driver:main'
+            'driver = spot_driver.spot_driver:main',
+            'image_server = spot_driver.image_server:main'
         ],
     },
 )

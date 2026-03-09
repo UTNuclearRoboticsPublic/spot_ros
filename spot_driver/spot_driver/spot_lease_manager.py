@@ -27,6 +27,7 @@
 
 from typing import Text, Tuple
 from .async_queries import *
+from asyncio import Future
 import atexit
 
 from bosdyn.client import create_standard_sdk, ResponseError, RpcError, power
@@ -35,6 +36,8 @@ from bosdyn.client.async_tasks import AsyncTasks
 from bosdyn.client.estop import EstopClient, EstopEndpoint, EstopKeepAlive
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.lease import ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError, LeaseClient, LeaseKeepAlive
+from bosdyn.client.payload import PayloadClient
+from bosdyn.client.payload_registration import PayloadRegistrationClient
 from bosdyn.client.power import PowerClient
 from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.robot_command import RobotCommandClient, RobotCommandBuilder, block_until_arm_arrives
@@ -46,6 +49,8 @@ from bosdyn.api import estop_pb2
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
 from google.protobuf.message import Message as PB2Message
+
+from .type_hint_helpers import *
 
 # Type hint helpers
 class EStopSystemStatusProto(type[estop_pb2.EstopSystemStatus]): pass
@@ -73,6 +78,8 @@ class SpotLeaseManager():
         self._lease = None
         self._hostname = None
         self._is_frozen = False
+        self._lease_proto = None
+        self._lease_query_future = None
 
         # Clients
         self._robot_state_client = None
@@ -83,6 +90,8 @@ class SpotLeaseManager():
         self._estop_client = None
         self._estop_endpoint = None
         self._estop_keepalive = None
+        self._payload_client = None
+        self._payload_registration_client = None
 
         # Keep track of who is using the lease
         self._lease_owners = []
@@ -94,7 +103,7 @@ class SpotLeaseManager():
         """Set the logger"""
         self._logger = logger
 
-    def connect(self, hostname, rates = {}, callbacks = {}) -> bool:
+    def connect(self, hostname) -> bool:
         """
         Connect the lease manager to a Spot robot at address 'hostname'. Additionally creates
         a time-sync between the host computer and the robot and registers clients for robot
@@ -146,16 +155,14 @@ class SpotLeaseManager():
         try:
             self._robot_state_client: RobotStateClient = self._robot.ensure_client(RobotStateClient.default_service_name)
             self._robot_command_client: RobotCommandClient = self._robot.ensure_client(RobotCommandClient.default_service_name)
-            self._power_client = self._robot.ensure_client(PowerClient.default_service_name)
-            self._lease_client = self._robot.ensure_client(LeaseClient.default_service_name)
-            self._estop_client = self._robot.ensure_client(EstopClient.default_service_name)
+            self._power_client: PowerClient = self._robot.ensure_client(PowerClient.default_service_name)
+            self._lease_client: LeaseClient = self._robot.ensure_client(LeaseClient.default_service_name)
+            self._estop_client: EstopClient = self._robot.ensure_client(EstopClient.default_service_name)
+            self._payload_registration_client: PayloadRegistrationClient = self._robot.ensure_client(PayloadRegistrationClient.default_service_name)
+            self._payload_client: PayloadClient = self._robot.ensure_client(PayloadClient.default_service_name)
         except Exception as e:
             self.logger.error('Unable to create client service: ' + Text(e))
             return False
-
-        # Async Tasks
-        self._lease_task = AsyncLease(self._lease_client, self.logger, rates.get("status.lease", 1.0), callbacks.get("lease", lambda:None))
-        self._async_lease_task = AsyncTasks([self._lease_task])
 
         self._estop_endpoint = None
         self._is_connected = True
@@ -195,8 +202,8 @@ class SpotLeaseManager():
 
     @property
     def lease(self):
-        """Return latest proto from the _lease_task"""
-        return self._lease_task.proto
+        """Return latest proto from the lease request"""
+        return self._lease_proto
     
     @property
     def command_client(self):
@@ -218,12 +225,49 @@ class SpotLeaseManager():
         """Return whether or not the robot is allowed to accept new command or move"""
         return self._is_frozen
     
-    def registerLeaseOwner(self, owner_id) -> Tuple[bool, Text]:
+    def register_payload(self, payload: PayloadProto, secret: str) -> Tuple[bool, Text]:
+        try:
+            self._payload_registration_client.register_payload(payload, secret)
+            return True, 'Payload registered successfully'
+        except Exception as e:
+            return False, f'Error registering payload: {e}'
+    
+    def toggle_payload(self, identifier: str, secret: str, attach: bool, use_name: bool = False) -> Tuple[bool, Text]:
+        if use_name:
+            payloads = self._payload_client.list_payloads()
+            matching_payloads = [payload for payload in payloads if payload.name == identifier]
+            if len(matching_payloads) == 0:
+                return False, f'No payloads were found matching the name {identifier}'
+            elif len(matching_payloads) > 1:
+                return False, f'Found {len(matching_payloads)} payloads with name {identifier}, names must be unique'
+            else:
+                guid = matching_payloads[0].GUID
+        else:
+            guid = identifier
+
+        try:
+            if attach:
+                self._payload_registration_client.attach_payload(guid=guid, secret=secret)
+            else:
+                self._payload_registration_client.detach_payload(guid=guid, secret=secret)
+            return True, 'Payload update successful'
+        except Exception as e:
+            return False, f'Error updating payload: {e}'
+    
+    def setLeaseQueryResult(self, future: Future) -> None:
+        self._lease_proto = future.result()
+
+    def updateLeaseInfo(self) -> None:
+        if self._lease_query_future is None or self._lease_query_future.done():
+            self._lease_query_future = self._lease_client.list_leases_async()
+            self._lease_query_future.add_done_callback(self.setLeaseQueryResult)
+    
+    def registerLeaseOwner(self, owner_id, force: bool = False) -> Tuple[bool, Text]:
         if self.isRegisteredLeaseOwner(owner_id):
             self.logger.warn(f"Lease already owned for object with id {owner_id}")
             return True, 'You already own this lease'
 
-        (success, msg) = self.claim() if self._lease is None else (True, "Success")
+        (success, msg) = self.claim(force) if self._lease is None else (True, "Success")
         
         if success:
             self._lease_owners.append(owner_id)
@@ -240,11 +284,6 @@ class SpotLeaseManager():
             True if the object owns a lease, False otherwise 
         """
         return True if ID in self._lease_owners else False 
-    
-    def updateLeaseTask(self) -> None:
-        """Update and retrieve the latest lease information"""
-        if self._lease_task is not None:
-            self._lease_task.update()
 
     def freeze(self) -> Tuple[bool, Text]:
         """Stop the robot and prevent it from making any further movements"""
@@ -312,10 +351,10 @@ class SpotLeaseManager():
 
         return rtime
 
-    def claim(self) -> Tuple[bool, Text]:
+    def claim(self, force: bool = False) -> Tuple[bool, Text]:
         """Get a lease for the robot, a handle on the estop endpoint, and the ID of the robot."""
         try:
-            got_lease, msg = self.getLease()
+            got_lease, msg = self.getLease(force)
             if not got_lease:
                 return False, msg
             self.resetEStop()
@@ -364,11 +403,11 @@ class SpotLeaseManager():
             self._estop_keepalive = None
             self._estop_endpoint = None
 
-    def getLease(self) -> Tuple[bool, Text]:
+    def getLease(self, force: bool = False) -> Tuple[bool, Text]:
         """Get a lease for the robot and keep the lease alive automatically."""
         try:
             self.logger.info("Obtaining lease...")
-            self._lease = self._lease_client.acquire()
+            self._lease = self._lease_client.acquire() if not force else self._lease_client.take()
         except (ResourceAlreadyClaimedError, InvalidResourceError, NotAuthoritativeServiceError) as err:
             self.logger.error(f"Unable to obtain lease: {Text(err.error_message)}")
             return False, err.error_message
@@ -380,8 +419,12 @@ class SpotLeaseManager():
     def _releaseLease(self) -> None:
         """Return the lease on the body."""
         if self._lease:
-            self._lease_client.return_lease(self._lease)
-            self._lease = None
+            if not self.robot.is_powered_on():
+                self._logger.info('Releasing global lease')
+                self._lease_client.return_lease(self._lease)
+                self._lease = None
+            else:
+                self._logger.warn('Cannot release lease, the robot is still powered on!')
             self.logger.info("Shutting down lease keepalive")
             if self._lease_keepalive is not None:
                 self._lease_keepalive.shutdown()
@@ -389,12 +432,15 @@ class SpotLeaseManager():
 
     def safe_shut_down(self):
         if self.robot.has_arm():
-            _, _, cmd_id = self.robot_command(RobotCommandBuilder.arm_stow_command())
             try:
+                _, _, cmd_id = self.robot_command(RobotCommandBuilder.arm_stow_command())
                 block_until_arm_arrives(self._robot_command_client, cmd_id, timeout_sec=5.0)
             except:
                 pass
-        powered_off, msg = self.safe_power_off()
+        try:
+            powered_off, msg = self.safe_power_off()
+        except Exception as e:
+            self._logger.error(f'{e}')
         if powered_off:
             self._releaseLease()
             self._releaseEStop()
@@ -426,7 +472,7 @@ class SpotLeaseManager():
 
     def safe_power_off(self) -> Tuple[bool, Text]:
         """Stop the robot's motion and sit if possible.  Once sitting, disable motor power."""
-        self.robot.power_off(cut_immediately=False, timeout_sec=20)
         if self.robot.is_powered_on():
-            return False, "Robot power off failed."
-        return not self.robot.is_powered_on(), "Success"
+            self.robot.power_off(cut_immediately=False, timeout_sec=20)
+        success = not self.robot.is_powered_on()
+        return success, "Success" if success else "Robot power off failed."

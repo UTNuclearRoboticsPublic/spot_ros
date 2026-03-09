@@ -1,0 +1,65 @@
+# Unique identifier for the payload
+string guid
+
+# A human readable name describing this payload
+string name
+
+# A secret used for authorization of this payload in the future
+string secret
+
+# A human-readable description string providing more context as to the
+# function of this payload. It is displayed in UIs
+string description
+
+# A unique traceable per-payload serial number
+string serial_number
+
+# A list of labels used to indicate what type of payload this is.
+# For example, an arm payload will have a prefix entry "arm"
+# Here is the list for an EAP2 payload:
+# "spotcore"                   
+# "core_io"                    
+# "use_for_graph_nav"          
+# "service_type: bosdyn.api.PointCloudService"                                                      
+# "service_name: velodyne-point-cloud"                                                              
+# "mounted_lidar"              
+# "mount_port:rear"            
+# "provides_entity_detections"                                                                      
+# "service_type: bosdyn.api.NetworkComputeBridgeWorker"                                             
+# "service_name: detect-entities"
+string[] label_prefix
+
+# Set true for payloads registered without their own computers. These records
+# are all manually entered.
+bool is_noncompute_payload
+
+# Payload version details
+spot_msgs/SoftwareVersion version
+
+# Mount frame. Must be one of [body, wrist, gripper]
+string mount_frame "body"
+
+# The pose of the payload relative to the mount frame 
+geometry_msgs/Pose payload_pose
+
+# Number of seconds to wait between heartbeats before assuming payload is no longer live
+# If unset (0) liveness checks will be disabled for this service
+float64 liveness_timeout_secs 0
+
+# IP address of the payload for the robot to ping
+# If left empty, assume that the payload will send heartbeats
+string ipv4_address
+
+# Link speed in Mbps
+int32 link_speed
+
+# The mass and volume properties of the payload
+spot_msgs/PayloadMassVolumeProperties mass_volume_properties
+
+---
+
+# Whether the payload was succesfully registered
+bool success
+
+# A message explaining the results
+string message

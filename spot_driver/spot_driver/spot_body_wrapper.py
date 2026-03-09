@@ -25,41 +25,54 @@
 #
 ############################################################################################
 
+import math
 from typing import Text, Tuple
 from .async_queries import *
+from asyncio import Future
+from threading import Lock
 
-from bosdyn.api import image_pb2, header_pb2, geometry_pb2
+from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
 from bosdyn.geometry import EulerZXY
 
-from bosdyn.client.async_tasks import AsyncTasks
+from bosdyn.client.common import FutureWrapper
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
 from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
-from bosdyn.client.image import ImageClient, build_image_request
-from bosdyn.client.point_cloud import build_pc_request
+from bosdyn.client.point_cloud import PointCloudClient, build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
-from google.protobuf.message import Message as PB2Message
 
 from .spot_lease_manager import SpotLeaseManager
 from .type_hint_helpers import *
 
+# Manual cmd_vel velocity limits
+MAX_CMD_X = 1.0
+MAX_CMD_Y = 1.0
+MAX_CMD_ROT = 1.0
+
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
-    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False, publish_images: bool = False, publish_depth_images: bool = False):
+    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
         self._logger = logger
         self._hostname = hostname
 
         self._is_connected = False
         self._has_eap_2 = has_eap_2
         self._has_cam_payload = has_cam_payload
-        self._publish_images = publish_images
-        self._publish_depth_images = publish_depth_images
         self._lease_manager = None
+
+        """ State futures """
+        self._robot_state_proto = None
+        self._robot_state_lock = Lock()
+
+        """ Point cloud task """
+        self._point_cloud_requests = []
+        self._point_cloud_future: FutureWrapper = None
+        self._point_cloud_proto = None
 
         self._robot_id = None
         self._is_sitting = True
@@ -73,7 +86,11 @@ class SpotBodyWrapper():
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
 
-    def connect(self, lease_manager: SpotLeaseManager, rates = {}, callbacks = {}) -> bool:
+        self._max_cmd_x = MAX_CMD_X
+        self._max_cmd_y = MAX_CMD_Y
+        self._max_cmd_rot = MAX_CMD_ROT
+
+    def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
         Connect the lease manager to a Spot robot at address 'hostname' if it is not already connected. 
         Additionally registers self as a lease owner with this lease manager registers clients for robot
@@ -86,8 +103,8 @@ class SpotBodyWrapper():
             rates    : The rates at which to call each of the callbacks
 
         Note:
-            Valid keys for rates are ['sensors.front_image', 'sensors.side_image', 'sensors.rear_image', 'sensors.front_depth_image', 'sensors.side_depth_image', 'sensors.rear_depth_image', 'status.robot_state'] 
-            and valid keys for callbacks are ['front_image', 'side_image', 'rear_image', 'front_depth_image', 'side_depth_image', 'rear_depth_image', 'robot_state']
+            Valid keys for rates are ['status.robot_state'] 
+            and valid keys for callbacks are ['robot_state']
 
         Returns:
             Bool describing whether connection was successful
@@ -101,18 +118,17 @@ class SpotBodyWrapper():
         self._lease_manager = lease_manager
         if not self._lease_manager.is_connected:
             self._lease_manager.setLogger(self._logger)
-            if not self._lease_manager.connect(self._hostname, rates, callbacks):
+            if not self._lease_manager.connect(self._hostname):
                 return False
 
         self._robot_id = self._lease_manager.ID
 
         # Spot service clients
         try:
-            self._image_client = self._lease_manager.robot.ensure_client(ImageClient.default_service_name)
             self._docking_client = self._lease_manager.robot.ensure_client(DockingClient.default_service_name) 
 
             if self._has_eap_2:
-                self._pointcloud_client = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
+                self._pointcloud_client: PointCloudClient = self._lease_manager.robot.ensure_client('velodyne-point-cloud')
 
 
         except Exception as e:
@@ -126,75 +142,12 @@ class SpotBodyWrapper():
                 self.logger.error('Unable to create client service: ' + Text(e))
                 return False
 
-        sensor_tasks = []
-
-        # Request images asynchronously 
-        if self._publish_images:
-            front_visual_image_sources = {'frontleft_fisheye_image', 'frontright_fisheye_image'}
-            side_visual_image_sources = {'left_fisheye_image', 'right_fisheye_image'}
-            rear_visual_image_sources = {'back_fisheye_image'}
-
-            # Create visual image requests
-            front_image_requests = []
-            side_image_requests = []
-            rear_image_requests = []
-            for source in front_visual_image_sources:
-                front_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-            for source in side_visual_image_sources:
-                side_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-            for source in rear_visual_image_sources:
-                rear_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW, pixel_format=image_pb2.Image.PIXEL_FORMAT_RGB_U8))
-
-            # Call async service for visual images
-            self._front_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_image", 1.0), callbacks.get("front_image", lambda:None), front_image_requests)
-            self._side_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_image", 1.0), callbacks.get("side_image", lambda:None), side_image_requests)
-            self._rear_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_image", 1.0), callbacks.get("rear_image", lambda:None), rear_image_requests)
-            sensor_tasks.extend([self._front_image_task, self._side_image_task, self._rear_image_task])
-
-        if self._publish_depth_images:
-            front_depth_image_sources = {'frontleft_depth', 'frontright_depth'}
-            side_depth_image_sources = {'left_depth', 'right_depth'}
-            rear_depth_image_sources = {'back_depth'}
-
-            # Create depth image requests
-            front_depth_image_requests = []
-            side_depth_image_requests = []
-            rear_depth_image_requests = []
-
-            for source in front_depth_image_sources:
-                front_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-            for source in side_depth_image_sources:
-                side_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-            for source in rear_depth_image_sources:
-                rear_depth_image_requests.append(build_image_request(source, image_format=image_pb2.Image.FORMAT_RAW))
-
-            # Call async service for depth images
-            self._front_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.front_depth_image", 1.0), callbacks.get("front_depth_image", lambda:None), front_depth_image_requests)
-            self._side_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.side_depth_image", 1.0), callbacks.get("side_depth_image", lambda:None), side_depth_image_requests)
-            self._rear_depth_image_task = AsyncImageService(self._image_client, self.logger, rates.get("sensors.rear_depth_image", 1.0), callbacks.get("rear_depth_image", lambda:None), rear_depth_image_requests)
-            sensor_tasks.extend([self._front_depth_image_task, self._side_depth_image_task, self._rear_depth_image_task])
-
         # Optionally populate pointcloud data asynchronously
-        if self._has_eap_2 and 'point_cloud' in callbacks:
+        if self._has_eap_2:
             # Create point cloud requests
-            point_cloud_requests = []
             point_cloud_sources = {'velodyne-point-cloud'}
             for source in point_cloud_sources:
-                point_cloud_requests.append(build_pc_request(source))
-            self._pointcloud_task = AsyncPointCloudService(self._pointcloud_client, self.logger, rates.get("sensors.point_cloud", 1.0), callbacks.get("point_cloud", lambda:None), point_cloud_requests)
-            sensor_tasks.append(self._pointcloud_task)
-
-        self._async_sensor_tasks = AsyncTasks(sensor_tasks)
-        
-        self._idle_task = AsyncIdle(self._lease_manager.command_client, self.logger, 10.0, self)
-        self._async_idle_task  = AsyncTasks([self._idle_task])
-
-        self._robot_state_task = AsyncRobotState(self._lease_manager._robot_state_client, self.logger, rates.get("status.robot_state", 1.0), callbacks.get("robot_state", lambda:None))
-        self._async_state_task = AsyncTasks([self._robot_state_task])
+                self._point_cloud_requests.append(build_pc_request(source))
 
         self._is_connected = True
         return True
@@ -216,8 +169,9 @@ class SpotBodyWrapper():
 
     @property
     def robot_state(self):
-        """Return latest proto from the _robot_state_task"""
-        return self._robot_state_task.proto
+        """Return latest proto from the robot state response"""
+        with self._robot_state_lock:
+            return self._robot_state_proto
 
     @property
     def lease(self):
@@ -225,39 +179,9 @@ class SpotBodyWrapper():
         return self._lease_manager.lease
 
     @property
-    def front_images(self):
-        """Return latest proto from the _front_image_task"""
-        return self._front_image_task.proto
-
-    @property
-    def side_images(self):
-        """Return latest proto from the _side_image_task"""
-        return self._side_image_task.proto
-
-    @property
-    def rear_images(self):
-        """Return latest proto from the _rear_image_task"""
-        return self._rear_image_task.proto
-
-    @property
-    def front_depth_images(self):
-        """Return latest proto from the _front_depth_image_task"""
-        return self._front_depth_image_task.proto
-
-    @property
-    def side_depth_images(self):
-        """Return latest proto from the _side_depth_image_task"""
-        return self._side_depth_image_task.proto
-
-    @property
-    def rear_depth_images(self):
-        """Return latest proto from the _rear_depth_image_task"""
-        return self._rear_depth_image_task.proto
-
-    @property
     def point_clouds(self):
         """Return the latest proto from teh _pointcloud_task"""
-        return self._pointcloud_task.proto
+        return self._point_cloud_proto
 
     @property
     def is_sitting(self) -> bool:
@@ -273,6 +197,11 @@ class SpotBodyWrapper():
     def is_moving(self) -> bool:
         """Return boolean of walking state"""
         return self._is_moving
+    
+    @property
+    def is_docked(self) -> bool:
+        """Return boolean of docked state"""
+        return self.get_docking_state().status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED
 
     @property
     def time_skew(self) -> PB2Duration:
@@ -283,25 +212,31 @@ class SpotBodyWrapper():
         """Return the robot time in local time as a proto timestamp"""
         return self._lease_manager.robotToLocalTime(timestamp)
 
-    def updateStateTasks(self) -> None:
+    def updateState(self) -> None:
         """Update the robot state"""
-        self._async_state_task.update()
+        try:
+            with self._robot_state_lock:
+                self._robot_state_proto = self._lease_manager._robot_state_client.get_robot_state()
+        except Exception as e:
+            self._logger.error(f'An error occurred when getting the robot state: {e}')
 
-    def updateIdleTasks(self) -> None:
-        """Update the idle task"""
-        self._async_idle_task.update()
+    def setPointCloudResult(self, future: Future) -> None:
+        """ Callback to set the result of an async pointcloud query """
+        self._point_cloud_proto = future.result()
 
-    def updateSensorTasks(self) -> None:
-        """Loop through the sensor query periodic tasks and update their data if needed."""
-        self._async_sensor_tasks.update()
+    def updatePointCloud(self) -> None:
+        """Check if we have received a pointcloud message from the robot, and if so record it and send a new one"""
+        if self._point_cloud_future is None or self._point_cloud_future.done():
+            self._point_cloud_future = self._pointcloud_client.get_point_cloud_async(self._point_cloud_requests)
+            self._point_cloud_future.add_done_callback(self.setPointCloudResult)
 
-    def claim(self) -> bool:
+    def claim(self, force: bool = False) -> bool:
         """Add this driver as an EStop and Lease owner of the lease manager"""
         if self._lease_manager is None:
             self.logger.warn("Cannot claim a lease without first connecting to a LeaseManager!")
             return False
         
-        self._lease_manager.registerLeaseOwner(id(self))
+        self._lease_manager.registerLeaseOwner(id(self), force)
         return True        
     
     def release(self) -> None:
@@ -391,13 +326,34 @@ class SpotBodyWrapper():
             return False, Text(e)
         return True, 'Success'
     
-    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_duration: float) -> Tuple[bool, Text]:
-        navigate_command = RobotCommandBuilder.synchro_se2_trajectory_command(
+    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_vel: SE2VelProto, max_duration: float) -> Tuple[bool, Text]:
+        walk_params = spot_command_pb2.MobilityParams()
+        walk_params.CopyFrom(self._mobility_params)
+
+        # Only apply the speed limit if it is non-zero in at least one axis
+        if (max_vel.linear.x != 0 or max_vel.linear.y != 0 or max_vel.angular != 0):
+            walk_params.vel_limit.CopyFrom(
+                geometry_pb2.SE2VelocityLimit(
+                    max_vel=max_vel,
+                    min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
+                )
+            )
+        # Otherwise, we apply the negative of the configured max-vel as the min-vel
+        # NOTE: We never configure min vel directly in the main mobility params because it interfers with teleop
+        else:
+            max_vel = walk_params.vel_limit.max_vel
+            walk_params.vel_limit.min_vel.CopyFrom(
+                geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
+            )
+            
+        
+        walk_command = RobotCommandBuilder.synchro_se2_trajectory_command(
             goal_se2=target_pose_in_odom,
-            frame_name=ODOM_FRAME_NAME
+            frame_name=ODOM_FRAME_NAME,
+            params=walk_params
         )
 
-        success, message, command_id = self._lease_manager.robot_command(navigate_command, end_time_secs=time.time() + max_duration)
+        success, message, command_id = self._lease_manager.robot_command(walk_command, end_time_secs=time.time() + max_duration)
         return success, message, command_id
 
     def get_docking_state(self, **kwargs) -> DockStateProto:
@@ -410,7 +366,9 @@ class SpotBodyWrapper():
                             footprint_R_body: EulerZXY = EulerZXY(),
                             locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
-                            external_force_params: BodyExternalParamsProto = None) -> None:
+                            external_force_params: BodyExternalParamsProto = None,
+                            obstacle_avoidance_padding: float = None,
+                            speed_limit: SE2VelProto = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -418,8 +376,19 @@ class SpotBodyWrapper():
             footprint_R_body: (EulerZXY) - The orientation of the body frame with respect to the footprint frame (gravity aligned framed with yaw computed from the stance feet)
             locomotion_hint: Locomotion hint
             stair_hint: Boolean to define stair motion
+            obstacle_avoidance_padding: The distance that the robot will automatically keep between itself and its environment
+            speed_limit: The maximum (and mirrored minimum) speed that the robot is allowed to go
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
+        if obstacle_avoidance_padding is not None:
+            self._mobility_params.obstacle_params.obstacle_avoidance_padding = obstacle_avoidance_padding
+        if speed_limit is not None:
+            # Set speed limit for autonomous motions
+            self._mobility_params.vel_limit.max_vel.CopyFrom(speed_limit)
+            # Set speed limit for manual motions
+            self._max_cmd_x = speed_limit.linear.x
+            self._max_cmd_y = speed_limit.linear.y
+            self._max_cmd_rot = speed_limit.angular
 
     def get_mobility_params(self) -> MobilityParamsProto:
         """Get mobility params
@@ -435,6 +404,30 @@ class SpotBodyWrapper():
             v_rot: Angular velocity around the Z axis in radians per second
             cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
         """
+        # Prevent the robot from moving faster than the configured speed limit
+        speed_ratio = 1.0
+        if abs(v_x) > abs(self._max_cmd_x): speed_ratio = min(speed_ratio, abs(self._max_cmd_x/v_x))
+        if abs(v_y) > abs(self._max_cmd_y): speed_ratio = min(speed_ratio, abs(self._max_cmd_x/v_y))
+        if abs(v_rot) > abs(self._max_cmd_rot): speed_ratio = min(speed_ratio, abs(self._max_cmd_rot/v_rot))
+
+        v_x *= speed_ratio 
+        v_y *= speed_ratio 
+        v_rot *= speed_ratio 
+
+        # The robot will ignore commands too low, so we also enforce a floor
+        MIN_SPEED = 0.15 # m/s
+        commanded_speed = math.sqrt(v_x**2 + v_y**2)
+        if (commanded_speed < MIN_SPEED) and (commanded_speed > MIN_SPEED/5):
+            v_x = MIN_SPEED/commanded_speed * v_x
+            v_y = MIN_SPEED/commanded_speed * v_y
+            v_rot = MIN_SPEED/commanded_speed * v_rot
+
+        MIN_ROT_SPEED = 0.20
+        if v_rot < MIN_ROT_SPEED and v_rot > MIN_ROT_SPEED/5:
+            v_x   *= MIN_ROT_SPEED/v_rot
+            v_y   *= MIN_ROT_SPEED/v_rot
+            v_rot *= MIN_ROT_SPEED / v_rot
+
         end_time=time.time() + cmd_duration
         self._lease_manager.robot_command(RobotCommandBuilder.synchro_velocity_command(
                             v_x=v_x, v_y=v_y, v_rot=v_rot, params=self._mobility_params),
@@ -481,5 +474,225 @@ class SpotBodyWrapper():
         response = self._audio_client.set_volume(percentage)
         success = response.error.code == header_pb2.CommonError.Code.CODE_OK
         return success, Text(response.error.message)
+    
+    def update_idle_state(self) -> None:
+        is_moving = False
+        dock_state = self.get_docking_state()
+
+        if self._last_stand_command is not None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_stand_command)
+                self._is_sitting = False
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.stand_feedback.status ==
+                        basic_command_pb2.StandCommand.Feedback.STATUS_IS_STANDING):
+                    self._is_standing = True
+                    self._last_stand_command = None
+                else:
+                    self._is_standing = False
+                    is_moving = True
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_stand_command = None
+
+        if self._last_sit_command is not None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_sit_command)
+                self._is_standing = False
+                if (response.feedback.synchronized_feedback.mobility_command_feedback.sit_feedback.status ==
+                        basic_command_pb2.SitCommand.Feedback.STATUS_IS_SITTING):
+                    self._is_sitting = True
+                    self._last_sit_command = None
+                else:
+                    self._is_sitting = False
+                    is_moving = True
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_sit_command = None
+
+        if (dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKING) or \
+           (dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_UNDOCKING):
+            is_moving = True
+            self._is_standing = True
+            self._is_sitting = False
+
+        if dock_state.status == docking_pb2.DockState.DockedStatus.DOCK_STATUS_DOCKED:
+            is_moving = False
+            self._is_standing = False
+            self._is_sitting = True
+        
+        if self._last_velocity_command_time != None:
+            if time.time() < self._last_velocity_command_time:
+                is_moving = True
+            else:
+                self._is_standing = True
+                self._last_velocity_command_time = None
+
+        if self._last_trajectory_command != None:
+            try:
+                response = self._lease_manager.command_client.robot_command_feedback(self._last_trajectory_command)
+                status = response.feedback.synchronized_feedback.mobility_command_feedback.se2_trajectory_feedback.status
+                # STATUS_AT_GOAL always means that the robot reached the goal. If the trajectory command did not
+                # request precise positioning, then STATUS_NEAR_GOAL also counts as reaching the goal
+                if status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_AT_GOAL or \
+                    (status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL and
+                     not self._last_trajectory_command_precise):
+                    self._at_goal = True
+                    # Clear the command once at the goal
+                    self._last_trajectory_command = None
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_GOING_TO_GOAL:
+                    is_moving = True
+                elif status == basic_command_pb2.SE2TrajectoryCommand.Feedback.STATUS_NEAR_GOAL:
+                    is_moving = True
+                    self._near_goal = True
+                else:
+                    self._last_trajectory_command = None
+            except (ResponseError, RpcError) as e:
+                self._logger.error(f"Error when getting robot command feedback: {e}")
+                self._last_trajectory_command = None
+
+        self._is_moving = is_moving
+
+    def sassy_confused(self) -> Tuple[bool, str]:
+        """Makes Spot look confused in a bit of a sassy way"""
+        try:
+            # Lower and rotate Spot's body
+            roll = EulerZXY(yaw=0.0, roll=0.4, pitch=0.0)
+            body_height = -0.1
+            self.set_mobility_params(body_height_offset=body_height,footprint_R_body=roll)
+
+            # Ensure params are set
+            assert self._mobility_params is not None, "Mobility parameters not set!"
+
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+            
+            # Maintain the pose for 1 seconds
+            time.sleep(1)
+
+            # Restore to normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
 
 
+            return True, "Spot successfully completed low rotate and returned to normal stance."
+
+        except Exception as e:
+            return False, f"Failed to execute low rotate sequence: {e}"
+        
+    def no_nod(self) -> Tuple[bool, str]:
+        """Makes Spot do a quick "no" gesture."""
+        try:
+            yaw_sequence = [0.15, -0.15, 0.15, -0.15, 0.15, -0.15]
+
+            for yaw_element in yaw_sequence:
+
+                nod = EulerZXY(yaw=yaw_element, roll=0.0, pitch=0.1)
+                self.set_mobility_params(body_height_offset=0.0, footprint_R_body=nod)
+                
+                # Execute yaw command
+                self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+            
+                # Maintain the pose for 1 seconds
+                time.sleep(0.25)
+
+            # Restore to normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+
+            return True, "Spot successfully performed a 'no nod' gesture"
+
+        except Exception as e:
+            return False, f"Failed to execute 'no nod' gesture: {e}"
+
+    def water_shakeoff(self) -> Tuple[bool, str]:
+        """Makes Spot do a quick "water shakeoff" gesture."""
+        try:
+            sequence = [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0]
+
+            for element in sequence:
+
+                shake = EulerZXY(yaw=0.1*element, roll=0.5*element, pitch=0.0)
+                self.set_mobility_params(body_height_offset=-0.15, footprint_R_body=shake)
+                
+                # Execute water_shakeoff command
+                self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+            
+                # Maintain the pose for 1 seconds
+                time.sleep(0.23)
+
+            # Restore to normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+
+            return True, "Spot successfully performed a 'water shakeoff' gesture"
+
+        except Exception as e:
+            return False, f"Failed to execute 'water shakeoff' gesture: {e}"
+
+    def serious_stance(self) -> Tuple[bool, str]:
+        """Makes Spot perform a "serious" gesture stance."""
+        try:
+
+            pose = EulerZXY(yaw=0.0, roll=0.0, pitch=0.2)
+            self.set_mobility_params(body_height_offset=-0.19, footprint_R_body=pose)
+            
+            # Execute stance command
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+
+            return True, "Spot successfully performed a 'serious stance' gesture"
+
+        except Exception as e:
+            return False, f"Failed to execute 'serious stance' gesture: {e}"
+
+    def perform_gesture(self, gesture_sequence) -> Tuple[bool, str]:
+        """Makes Spot perform a gesture sequence with validation"""
+
+        # Define the valid bounds for each gesture component
+        BOUNDS = {
+            "yaw": (-0.6, 0.6),           # Yaw range in radians
+            "roll": (-0.6, 0.6),          # Roll range in radians
+            "pitch": (-0.6, 0.6),         # Pitch range in radians
+            "body_height": (-0.2, 0.2),   # Height offset in meters
+            "pose_duration": (0.0, 10.0)  # Duration in seconds (min/max duration)
+            }
+
+        try:
+            for idx, gesture in enumerate(gesture_sequence):
+                # Extract individual gesture components
+                yaw = gesture.yaw
+                roll = gesture.roll
+                pitch = gesture.pitch
+                body_height = gesture.body_height
+                pose_duration = gesture.pose_duration
+
+                # Build a dictionary for easier validation and clearer messages
+                gesture_dict = {
+                    "yaw": yaw,
+                    "roll": roll,
+                    "pitch": pitch,
+                    "body_height": body_height,
+                    "pose_duration": pose_duration
+                }
+
+                # Validate each value against its bounds
+                for label, value in gesture_dict.items():
+                    min_val, max_val = BOUNDS[label]
+                    if not (min_val <= value <= max_val):
+                        return False, (
+                            f"Gesture {idx} has an invalid {label} value: {value} "
+                            f"(allowed range: {min_val} to {max_val})"
+                        )
+
+                # If all values are within bounds, proceed with execution
+                posture = EulerZXY(yaw=yaw, roll=roll, pitch=pitch)
+                self.set_mobility_params(body_height_offset=body_height,footprint_R_body=posture)
+
+                # Execute the gesture
+                self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command(params=self._mobility_params))
+                
+                # Maintain the pose for the desired duration
+                time.sleep(pose_duration)
+
+            # Restore Spot to its normal standing pose
+            self._lease_manager.robot_command(RobotCommandBuilder.synchro_stand_command())
+            
+            return True, "Spot successfully performed the gesture sequence"
+
+        except Exception as e:
+            return False, f"Failed to execute gesture sequence: {e}"

@@ -1,7 +1,8 @@
 import math
 from launch import LaunchDescription
+from launch.conditions import LaunchConfigurationNotEquals
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, IfElseSubstitution, NotEqualsSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node, PushRosNamespace
 
@@ -21,7 +22,7 @@ def generate_launch_description():
                 FindPackageShare('spot_navigation'),
                 'map',
                 'new_map.yaml']),
-            description='Full path to map file to load'),
+            description='Full path to map file to load. Set to "none" to omit this and use an external map server'),
 
         DeclareLaunchArgument(
             'use_sim_time',
@@ -43,7 +44,7 @@ def generate_launch_description():
             {"angle_max":  math.pi},
             {"angle_increment": math.radians(1.0)},
             {"target_frame": "base_footprint"},
-            {"min_height": 0.20},
+            {"min_height": 0.40},
             {"max_height": 1.5}
         ],
         remappings=[
@@ -52,11 +53,13 @@ def generate_launch_description():
     )
 
     map_server = Node(
+        condition=LaunchConfigurationNotEquals('map', 'none'),
         package='nav2_map_server',
         executable='map_server',
         name='map_server',
         parameters=[
-            {'yaml_filename': LaunchConfiguration('map')}
+            {'yaml_filename': LaunchConfiguration('map')},
+            {'frame_id': 'spot_nav/map'}
         ]
     )
 
@@ -71,7 +74,12 @@ def generate_launch_description():
     )
 
     # Create a lifecycle manager to start AMCL and the Map Server
-    lifecycle_nodes = ['map_server', 'amcl']
+    lifecycle_nodes = IfElseSubstitution(
+        NotEqualsSubstitution(LaunchConfiguration('map'), 'none'),
+        if_value='[map_server, amcl]',
+        else_value='[amcl]'
+    )
+
     lifecycle_manager = Node(
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',

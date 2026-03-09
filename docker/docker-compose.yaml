@@ -1,0 +1,88 @@
+services:
+  spot_ros:
+    container_name: spot_ros
+    image: nrg/spot_ros:${TARGET_ROS_DISTRO}
+    build:
+      network: host
+      # platforms:
+        # - linux/arm64
+        # - linux/amd64
+      args:
+        SPOT_VERSION: $SPOT_VERSION
+        ROS_DISTRO: $TARGET_ROS_DISTRO
+      target: spot_ros
+    environment:
+      # Enable colored output on ros2 launch
+      - RCUTILS_COLORIZED_OUTPUT=1
+      # Spot configuration
+      - BOSDYN_CLIENT_USERNAME
+      - BOSDYN_CLIENT_PASSWORD
+      - SPOT_URDF_EXTRAS
+      - SPOT_ACCESSORIES
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      # pass the display variable to the container
+      - DISPLAY=${DISPLAY}
+      # disable qt-X11 memory sharing for RViz
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      # mount the X11 socket to enable graphics display
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # required for non-nvidia users, comment out for nvidia users
+      - /dev/dri:/dev/dri
+      # add the .Xauthority file to use ssh X11 forwarding
+      - ${HOME}/.Xauthority:/root/.Xauthority:rw
+    # Enable host compatibiltiy for as much as possible to make usage seamless
+    network_mode: host
+    ipc: host
+    pid: host
+    stdin_open: true
+    tty: true
+
+  bringup:
+    extends: spot_ros
+    image: nrg/spot_bringup:${TARGET_ROS_DISTRO}
+    container_name: spot_bringup
+    entrypoint: /entrypoints/bringup.bash
+    devices:
+      - /dev/input/js0
+
+  bringup_autonomous:
+    extends: spot_ros
+    image: nrg/spot_bringup_auto:${TARGET_ROS_DISTRO}
+    container_name: spot_bringup
+    entrypoint: /entrypoints/bringup.bash
+
+  navigation:
+    extends: spot_ros
+    image: nrg/spot_navigation:${TARGET_ROS_DISTRO}
+    container_name: spot_navigation
+    # For autonomous modes we require an attached controller
+    devices:
+      - /dev/input/js0
+    environment:
+      - SPOT_NAV_MAP
+    volumes:
+      - ${SPOT_NAV_MAP}.yaml:/maps/user_map.yaml
+      - ${SPOT_NAV_MAP}.pgm:/maps/user_map.pgm
+    entrypoint: /entrypoints/navigation.bash
+
+  slam:
+    extends: spot_ros
+    image: nrg/spot_slam:${TARGET_ROS_DISTRO}
+    container_name: spot_slam
+    entrypoint: /entrypoints/slam.bash
+
+  save_map:
+    extends: spot_ros
+    image: nrg/spot_map_saver:${TARGET_ROS_DISTRO}
+    container_name: spot_map_saver
+    entrypoint: /entrypoints/map_saver.bash
+    # We need to mount a volume so that the map can be saved
+    volumes:
+      - /tmp:/tmp
+
+  moveit:
+    extends: spot_ros
+    image: nrg/spot_moveit_server:${TARGET_ROS_DISTRO}
+    container_name: spot_moveit_server
+    entrypoint: /entrypoints/moveit_server.bash

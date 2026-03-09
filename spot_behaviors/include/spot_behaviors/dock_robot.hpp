@@ -36,7 +36,7 @@ namespace spot_behaviors {
 
 class DockRobot : public BT::StatefulActionNode, public NodeBehaviorBase {
 public:
-    DockRobot(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
+    DockRobot(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer = nullptr);
 
     /** We accept 1 input port - dock_id */
     static BT::PortsList providedPorts();

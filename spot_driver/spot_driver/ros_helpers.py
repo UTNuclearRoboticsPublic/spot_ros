@@ -42,6 +42,7 @@ from sensor_msgs.msg import Image, CameraInfo
 from sensor_msgs.msg import JointState
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
+from shape_msgs.msg import SolidPrimitive
 
 from spot_msgs.msg import DockState
 from spot_msgs.msg import FootState, FootStateArray
@@ -52,13 +53,14 @@ from spot_msgs.msg import BehaviorFault, BehaviorFaultState
 from spot_msgs.msg import SystemFault, SystemFaultState
 from spot_msgs.msg import BatteryState, BatteryStateArray
 from spot_msgs.msg import ManipulatorState
+from spot_msgs.msg import SoftwareVersion, PayloadMassVolumeProperties
 
 from google.protobuf import timestamp_pb2
-from bosdyn.api import geometry_pb2
+from bosdyn.api import geometry_pb2, payload_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
-from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
-from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot
+from bosdyn.client.math_helpers import SE3Pose, SE2Pose, Quat, Vec3, SE2Velocity
+from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot, get_a_tform_b, BODY_FRAME_NAME
 
 """Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {
@@ -87,7 +89,8 @@ arm_joint_names = {
     'arm0.f1x' : 'arm0_fingers'
 }
 
-friendly_joint_names = dict(body_joint_names, **arm_joint_names)
+joint_name_map_BD_to_ROS = dict(body_joint_names, **arm_joint_names)
+joint_name_map_ROS_to_BD = dict(zip(joint_name_map_BD_to_ROS.values(), joint_name_map_BD_to_ROS.keys()))
 
 def TimestampToMsg(timestamp: timestamp_pb2.Timestamp) -> ROSTime:
     """Convert timestamp_pb2.Timestamp to rclpy.time.Time"""
@@ -97,21 +100,21 @@ def MsgToTimestamp(timestamp_msg: ROSTime) -> timestamp_pb2.Timestamp:
     """Convert rclpy.time.Time to timestamp_pb2.Timestamp"""
     return timestamp_pb2.Timestamp(seconds=timestamp_msg.sec, nanos=timestamp_msg.nanosec)
 
-def Vec3ToMsg(vector3_proto: Vec3Proto) -> Vector3:
+def Vec3ToMsg(vector3_proto: Vec3Proto | Vec3) -> Vector3:
     """Convert Vec3Proto to geometry_msgs.msg.Vector3"""
     return Vector3(x=vector3_proto.x, y=vector3_proto.y, z=vector3_proto.z)
 
-def MsgToVec3(msg: Vector3 | Point) -> Vec3Proto:
-    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3Proto"""
-    return Vec3Proto(x = msg.x, y=msg.y, z=msg.z)
+def MsgToVec3(msg: Vector3 | Point) -> Vec3:
+    """Convert geometry_msgs.msg.Vector3 or geometry_msgs.msg.Point to Vec3"""
+    return Vec3(x = msg.x, y=msg.y, z=msg.z)
 
-def QuaternionToMsg(quat_proto: QuaternionProto) -> Quaternion:
+def QuaternionToMsg(quat_proto: QuaternionProto | Quat) -> Quaternion:
     """Converts QuaternionProto to geometry_msgs.msg.Quaternion"""
     return Quaternion(x=quat_proto.x, y=quat_proto.y, z=quat_proto.z, w=quat_proto.w)
 
-def MsgToQuaternion(quat_msg: Quaternion) -> QuaternionProto:
-    """Converts geometry_msgs.msg.Quaternion to QuaternionProto"""
-    return QuaternionProto(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
+def MsgToQuaternion(quat_msg: Quaternion) -> Quat:
+    """Converts geometry_msgs.msg.Quaternion to Quaternion"""
+    return Quat(x=quat_msg.x, y=quat_msg.y, z=quat_msg.z, w=quat_msg.w)
 
 def SE3VelocityToMsg(se3_velocity: SE3VelocityProto) -> Twist:
     """Converts SE3VelocityProto to geometry_msgs.msg.Twist"""
@@ -132,8 +135,11 @@ def TransformToMsg(*, child_frame: str, parent_frame: str, transform: SE3Pose, t
 
     return new_tf
 
-def MsgToTransform(msg: Transform) -> SE3Pose:
-    """Converts geometry_msgs.msg.Transform to bosdyn.client.math_helpers.SE3Pose"""
+def MsgToTransform(msg: Transform | TransformStamped) -> SE3Pose:
+    """Converts geometry_msgs.msg.Transform(Stamped) to bosdyn.client.math_helpers.SE3Pose"""
+    if isinstance(msg, TransformStamped):
+        msg = msg.transform
+
     return SE3Pose (
         x = msg.translation.x,
         y = msg.translation.y,
@@ -149,7 +155,45 @@ def MsgToPose(msg: Pose) -> SE3Pose:
         rot = MsgToQuaternion(msg.orientation)
     )
 
-def populateTransformStamped(time: rclpy.time.Time,
+def PoseToMsg(pose: SE3Pose):
+    return Pose(
+        position = Point(
+            x = pose.x,
+            y = pose.y,
+            z = pose.z
+        ),
+        orientation = Quaternion(
+            w = pose.rot.w,
+            x = pose.rot.x,
+            y = pose.rot.y,
+            z = pose.rot.z
+        )
+    )
+
+def MsgToSE2Pose(msg: Pose) -> SE2Pose:
+    return SE2Pose.flatten(MsgToPose(msg))
+
+def SE2PoseToMsg(pose: SE2Pose) -> Pose:
+    return PoseToMsg(SE3Pose.from_se2(pose))
+
+def MsgToSE2Vel(msg: Twist) -> SE2Velocity:
+    return SE2Velocity(x = msg.linear.x, y = msg.linear.y, angular=msg.angular.z)
+
+def SE2VelToMsg(vel: SE2Velocity) -> Twist:
+    return Twist(
+        linear=Vector3(
+            x = vel.linear_velocity_x,
+            y = vel.linear_velocity_y,
+            z = 0
+        ),
+        angular=Vector3(
+            x = 0,
+            y = 0,
+            z = vel.angular_velocity
+        )
+    )
+
+def populateTransformStamped(time: rclpy.time.Time | ROSTime,
                              parent_frame: Text,
                              child_frame: Text,
                              transform: SE3Pose) -> TransformStamped:
@@ -165,7 +209,10 @@ def populateTransformStamped(time: rclpy.time.Time,
         TransformStamped message
     """
     new_tf = TransformStamped()
-    new_tf.header.stamp = time.to_msg()
+    if hasattr(time, 'to_msg'):
+        new_tf.header.stamp = time.to_msg()
+    else:
+        new_tf.header.stamp = time
     new_tf.header.frame_id = parent_frame
     new_tf.child_frame_id = child_frame
     new_tf.transform.translation.x = transform.position.x
@@ -177,6 +224,45 @@ def populateTransformStamped(time: rclpy.time.Time,
     new_tf.transform.rotation.w = transform.rotation.w
 
     return new_tf
+
+def MsgToPayloadMassVolumeProperties(msg: PayloadMassVolumeProperties) -> PayloadMassVolumePropertiesProto:
+    for box in msg.bounding_boxes:
+        if box.type != SolidPrimitive.BOX:
+            raise RuntimeError(f'SolidPrimitive type of bounding boxes MUST be SolidPrimitive.BOX (i.e. {SolidPrimitive.BOX})')
+
+    return payload_pb2.PayloadMassVolumeProperties(
+            total_mass=msg.total_mass,
+            com_pos_rt_payload=MsgToVec3(msg.center_of_mass).to_proto(),
+            moi_tensor=payload_pb2.MomentOfIntertia(
+                xx=msg.moment_of_inertia[0],
+                yy=msg.moment_of_inertia[1],
+                zz=msg.moment_of_inertia[2],
+                xy=msg.moment_of_inertia[3],
+                xz=msg.moment_of_inertia[4],
+                yz=msg.moment_of_inertia[5]
+            ),
+            bounding_box=[
+                geometry_pb2.Box3WithFrame(
+                    box=geometry_pb2.Box3(
+                        size=geometry_pb2.Vec3(
+                            x = box_msg.dimensions[0],
+                            y = box_msg.dimensions[1],
+                            z = box_msg.dimensions[2],
+                        )
+                    ),
+                    frame_name="payload",
+                    frame_name_tform_box=MsgToPose(box_pose).to_proto()
+                )
+                for (box_msg, box_pose) in zip(msg.bounding_boxes, msg.box_poses)
+            ]
+        )
+
+def MsgToSoftwareVersion(msg: SoftwareVersion) -> SoftwareVersionProto:
+    return robot_id_pb2.SoftwareVersion(
+            major_version=msg.major_version,
+            minor_version=msg.minor_version,
+            patch_level=msg.patch_level
+        )
 
 def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tuple[Image, CameraInfo, TFMessage]:
     """Takes the image, camera, and TF data and populates the necessary ROS messages
@@ -190,23 +276,17 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
             * CameraInfo: message to define the state and config of the camera that took the image
             * TFMessage: with the transforms necessary to locate the image frames
     """
-    tf_msg = TFMessage()
-    for frame_name in data.shot.transforms_snapshot.child_to_parent_edge_map:
-        if data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name).parent_frame_name:
-            transform = data.shot.transforms_snapshot.child_to_parent_edge_map.get(frame_name)
-            new_tf = TransformStamped()
-            local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
-            new_tf.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-            new_tf.header.frame_id = transform.parent_frame_name
-            new_tf.child_frame_id = frame_name
-            new_tf.transform.translation.x = transform.parent_tform_child.position.x
-            new_tf.transform.translation.y = transform.parent_tform_child.position.y
-            new_tf.transform.translation.z = transform.parent_tform_child.position.z
-            new_tf.transform.rotation.x = transform.parent_tform_child.rotation.x
-            new_tf.transform.rotation.y = transform.parent_tform_child.rotation.y
-            new_tf.transform.rotation.z = transform.parent_tform_child.rotation.z
-            new_tf.transform.rotation.w = transform.parent_tform_child.rotation.w
-            tf_msg.transforms.append(new_tf)
+    transforms = []
+    for child_frame, transform in data.shot.transforms_snapshot.child_to_parent_edge_map.items():
+        if not transform.parent_frame_name:
+            continue
+        transforms.append(populateTransformStamped(
+            time=TimestampToMsg(lease_manager.robotToLocalTime(data.shot.acquisition_time)),
+            parent_frame=transform.parent_frame_name,
+            child_frame=child_frame,
+            transform=SE3Pose.from_proto(transform.parent_tform_child)
+        ))
+    tf_msg = TFMessage(transforms=transforms)
 
     image_msg = Image()
     local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
@@ -261,36 +341,15 @@ def getImageMsg(data: ImageResponseProto, lease_manager: SpotLeaseManager) -> Tu
             image_msg.step = 2 * data.shot.image.cols
             image_msg.data = data.shot.image.data
 
-            # image_msg.encoding = '32FC1'
-            # image_msg.is_bigendian = False
-            # image_msg.step = 2 * data.shot.image.cols
-
-            # # convert the uint16's into 32-bit floats
-            # # depth zero in OpenNI format is converted to NaN
-            # assert data.shot.image.data, 'No camera data received for 32FC1 encoding.'
-            # assert len(data.shot.image.data) % 2 == 0, 'Received odd number of bytes for  32FC1 encoding.'
-            # image_msg.data = []
-
-            # # iterate over the list two bytes at a time
-            # for i,j in zip(data.shot.image.data[::2], data.shot.image.data[1::2]):
-            #     pixel = int(i * 256 + j)
-            #     value_in_meters = float32(nan)
-
-            #     if pixel != 0:
-            #         value_in_meters = float32(pixel / data.source.depth_scale)
-                
-            #     bytes = list(struct.pack('<f', value_in_meters))
-            #     image_msg.data.extend(bytes)
-
     elif data.shot.image.format == image_pb2.Image.PIXEL_FORMAT_UNKNOWN:
         lease_manager.logger.error('Unknown image format from Spot SDK.', throttle_duration_sec=5.0)
         return Image(), CameraInfo(), tf_msg
 
-    camera_info_msg = CameraInfo(d=[0]*5,
+    camera_info_msg = CameraInfo(d=[0.0]*5,
                                  distortion_model="plumb_bob",
-                                 k=[0,0,0,0,0,0,0,0,1],
-                                 r=[1,0,0,0,1,0,0,0,1],
-                                 p=[0,0,0,0,0,0,0,0,0,0,1,0])
+                                 k=[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0],
+                                 r=[1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0],
+                                 p=[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.0])
 
     local_time = lease_manager.robotToLocalTime(data.shot.acquisition_time)
     camera_info_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
@@ -375,7 +434,7 @@ def JointStatesToMsg(kinematic_state: KinematicStateProto,
 
     for joint in kinematic_state.joint_states:
         try:
-            name = friendly_joint_names[joint.name]
+            name = joint_name_map_BD_to_ROS[joint.name]
         except KeyError:
             lease_manager.logger.error('Failed to look up friendly name for frame ' + joint.name,
                                        once=True)
@@ -518,7 +577,8 @@ def GetWifiFromState(comms_states: CommsStateProto) -> WiFiState:
     return wifi_msg
 
 def GetTFFromState(kinematic_state: KinematicStateProto,
-                   lease_manager: SpotLeaseManager) -> TFMessage:
+                   lease_manager: SpotLeaseManager,
+                   kinematic_model: str) -> TFMessage:
     """Maps robot link state data from robot state proto to ROS TFMessage message
 
     Args:
@@ -549,71 +609,112 @@ def GetTFFromState(kinematic_state: KinematicStateProto,
 
     ## === TODO: Fix orientation when on slopes === ##
 
-    # Add the base footprint transform 
-    tform_odom_to_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("odom").parent_tform_child).inverse()
-    tform_body_to_flat_body = SE3Pose.from_proto(kinematic_state.transforms_snapshot.child_to_parent_edge_map.get("flat_body").parent_tform_child)
-    tform_gpe_to_base_footprint = tform_odom_to_body * tform_body_to_flat_body
-    tform_gpe_to_base_footprint.x = 0.0
-    tform_gpe_to_base_footprint.y = 0.0
-    tform_gpe_to_base_footprint.z = 0.0
+    # Add the GPE -> base footprint transform, where GPE is aligned with the odom frame 
+    odom_tform_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'odom', 'body')
+    body_tform_flat_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'body', 'flat_body')
+    gpe_tform_base_footprint = odom_tform_body * body_tform_flat_body
+    gpe_tform_base_footprint.x = 0.0
+    gpe_tform_base_footprint.y = 0.0
+    gpe_tform_base_footprint.z = 0.0
     tf_msg.transforms.append(TransformToMsg(
-        child_frame="base_footprint", 
-        parent_frame="gpe", 
-        transform=tform_gpe_to_base_footprint, 
+        child_frame='base_footprint', 
+        parent_frame='gpe', 
+        transform=gpe_tform_base_footprint, 
         timestamp=timestamp)
     )
 
+    # If there is no kinematic model set, we also need to publish the base_footprint -> body transform
+    if kinematic_model == 'none':
+        gpe_tform_body = get_a_tform_b(kinematic_state.transforms_snapshot, 'gpe', 'body')
+        base_footprint_tform_body = gpe_tform_base_footprint.inverse() * gpe_tform_body
+        tf_msg.transforms.append(TransformToMsg(
+            child_frame='body',
+            parent_frame='base_footprint',
+            transform=base_footprint_tform_body,
+            timestamp=timestamp
+        ))
+
     return tf_msg
 
-def GetVirtualJointValues(kinematic_state: KinematicStateProto) -> JointState:
+def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model: str, data_capture_mode: bool) -> JointState:
+    """
+    Computes virtual joint states based on the selected kinematic model.
+    Returns a JointState message with corresponding virtual joint names and states.
+    """
     transform_map = kinematic_state.transforms_snapshot.child_to_parent_edge_map 
     tform_body_to_odom = SE3Pose.from_proto(transform_map.get("odom").parent_tform_child)
     tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
     tform_flat_body_to_body = SE3Pose.from_proto(transform_map.get("flat_body").parent_tform_child).inverse()
     tform_gpe_to_body  = (tform_body_to_odom * tform_odom_to_gpe).inverse()
+    vision_tform_body = get_vision_tform_body(kinematic_state.transforms_snapshot)
 
     joint_state = JointState()
 
     #TODO: Velocities
 
-    # base_footprint -> body_with_height
-    joint_state.name.append("body_height_joint")
-    joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    if kinematic_model == "body_assist":
+        # base_footprint -> body_with_height
+        joint_state.name.append("body_height_joint")
+        joint_state.position.append(linalg.norm(tform_gpe_to_body.get_translation()))
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
-    joint_state.name.append("body_yaw_joint")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_height -> body_with_yaw (always zero in reality but can be non-zero when planning)
+        joint_state.name.append("body_yaw_joint")
+        joint_state.position.append(0)
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_yaw -> body_with_pitch_and_yaw
-    joint_state.name.append("body_pitch_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_yaw -> body_with_pitch_and_yaw
+        joint_state.name.append("body_pitch_joint")
+        joint_state.position.append(tform_flat_body_to_body.rot.to_pitch())
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    # body_with_pitch_and_yaw -> body
-    joint_state.name.append("body_roll_joint")
-    joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+        # body_with_pitch_and_yaw -> body
+        joint_state.name.append("body_roll_joint")
+        joint_state.position.append(tform_flat_body_to_body.rot.to_roll())
+        joint_state.velocity.append(0)
+        joint_state.effort.append(0)
 
-    joint_state.name.append("body_x")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    elif kinematic_model == "mobile_manipulation":
+        # Virtual base joints for MM control
+        body_manipulation_joints = ["body_x", "body_y", "body_or"]
+        body_joint_positions = [0.0, 0.0, 0.0]
+    
+        for i, joint_name in enumerate(body_manipulation_joints):
+            joint_state.name.append(joint_name)
+            joint_state.position.append(body_joint_positions[i])
+            joint_state.velocity.append(0.0)
+            joint_state.effort.append(0.0)
+    
+        # If in data capture mode, also add the virtual body_manipulation_joints in vision frame
+        if data_capture_mode:
+            body_manipulation_joints_vision = [joint + "_vision" for joint in body_manipulation_joints]
+    
+            # Transform body manipulation joint positions to vision frame
+            bx, by, _ = vision_tform_body.transform_point(
+                body_joint_positions[0], # x
+                body_joint_positions[1], # y
+                0.0
+            )
+            
+            body_or_vision = vision_tform_body.rot.to_yaw()
+    
+            body_joint_positions_vision = [bx, by, body_or_vision]
+    
+            for i, joint_name in enumerate(body_manipulation_joints_vision):
+                joint_state.name.append(joint_name)
+                joint_state.position.append(body_joint_positions_vision[i])
+                joint_state.velocity.append(0.0)
+                joint_state.effort.append(0.0)
 
-    joint_state.name.append("body_y")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    elif kinematic_model == "none":
+        pass
 
-    joint_state.name.append("body_or")
-    joint_state.position.append(0)
-    joint_state.velocity.append(0)
-    joint_state.effort.append(0)
+    else:
+        raise ValueError(f"Unsupported kinematic model: {kinematic_model}")
+
 
     return joint_state
 

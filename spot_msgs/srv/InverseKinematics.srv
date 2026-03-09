@@ -1,0 +1,37 @@
+# spot_msgs/InverseKinematics.srv
+#
+# Determine the robot state required to either reach a target
+# pose or to point at a target pose
+
+# The name of the frame for which we are calculating IK
+string tool_frame arm0_hand
+
+# If this is true, then the orientation of the target pose will be
+# overridden to instead point at the gaze target
+bool use_gaze_target false
+
+# The target point that we want to point at
+geometry_msgs/PointStamped gaze_target
+
+# The desired pose of the tool. If use_gaze_target is set, then
+# only the position component of this pose will be used
+geometry_msgs/PoseStamped target_pose
+
+# The names of the joints for which we set a nominal configuration
+# Omitting a joint will result in using the current joint config
+string[] joint_names
+
+# The values to set the joints to prior to solving IK. Must match
+# the length of joint_names as they form key-value pairs
+float64[] joint_nominal_positions
+
+---
+
+# Whether a solution was found
+bool solution_found
+
+# The robot body pose in the solution state relative to the robot stance
+geometry_msgs/Pose body_pose
+
+# The robot joint angles in the solution state
+sensor_msgs/JointState arm_joint_state

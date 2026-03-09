@@ -1,0 +1,124 @@
+<?xml version="1.0" ?>
+<robot name="rl_kit" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:macro name="rl_kit">
+    <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_pkg" default="spot_proprietary_description" />
+    <xacro:arg name="proprietary_mesh_format" default="dae" />
+
+    <!-- Determine mesh source -->
+    <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
+    <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
+
+    <link name="rl_kit_reference_frame"/>
+    <joint name="rl_kit_base_mount_to_body"  type="fixed">
+        <parent link = "payload_mount_reference_frame"/>
+        <child  link = "rl_kit_reference_frame"/>
+        <origin xyz = "-0.292 0.0 0.056"/>
+    </joint>
+
+    <link name="rl_kit_wire_housing_box">
+	<xacro:if value="$(arg use_proprietary_meshes)">
+        <visual>
+            <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/rl_kit_wire_housing_box.${mesh_ext}"/>
+            </geometry>
+            <origin xyz="-0.025 0 -0.03" rpy="0 0 ${pi/2}"/>
+        </visual>
+    </xacro:if>
+	<xacro:unless value="$(arg use_proprietary_meshes)">
+        <visual>
+            <geometry>
+                <box size="${2*0.103} 0.09 0.0635"/>
+            </geometry>
+            <origin xyz="-0.025 0.0 0.0" rpy="0 0 ${pi/2}"/>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </xacro:unless>
+        <collision>
+            <geometry>
+                <box size="${2*0.103} 0.09 0.0635"/>
+            </geometry>
+            <origin xyz="-0.025 0.0 0.0" rpy="0 0 ${pi/2}"/>
+        </collision>
+    </link>
+    <joint name="rl_kit_wire_housing_box_joint"  type="fixed">
+        <parent link = "rl_kit_reference_frame"/>
+        <child  link = "rl_kit_wire_housing_box"/>
+        <origin xyz = "0.076 0.0 -0.023"/>
+    </joint>
+
+    <link name="rl_kit_jetson_housing_box">
+        <xacro:if value="$(arg use_proprietary_meshes)">
+            <visual name="housing">
+                <geometry>
+                    <mesh filename="package://${mesh_pkg}/meshes/accessories/rl_kit_jetson_housing_box.${mesh_ext}"/>
+                </geometry>
+                <origin xyz="0.02 0 -0.056"/>
+            </visual>
+            <visual name="jetson">
+                <geometry>
+                    <mesh filename="package://${mesh_pkg}/meshes/accessories/jetson_orin_dev_kit.${mesh_ext}"/>
+                </geometry>
+                <origin xyz="0 0 -0.056" rpy="0 0 ${pi/2}"/>
+            </visual>
+        </xacro:if>
+        <xacro:unless value="$(arg use_proprietary_meshes)">
+            <visual name="housing_and_jetson">
+                <geometry>
+                    <box size="${2*0.068} ${2*0.1} ${2*0.056}"/>
+                </geometry>
+                <origin xyz="0.01 0.0 0.0"/>
+                <material name="black">
+                    <color rgba="0 0 0 1"/>
+                </material>
+            </visual>
+        </xacro:unless>
+        <collision>
+            <geometry>
+                <box size="${2*0.068} ${2*0.1} ${2*0.056}"/>
+            </geometry>
+            <origin xyz="0.01 0.0 0.0"/>
+        </collision>
+    </link>
+    <joint name="rl_kit_jetson_housing_box_joint"  type="fixed">
+        <parent link = "rl_kit_reference_frame"/>
+        <child  link = "rl_kit_jetson_housing_box"/>
+        <origin xyz = "-0.078 0.0 0.0"/>
+    </joint>
+
+    <link name="rl_kit_gxp_interface">
+        <xacro:if value="$(arg use_proprietary_meshes)">
+            <visual>
+                <geometry>
+                    <mesh filename="package://${mesh_pkg}/meshes/accessories/gxp.${mesh_ext}"/>
+                </geometry>
+            </visual>
+        </xacro:if>
+        <xacro:unless value="$(arg use_proprietary_meshes)">
+            <visual>
+                <geometry>
+                    <box size=" 0.04445 0.1905 0.0635"/>
+                </geometry>
+                <origin xyz="${0.0445/2 - 0.02} 0 ${0.0635/2}"/>
+                <material name="black">
+                    <color rgba="0 0 0 1"/>
+                </material>
+            </visual>
+        </xacro:unless>
+        <collision>
+            <geometry>
+                <box size=" 0.04445 0.1905 0.0635"/>
+            </geometry>
+            <origin xyz="${0.0445/2 - 0.02} 0 ${0.0635/2}"/>
+        </collision>
+    </link>
+
+    <joint name="rl_kit_gxp_joint" type="fixed">
+        <parent link = "rl_kit_reference_frame"/>
+        <child  link = "rl_kit_gxp_interface"/>
+        <origin xyz = "0.13 0.0 -0.056"/>
+    </joint>
+    </xacro:macro>
+</robot>

@@ -8,11 +8,21 @@
     <xacro:arg name="has_arm" default="False"/>
     <xacro:arg name="has_eap" default="False"/>
     <xacro:arg name="has_eap_2" default="False"/>
+    <xacro:arg name="has_rl_kit" default="False"/>
     <xacro:arg name="has_realsense" default="False"/>
-    <xacro:arg name="kinematic_model" default="body_assist"/>
+    <xacro:arg name="kinematic_model" default="none"/>
+    <xacro:arg name="use_proprietary_meshes" default="false" />
+    <xacro:arg name="proprietary_pkg" default="spot_proprietary_description" />
+    <xacro:arg name="proprietary_mesh_format" default="dae" />
     <xacro:property name="kinematic_model" value="$(arg kinematic_model)"/>
 
-    <link name="base_footprint"/>
+    <!-- Determine mesh source -->
+    <xacro:property name="mesh_pkg" value="$(eval proprietary_pkg if use_proprietary_meshes else 'spot_description')"/>
+    <xacro:property name="mesh_ext" value="$(eval proprietary_mesh_format if use_proprietary_meshes else 'obj')" />
+
+    <xacro:unless value="${kinematic_model == 'none'}">
+        <link name="base_footprint"/>
+    </xacro:unless>
 
     <!-- Virtual Joints -->
     <xacro:if value="${kinematic_model == 'body_assist'}">
@@ -70,10 +80,10 @@
             <limit lower = "-10.0" upper = "10.0" velocity="0.1" effort="1e9"/>
         </joint>
 
-        <joint name="body_or" type="revolute">
+        <joint name="body_or" type="continuous">
             <parent link = "body_y"/>
             <child  link = "body_or"/>
-            <limit lower = "0" upper = "${2*pi}" velocity="0.1" effort="1e9"/>
+            <limit velocity="0.1" effort="1e9"/>
             <axis    xyz = "0 0 1"/>
         </joint>
 
@@ -124,6 +134,13 @@
         <child link="rear_rail" />
     </joint>
 
+    <link name="payload_mount_reference_frame"/>
+    <joint name="payload_mount_reference_frame_joint" type="fixed">
+        <parent link = "base_link"/>
+        <child  link = "payload_mount_reference_frame"/>
+        <origin xyz = "0.2075 0.0 0.0805"/>
+    </joint>
+
     <!-- Front Left -->
     <link name="front_left_hip">
         <visual>
@@ -136,29 +153,14 @@
                 <mesh filename="package://spot_description/meshes/body/front_left_hip_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0605" ixy="0.0"  ixz="0.0"  iyy="0.0"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="front_left_hip_x" type="revolute">
         <origin xyz="0.29785 0.05500 0.00000" rpy="0 0 0" />
         <axis xyz="1 0 0" />
         <parent link="body" />
         <child link="front_left_hip" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.78539816339744827899" upper="0.78539816339744827899" />
     </joint>
-    <transmission name="front_left_hip_x_trans">
-	    <type>transmission_interface/SimpleTransmission</type>
-	    <joint name="front_left_hip_x">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-	    <actuator name="front_left_hip_x">
-          	<mechanicalReduction>50</mechanicalReduction>
-          	<hardwareInterface>EffortJointInterface</hardwareInterface>
-	    </actuator>
-    </transmission>
 
     <link name="front_left_upper_leg">
         <visual>
@@ -171,29 +173,14 @@
                 <mesh filename="package://spot_description/meshes/body/front_left_upper_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.05"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="front_left_hip_y" type="revolute">
         <origin xyz="0.0 0.110945 0.0" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="front_left_hip" />
         <child link="front_left_upper_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.89884456477707963539" upper="2.2951079663725435509" />
     </joint>
-    <transmission name="front_left_hip_y_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="front_left_hip_y">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="front_left_hip_y">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
 
     <link name="front_left_lower_leg">
         <visual>
@@ -206,42 +193,14 @@
                 <mesh filename="package://spot_description/meshes/body/front_left_lower_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.0" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.045"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="front_left_knee" type="revolute">
         <origin xyz="0.025 0.000 -0.3205" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="front_left_upper_leg" />
         <child link="front_left_lower_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.254801" />
     </joint>
-    <gazebo reference="front_left_lower_leg">
-        <sensor name="front_left_lower_leg_contactsensor_sensor" type="contact">
-        <always_on>true</always_on>
-        <contact>
-            <collision>front_left_lower_leg_fixed_joint_lump__front_bump_sensor_collision</collision>
-        </contact>
-        <plugin filename="libgazebo_ros_bumper.so" name="front_left_lower_leg_plugin">
-            <bumperTopicName>front_left_lower_leg_contact</bumperTopicName>
-            <frameName>front_left_lower_leg</frameName>
-        </plugin>
-        </sensor>
-    </gazebo>
-
-    <transmission name="front_left_knee_trans">
-	  <type>transmission_interface/SimpleTransmission</type>
-	  <joint name="front_left_knee">
-          	<hardwareInterface>EffortJointInterface</hardwareInterface>
-      </joint>
-	  <actuator name="front_left_knee">
-          	<mechanicalReduction>50</mechanicalReduction>
-          	<hardwareInterface>EffortJointInterface</hardwareInterface>
-	  </actuator>
-    </transmission>
 
     <!-- Front Right -->
     <link name="front_right_hip">
@@ -255,29 +214,14 @@
                 <mesh filename="package://spot_description/meshes/body/front_right_hip_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0605" ixy="0.0"  ixz="0.0"  iyy="0.0"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="front_right_hip_x" type="revolute">
         <origin xyz="0.29785 -0.05500 0.00000" rpy="0 0 0" />
         <axis xyz="1 0 0" />
         <parent link="body" />
         <child link="front_right_hip" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.78539816339744827899" upper="0.78539816339744827899" />
     </joint>
-    <transmission name="front_right_hip_x_trans">
-	  <type>transmission_interface/SimpleTransmission</type>
-	  <joint name="front_right_hip_x">
-          	<hardwareInterface>EffortJointInterface</hardwareInterface>
-      </joint>
-	  <actuator name="front_right_hip_x">
-          	<mechanicalReduction>50</mechanicalReduction>
-          	<hardwareInterface>EffortJointInterface</hardwareInterface>
-	  </actuator>
-    </transmission>
 
     <link name="front_right_upper_leg">
         <visual>
@@ -290,29 +234,14 @@
                 <mesh filename="package://spot_description/meshes/body/front_right_upper_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.05"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="front_right_hip_y" type="revolute">
         <origin xyz="0.0 -0.110945 0.0" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="front_right_hip" />
         <child link="front_right_upper_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.89884456477707963539" upper="2.2951079663725435509" />
     </joint>
-    <transmission name="front_right_hip_y_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="front_right_hip_y">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="front_right_hip_y">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
 
     <link name="front_right_lower_leg">
         <visual>
@@ -325,42 +254,14 @@
                 <mesh filename="package://spot_description/meshes/body/front_right_lower_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.0" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.045"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="front_right_knee" type="revolute">
         <origin xyz="0.025 0.000 -0.3205" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="front_right_upper_leg" />
         <child link="front_right_lower_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.247563" />
     </joint>
-    <gazebo reference="front_right_lower_leg">
-        <sensor name="front_right_lower_leg_contactsensor_sensor" type="contact">
-        <always_on>true</always_on>
-        <contact>
-            <collision>front_right_lower_leg_fixed_joint_lump__front_bump_sensor_collision</collision>
-        </contact>
-        <plugin filename="libgazebo_ros_bumper.so" name="front_right_lower_leg_plugin">
-            <bumperTopicName>front_right_lower_leg_contact</bumperTopicName>
-            <frameName>front_right_lower_leg</frameName>
-        </plugin>
-        </sensor>
-    </gazebo>
-
-    <transmission name="front_right_knee_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="front_right_knee">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="front_right_knee">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
 
     <!-- Rear Left -->
     <link name="rear_left_hip">
@@ -374,29 +275,14 @@
                 <mesh filename="package://spot_description/meshes/body/rear_left_hip_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0605" ixy="0.0"  ixz="0.0"  iyy="0.0"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="rear_left_hip_x" type="revolute">
         <origin xyz="-0.29785 0.05500 0.00000" rpy="0 0 0" />
         <axis xyz="1 0 0" />
         <parent link="body" />
         <child link="rear_left_hip" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.78539816339744827899" upper="0.78539816339744827899" />
     </joint>
-    <transmission name="rear_left_hip_x_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="rear_left_hip_x">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="rear_left_hip_x">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
 
     <link name="rear_left_upper_leg">
         <visual>
@@ -409,29 +295,14 @@
                 <mesh filename="package://spot_description/meshes/body/rear_left_upper_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-           <mass value="1.5" />
-    	   <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.05"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="rear_left_hip_y" type="revolute">
         <origin xyz="0.0 0.110945 0.0" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="rear_left_hip" />
         <child link="rear_left_upper_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.89884456477707963539" upper="2.2951079663725435509" />
     </joint>
-    <transmission name="rear_left_hip_y_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="rear_left_hip_y">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="rear_left_hip_y">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
 
     <link name="rear_left_lower_leg">
         <visual>
@@ -444,41 +315,14 @@
                 <mesh filename="package://spot_description/meshes/body/rear_left_lower_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.0" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.045"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="rear_left_knee" type="revolute">
         <origin xyz="0.025 0.000 -0.3205" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="rear_left_upper_leg" />
         <child link="rear_left_lower_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.267153" />
     </joint>
-    <gazebo reference="rear_left_lower_leg">
-        <sensor name="rear_left_lower_leg_contactsensor_sensor" type="contact">
-        <always_on>true</always_on>
-        <contact>
-            <collision>rear_left_lower_leg_fixed_joint_lump__rear_bump_sensor_collision</collision>
-        </contact>
-        <plugin filename="libgazebo_ros_bumper.so" name="rear_left_lower_leg_plugin">
-            <bumperTopicName>rear_left_lower_leg_contact</bumperTopicName>
-            <frameName>rear_left_lower_leg</frameName>
-        </plugin>
-        </sensor>
-    </gazebo>
-    <transmission name="rear_left_knee_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="rear_left_knee">
-             <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="rear_left_knee">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
 
     <!-- Rear Right -->
     <link name="rear_right_hip">
@@ -492,29 +336,15 @@
                 <mesh filename="package://spot_description/meshes/body/rear_right_hip_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0605" ixy="0.0"  ixz="0.0"  iyy="0.0"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="rear_right_hip_x" type="revolute">
         <origin xyz="-0.29785 -0.05500 0.00000" rpy="0 0 0" />
         <axis xyz="1 0 0" />
         <parent link="body" />
         <child link="rear_right_hip" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.78539816339744827899" upper="0.78539816339744827899" />
     </joint>
-    <transmission name="rear_right_hip_x_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="rear_right_hip_x">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </joint>
-        <actuator name="rear_right_hip_x">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
+
     <link name="rear_right_upper_leg">
         <visual>
             <geometry>
@@ -526,29 +356,15 @@
                 <mesh filename="package://spot_description/meshes/body/rear_right_upper_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.5" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.05"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="rear_right_hip_y" type="revolute">
         <origin xyz="0.0 -0.110945 0.0" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="rear_right_hip" />
         <child link="rear_right_upper_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-0.89884456477707963539" upper="2.2951079663725435509" />
     </joint>
-    <transmission name="rear_right_hip_y_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="rear_right_hip_y">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-            </joint>
-        <actuator name="rear_right_hip_y">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
+
     <link name="rear_right_lower_leg">
         <visual>
             <geometry>
@@ -560,45 +376,14 @@
                 <mesh filename="package://spot_description/meshes/body/rear_right_lower_leg_collision.stl" />
             </geometry>
         </collision>
-        <inertial>
-            <mass value="1.0" />
-    	    <inertia  ixx="0.0" ixy="0.0"  ixz="0.0"  iyy="0.045"  iyz="0.0"  izz="0.0" />
-    	</inertial>
     </link>
     <joint name="rear_right_knee" type="revolute">
         <origin xyz="0.025 0.000 -0.3205" rpy="0 0 0" />
         <axis xyz="0 1 0" />
         <parent link="rear_right_upper_leg" />
         <child link="rear_right_lower_leg" />
-        <dynamics damping="0.1" friction="0.1"/>
         <limit effort="1000" velocity="1000.00" lower="-2.7929" upper="-0.257725" />
     </joint>
-    <gazebo reference="rear_right_lower_leg">
-        <sensor name="rear_right_lower_leg_contactsensor_sensor" type="contact">
-        <always_on>true</always_on>
-        <contact>
-            <collision>rear_right_lower_leg_fixed_joint_lump__rear_bump_sensor_collision</collision>
-        </contact>
-        <plugin filename="libgazebo_ros_bumper.so" name="rear_right_lower_leg_plugin">
-            <bumperTopicName>rear_right_lower_leg_contact</bumperTopicName>
-            <frameName>rear_right_lower_leg</frameName>
-        </plugin>
-        </sensor>
-    </gazebo>
-    <transmission name="rear_right_knee_trans">
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="rear_right_knee">
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-            </joint>
-        <actuator name="rear_right_knee">
-            <mechanicalReduction>50</mechanicalReduction>
-            <hardwareInterface>EffortJointInterface</hardwareInterface>
-        </actuator>
-    </transmission>
-
-    <gazebo>
-    	<plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so"/>
-    </gazebo>
 
     <!-- Spot Arm -->
     <xacro:if value="$(arg has_arm)">
@@ -615,16 +400,36 @@
     <!-- Spot Enhanced Autonomy package (EAP) -->
     <xacro:if value="$(arg has_eap)">
         <link name="lidar_assembly">
+          <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/eap_lidar.stl" />
-                </geometry>
+              <geometry>
+		<mesh filename="package://${mesh_pkg}/meshes/accessories/eap_lidar.${mesh_ext}"/>
+              </geometry>
             </visual>
             <collision>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/eap_lidar.stl" />
-                </geometry>
+              <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/eap_lidar.${mesh_ext}"/>
+              </geometry>
             </collision>
+          </xacro:if>
+        
+          <xacro:unless value="$(arg use_proprietary_meshes)">
+            <visual>
+              <geometry>
+                <cylinder radius="0.12" length="0.17"/>
+              </geometry>
+	      <origin xyz="0 0 ${0.17/2}"/>
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
+            </visual>
+            <collision>
+              <geometry>
+                <cylinder radius="0.12" length="0.17"/>
+              </geometry>
+	      <origin xyz="0 0 ${0.17/2}"/>
+            </collision>
+          </xacro:unless>
         </link>
         <joint name="lidar_mount" type="fixed">
             <origin xyz="-0.03 0.0 0.0" rpy="0 0 0" />
@@ -641,16 +446,58 @@
     <!-- Updated Spot Enhanced Autonomy Package (EAP2) -->
     <xacro:if value="$(arg has_eap_2)">
         <link name="eap_2_assembly">
+          <xacro:if value="$(arg use_proprietary_meshes)">
             <visual>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/EAP2.dae" />
-                </geometry>
+              <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/EAP2.${mesh_ext}" />
+              </geometry>
             </visual>
             <collision>
-                <geometry>
-                    <mesh filename="package://spot_description/meshes/accessories/EAP2_compressed.stl" />
-                </geometry>
+              <geometry>
+                <mesh filename="package://${mesh_pkg}/meshes/accessories/EAP2.${mesh_ext}" />
+              </geometry>
             </collision>
+          </xacro:if>
+        
+          <xacro:unless value="$(arg use_proprietary_meshes)">
+            <!-- Base Box (computer) -->
+            <visual name="eap2_base">
+              <geometry>
+                <box size="0.173 0.264 0.064"/>
+              </geometry>
+              <origin xyz="0 -0.01 0.032" rpy="0 0 0"/>
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
+            </visual>
+        
+            <!-- LIDAR Cylinder -->
+            <visual name="eap2_lidar">
+              <geometry>
+                <cylinder radius="0.0765" length="0.182"/>
+              </geometry>
+              <origin xyz="0 0.03 0.155" rpy="0 0 0"/> <!-- base_z/2 + lidar_z/2 -->
+              <material name="black">
+                <color rgba="0 0 0 1"/>
+              </material>
+            </visual>
+        
+            <!-- Base collision -->
+            <collision name="eap2_base_col">
+              <geometry>
+                <box size="0.173 0.264 0.064"/>
+              </geometry>
+              <origin xyz="0 -0.01 0.032" rpy="0 0 0"/>
+            </collision>
+        
+            <!-- LIDAR collision -->
+            <collision name="eap2_lidar_col">
+              <geometry>
+                <cylinder radius="0.0765" length="0.182"/>
+              </geometry>
+              <origin xyz="0 0.03 0.155" rpy="0 0 0"/>
+            </collision>
+          </xacro:unless>
         </link>
         <joint name="eap_2_mount" type="fixed">
             <origin xyz="0.015 0.0 0.0" rpy="0 0 ${pi/2}" />
@@ -662,9 +509,14 @@
         <joint name="eap2_to_velodyne_joint" type="fixed">
             <parent link = "eap_2_assembly"/>
             <child  link = "velodyne"/>
-            <!-- These values were found by trial and error and may be slightly inaccurate -->
-            <origin xyz="0 0.035 0.11" rpy="0 0 -0.95"/>
+            <origin  xyz = "0 0.02775 0.1091" rpy="0 0 -0.9486"/>
         </joint>
+    </xacro:if>
+
+    <!-- Spot Reinforcement Learning Research Kit Mount with Nvidia Jetson Orin AGX -->
+    <xacro:if value="$(arg has_rl_kit)">
+        <xacro:include filename="$(find spot_description)/urdf/accessories/rl_kit.xacro"/>
+        <xacro:rl_kit/>
     </xacro:if>
 
     <!-- Optional custom includes. -->

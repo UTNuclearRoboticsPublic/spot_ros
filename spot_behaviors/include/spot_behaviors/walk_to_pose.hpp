@@ -58,12 +58,16 @@ public:
     void onHalted() override;
 
 private:
+    static const inline std::string action_server_name_ = "/spot_driver/walk_to";
+
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SharedPtr navigation_action_client_;
     std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::WalkTo>::SharedPtr> goal_handle_future_;
     rclcpp_action::ClientGoalHandle<spot_msgs::action::WalkTo>::SharedPtr goal_handle_;
     rclcpp::Time request_time_point_{};
 
     geometry_msgs::msg::PoseStamped target_pose_;
+    double trans_err_threshold_ = 0.25;
+    double rot_err_threshold_ = 0.25;
     bool checkGoal() const;
 };
     

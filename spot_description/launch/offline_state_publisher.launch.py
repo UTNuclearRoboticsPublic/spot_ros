@@ -5,6 +5,7 @@ from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitut
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+from spot_description.get_accessories import get_accessories_from_env
 
 joint_names = [
     "front_left_hip_x",
@@ -148,7 +149,91 @@ defaults = {
         0.0,
         0.0,
         0.0,
-    ]
+    ],
+    'namaste': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.00415325,
+        -1.3191,
+        2.291,
+        0.067544,
+        -1.8325,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    'carry': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.0041,
+        -1.91044,
+        2.50288,
+        0.067544,
+        -0.544375,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    'namaste_carry': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.0041,
+        -1.91044,
+        2.50288,
+        0.067544,
+        -1.8325,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
 }
 
 def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
@@ -169,7 +254,7 @@ def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
             {'source_list':['/spot_extra_joint_states']}
         ],
         remappings=[
-            ('/joint_states', '/spot_fake_joint_states')
+            ('/joint_states', '/spot_driver/joint_states')
         ]
     ),
 
@@ -177,50 +262,66 @@ def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
 
 def generate_launch_description():
 
+    spot_accessory_dict = get_accessories_from_env()
+
     launch_args = [
         DeclareLaunchArgument('has_arm',
             description='Boolean. Include the Spot Arm.',
-            choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_arm', 'False')),
             
         DeclareLaunchArgument('has_eap',
             description='Boolean. Include the Enhanced Autonomy package (EAP)',
-            choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_eap', 'False')),
 
         DeclareLaunchArgument('has_eap_2',
             description='Boolean. Include the Updated Enhanced Autonomy package (EAP2)',
-            choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_eap_2', 'False')),
+
+        DeclareLaunchArgument('has_rl_kit',
+            description='Boolean. Include the RL Research Kit mounting set',
+            default_value=spot_accessory_dict.get('has_rl_kit', 'False')),
 
         DeclareLaunchArgument('has_realsense',
             description='Boolean. Include an arm mounted Realsense D435',
-            choices=['True', 'False'],
-            default_value='False'),
+            default_value=spot_accessory_dict.get('has_realsense', 'False')),
 
         DeclareLaunchArgument('has_cam_payload',
             description='Boolean. Include the CAM payload',
-            choices=['True', 'False'],
+            default_value=spot_accessory_dict.get('has_cam_payload', 'False')),
+
+        DeclareLaunchArgument('kinematic_model',
+            description='The kinematic model to use for the Spot description',
+            choices=['none', 'body_assist', 'mobile_manipulation'],
+            default_value='none'),
+
+        DeclareLaunchArgument('use_proprietary_meshes',
+            description='Whether to use proprietary meshes',
             default_value='False'),
+
+        DeclareLaunchArgument(
+            'proprietary_pkg',
+            description='Name of the package containing proprietary meshes',
+            default_value='spot_proprietary_description'),
+        
+        DeclareLaunchArgument(
+            'proprietary_mesh_format',
+            description='File extension format for proprietary mesh files',
+            default_value='dae',
+            choices=['dae', 'stl', 'obj']),
 
         DeclareLaunchArgument('configuration',
             description='The configuration to emulate for the Spot robot',
-            choices=['docked', 'standing', 'ready', 'unstowed'],
+            choices=['docked', 'standing', 'ready', 'unstowed', 'namaste', 'carry', 'namaste_carry'],
             default_value='standing'
         )
     ]
 
-    has_arm = LaunchConfiguration('has_arm')
-    has_eap = LaunchConfiguration('has_eap')
-    has_eap_2 = LaunchConfiguration('has_eap_2')
-    has_realsense = LaunchConfiguration('has_realsense')
-    has_cam_payload = LaunchConfiguration('has_cam_payload')
+    launch_arg_names = ['has_arm', 'has_eap', 'has_eap_2', 'has_rl_kit', 'has_realsense', 'has_cam_payload', 'kinematic_model', 'use_proprietary_meshes', 'proprietary_pkg', 'proprietary_mesh_format']
+    xacro_command_args = [elem for arg_name in launch_arg_names for elem in (f' {arg_name}:=', LaunchConfiguration(arg_name))]
     
     # Build the URDF from the xacro, applying specified hardware accessories.
     xacro_path = PathJoinSubstitution([FindPackageShare('spot_description'), 'urdf', 'spot.urdf.xacro'])
-    urdf_param = ParameterValue(
-        Command(['xacro ', xacro_path, ' has_arm:=',has_arm, ' has_eap:=',has_eap, ' has_eap_2:=',has_eap_2, ' has_realsense:=',has_realsense, ' has_cam_payload:=',has_cam_payload]),
-        value_type=str)
+    urdf_param = ParameterValue(Command(['xacro ', xacro_path, *xacro_command_args]), value_type=str)
 
     return launch.LaunchDescription([
         *launch_args,
@@ -233,7 +334,7 @@ def generate_launch_description():
             output='both',
             parameters=[{'robot_description': urdf_param}],
             remappings=[
-                ('/joint_states', '/spot_fake_joint_states')
+                ('/joint_states', '/spot_driver/joint_states')
             ]
         )
     ])

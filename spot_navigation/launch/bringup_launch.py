@@ -11,6 +11,12 @@ def generate_launch_description():
         description='Full path to the navigation configuration file',
         default_value=PathJoinSubstitution([FindPackageShare("spot_navigation"), "config", "spot.yaml"])
     )
+
+    pointcloud_arg = DeclareLaunchArgument(
+        'cloud_in',
+        description='The topic on which to look for pointcloud data. Default "/velodyne_points"',
+        default_value='/velodyne_points'
+    )
     
     nav_include = GroupAction(
         actions=[
@@ -18,6 +24,7 @@ def generate_launch_description():
             SetRemap(src='cmd_vel'   , dst='/spot_driver/cmd_vel'),
             SetRemap(src='/tf'       , dst='/tf'),
             SetRemap(src='/tf_static', dst='/tf_static'),
+            SetRemap(src='/velodyne_points', dst=LaunchConfiguration('cloud_in')),
 
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -32,5 +39,6 @@ def generate_launch_description():
 
     return LaunchDescription([
         config_arg,
+        pointcloud_arg,
         nav_include,
     ])

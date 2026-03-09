@@ -43,14 +43,13 @@ public:
 
     static std::string toSnakeCase(const std::string& str) {
         std::string snake_str;
+        auto isUpper = [](char c) {return c >= 'A' && c <= 'Z';};
+        
         for (const char& c : str) {
-            if (c >= 'A' && c <= 'Z') {
-                if (&c != &(str.front())) {
-                    snake_str.push_back('_');
-                }
-                snake_str.push_back(std::tolower((unsigned char)(c)));
-            }else {
-                snake_str.push_back(c);
+            const char& c_next = *std::next(&c); 
+            snake_str.push_back(std::tolower((unsigned char)(c)));
+            if (!isUpper(c) && isUpper(c_next)) {
+                snake_str.push_back('_');
             }
         }
 
