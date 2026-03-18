@@ -22,6 +22,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/NavigateTo.action"
   "action/WalkTo.action"
   "action/ImageToGrasp.action"
+  "action/StableArmCommand.action"
 
   "srv/ArmForceTrajectory.srv"
   "srv/ArmJointMovement.srv"
