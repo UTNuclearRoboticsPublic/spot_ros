@@ -56,8 +56,8 @@ class SimulatedObject:
                 radius=self.config.dimensions[1]
             )
             self.marker.type = Marker.CYLINDER
-            self.marker.scale.x = self.config.dimensions[1]
-            self.marker.scale.y = self.config.dimensions[1]
+            self.marker.scale.x = 2*self.config.dimensions[1]
+            self.marker.scale.y = 2*self.config.dimensions[1]
             self.marker.scale.z = self.config.dimensions[0]
 
         elif self.config.object_type == 'mesh':
