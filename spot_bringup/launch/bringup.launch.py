@@ -237,13 +237,13 @@ def generate_launch_description():
             {'enable_button': 4},
             {'axis_linear.x': 1},
             {'axis_linear.y': 0},
-            {'scale_linear.x': 0.85},
-            {'scale_linear.y': 0.5},
+            {'scale_linear.x': 2.0},
+            {'scale_linear.y': 2.0},
             {'axis_angular.yaw': 2},
-            {'scale_angular.yaw': 1.0}
+            {'scale_angular.yaw': 1.5}
         ],
         remappings=[
-            ('cmd_vel', '/spot_driver/cmd_vel')
+            ('cmd_vel', '/controller/cmd_vel')
         ]
     )
 
@@ -328,6 +328,21 @@ def generate_launch_description():
         ],
     )
 
+    twist_mux_config = PathJoinSubstitution([
+        FindPackageShare('spot_driver'),
+        'config',
+        'twist_mux.yaml'
+    ])
+
+    twist_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        output='screen',
+        name='twist_mux',
+        remappings=[('/cmd_vel_out', '/spot_driver/cmd_vel')],
+        parameters=[twist_mux_config]
+    )
+
     ## Launch
     return LaunchDescription([
         *launch_args,
@@ -340,5 +355,6 @@ def generate_launch_description():
         teleop_twist_joy_node,
         spot_joy_node,
         spot_arm_joy_include,
-        velodyne_include
+        velodyne_include,
+        twist_mux
     ])

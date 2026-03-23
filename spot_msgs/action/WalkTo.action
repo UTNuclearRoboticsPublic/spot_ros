@@ -4,6 +4,10 @@
 geometry_msgs/PoseStamped target_pose
 float64 maximum_movement_time
 
+# Only the SE2 components of twist are considered
+# This field is ignored if all elements are zero
+geometry_msgs/Twist max_vel
+
 ---
 
 # Response
