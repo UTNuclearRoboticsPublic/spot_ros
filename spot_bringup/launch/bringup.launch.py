@@ -9,6 +9,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, OrSu
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import PushRosNamespace, SetRemap
 from spot_description.get_accessories import get_accessories_from_env
+from launch.actions import TimerAction
 
 def generate_launch_description():
 
@@ -355,6 +356,9 @@ def generate_launch_description():
         teleop_twist_joy_node,
         spot_joy_node,
         spot_arm_joy_include,
-        velodyne_include,
+        TimerAction(
+              period=3.0,
+              actions=[velodyne_include]
+        ),
         twist_mux
     ])
