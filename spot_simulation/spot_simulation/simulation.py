@@ -4,7 +4,7 @@ import open3d
 import numpy as np
 from rclpy.node import Node
 from rclpy.time import Time
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, qos_profile_sensor_data
 from rclpy.duration import Duration
 from rclpy.publisher import Publisher
 from std_msgs.msg import Header
@@ -65,18 +65,18 @@ class Simulation(Node):
                 self.sensor_pubs[sensor_name] = self.create_publisher(
                     msg_type=PointCloud2,
                     topic=sensor_config.topic,
-                    qos_profile=10) # TODO: Respect the best effort parameter
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data)
             elif sensor_config.sensor_type == 'depth_camera':
                 self.sensors[sensor_name] = SimulatedDepthCamera(sensor_config)
                 self.sensor_pubs[sensor_name] = self.create_publisher(
                     msg_type=Image,
                     topic=sensor_config.topic,
-                    qos_profile=10
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
                 )
                 self.sensor_info_pubs[sensor_name] = self.create_publisher(
                     msg_type=CameraInfo,
                     topic=sensor_config.depth_config.info_topic,
-                    qos_profile=10
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
                 )
             self.sensor_cb_groups[sensor_name] = MutuallyExclusiveCallbackGroup()
             self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_cb_groups[sensor_name]))

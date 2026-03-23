@@ -1,16 +1,13 @@
 import os
 import xacro
-import open3d
 import contextlib
 import numpy as np
 from rclpy.node import Node
-from urdf_parser_py import urdf
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
 from scipy.spatial.transform import Rotation
 from geometry_msgs.msg import Twist, TransformStamped
-from urdf_parser_py.urdf import Link as URDFLink, Robot as URDFRobot, Joint as URDFJoint
+from urdf_parser_py.urdf import Robot as URDFRobot
 from ament_index_python import get_package_share_directory
 
 class SimulatedRobot:
@@ -143,41 +140,3 @@ class SimulatedRobot:
             file_strings[line_idx] = resolve_package(line)
 
         return '\n'.join(file_strings)
-    
-    def get_geometry(self) -> open3d.geometry.TriangleMesh:
-        geometries = []
-
-        # Initialize state
-        rendered_links = set()
-        link_pose = self.pose
-        joint_idx = 0
-        current_link = self.urdf_model.get_root()
-
-        # self.urdf_model.child_map[current_link]
-        # for link_idx, link_name in enumerate(chain_links):
-        #     for attached_link, link_transform in get_links_attached_to(link_name, self.urdf_model).items():
-        #         if attached_link not in self.urdf_model.link_map or attached_link in rendered_links: continue
-        #         for visual_idx, visual in enumerate(self.urdf_model.link_map[attached_link].visuals):
-        #             try:
-        #                 visual_mesh, material = get_urdf_visual_geometry(visual)
-        #             except:
-        #                 # The function will print an error message and we simply don't render this link
-        #                 continue
-        #             visual_mesh.transform(link_pose @ link_transform @ urdf_pose_to_matrix(visual.origin))
-        #             geometries.append({'geometry': visual_mesh, 'group': 'robot_mesh', 'name': f'{attached_link}_{visual_idx}', 'material': material})
-        #             rendered_links.add(attached_link)
-
-        #     if link_idx != len(chain_joints):
-        #         joint: Joint = self.urdf_model.joint_map[chain_joints[link_idx]]
-        #         link_pose = link_pose @ urdf_pose_to_matrix(joint.origin)
-
-        #         if joint.type == 'fixed': continue
-
-        #         joint_angle = joint_state[joint_idx].item()
-        #         joint_idx += 1
-        #         if joint.type == 'revolute':
-        #             link_pose[:3, :3] = link_pose[:3, :3] @ scipy.spatial.transform.Rotation.from_euler(seq="xyz", angles=np.array(joint.axis)*joint_angle, degrees=False).as_matrix()
-        #         elif joint.type == 'prismatic':
-        #             link_pose[:3,  3] += link_pose[:3, :3] @ (joint_angle * np.array(joint.axis))
-
-        # return geometries

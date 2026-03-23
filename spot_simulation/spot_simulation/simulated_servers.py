@@ -1,4 +1,5 @@
 import math
+import time
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -72,6 +73,7 @@ class SimulatedServers(Node):
         motion_req.request.start_state.is_diff = True
 
         self.moveit_client.send_goal_async(motion_req)
+        time.sleep(2.0)
 
         resp.success = True
         resp.message = "Simulated stow requested"
@@ -100,6 +102,7 @@ class SimulatedServers(Node):
         motion_req.request.start_state.is_diff = True
 
         self.moveit_client.send_goal_async(motion_req)
+        time.sleep(1.0)
 
         resp.success = True
         resp.message = "Simulated unstow requested"
