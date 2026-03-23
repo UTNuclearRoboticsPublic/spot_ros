@@ -37,6 +37,7 @@ FROM spot_sdk AS spot_ros
 
 RUN apt update && apt install -y \
         ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+        ros-${ROS_DISTRO}-twist-mux \
         git \
         jq \
         openssh-client
