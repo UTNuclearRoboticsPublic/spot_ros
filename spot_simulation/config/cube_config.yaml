@@ -1,6 +1,6 @@
 spot_simulation:
   ros__parameters:
-    object_names: [cube, room]
+    object_names: [cube, room, cylinder]
 
     objects:
       cube:
@@ -13,3 +13,10 @@ spot_simulation:
         object_type: box
         dimensions: [10.0, 10.0, 4.5]
         location: [0.0, 0.0, 2.25]
+
+      cylinder:
+        object_type: cylinder
+        dimensions: [2.0, 0.5]
+        location: [0.0, 2.0, 1.0]
+        roll: 90.0
+        pitch: 15.0
