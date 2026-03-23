@@ -1,7 +1,5 @@
 import open3d
 import numpy as np
-from math import pi
-from rclpy.logging import get_logger
 
 class SimulatedLiDAR:
     def __init__(self, sensor_config):

@@ -1,9 +1,6 @@
 import open3d
 import numpy as np
-from math import pi
-from rclpy.logging import get_logger
 from sensor_msgs.msg import CameraInfo
-from scipy.spatial.transform import Rotation
 
 class SimulatedDepthCamera:
     def __init__(self, sensor_config):
