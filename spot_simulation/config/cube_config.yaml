@@ -1,6 +1,6 @@
 spot_simulation:
   ros__parameters:
-    object_names: [cube, room, cylinder]
+    object_names: [cube, room, cylinder] # ,mesh_object
 
     objects:
       cube:
@@ -20,3 +20,10 @@ spot_simulation:
         location: [0.0, 2.0, 1.0]
         roll: 90.0
         pitch: 15.0
+
+      # mesh_object:
+      #   object_type: mesh
+      #   file_path: /path/to/your/mesh/file.<stl,obj,ply>
+      #   mesh_scale: 0.5
+      #   location: [0.0, 0.3, 1.2]
+      #   yaw: 45.0
