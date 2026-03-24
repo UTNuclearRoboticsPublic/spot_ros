@@ -25,6 +25,12 @@
     </node>
     <node pkg="spot_simulation" exec="simulated_servers"/>
 
+    <!-- Twist Mux -->
+    <node pkg="twist_mux" exec="twist_mux" name="twist_mux">
+        <remap from="/cmd_vel_out" to="/spot_driver/cmd_vel"/>
+        <param from="$(find-pkg-share spot_driver)/config/twist_mux.yaml"/>
+    </node>
+
     <!-- If requested, launch RViz -->
     <node pkg="rviz2" exec="rviz2" args="-d $(find-pkg-share spot_simulation)/rviz/simulation.rviz" if="$(var launch_rviz)"/>
 
