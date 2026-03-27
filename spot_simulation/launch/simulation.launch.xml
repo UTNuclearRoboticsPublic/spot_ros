@@ -20,7 +20,7 @@
 
     <!-- Launch the simulation -->
     <node pkg="spot_simulation" exec="simulation">
-        <param from="$(find-pkg-share spot_simulation)/config/cube_config.yaml"/>
+        <param from="$(find-pkg-share spot_simulation)/config/environment_config.yaml"/>
         <param from="$(var params)"/>
     </node>
     <node pkg="spot_simulation" exec="simulated_servers"/>

@@ -76,7 +76,7 @@ rosdep install --from-paths src/spot_ros/spot_simulation -i -y
 Additionally, you will want to configure your simulation environment with objects and sensors. Refer to the  sample [environment configuration file](spot_simulation/config/cube_config.yaml) for examples on configuring the environment and the [robot configuration file](spot_simulation/config/spot_config.yaml) for examples of how to modify the robot and sensors. The simulation pulls the same accessories and URDF extensions and the main description launch. To run the simulation, execute
 
 ```bash
-ros2 launch spot_simulation box_sim.launch.xml
+ros2 launch spot_simulation simulation.launch.xml
 ```
 
 You can then move the robot around by publishing to the `/spot_driver/cmd_vel` topic and you should see the sensor data react to the robot's position. If you are also running the arm, you can control the arm using the MoveIt interface through 
