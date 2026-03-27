@@ -21,9 +21,7 @@ spot_simulation:
         roll: 90.0
         pitch: 15.0
 
-      # mesh_object:
-      #   object_type: mesh
-      #   file_path: /path/to/your/mesh/file.<stl,obj,ply>
-      #   mesh_scale: 0.5
-      #   location: [0.0, 0.3, 1.2]
-      #   yaw: 45.0
+      sphere:
+        object_type: sphere
+        dimensions: [0.75] # radius
+        location: [-3.0, 0.0, 2.0]

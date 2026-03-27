@@ -22,9 +22,9 @@ simulation_parameters:
       object_type:
         type: string
         read_only: True
-        description: The type of object to add. Options are [mesh, box, cylinder]
+        description: The type of object to add. Options are [mesh, box, cylinder, sphere]
         validation:
-          one_of<>: [[mesh, box, cylinder]]
+          one_of<>: [[mesh, box, cylinder, sphere]]
 
       dimensions:
         type: double_array

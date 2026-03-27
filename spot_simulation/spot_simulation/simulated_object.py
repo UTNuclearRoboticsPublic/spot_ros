@@ -60,6 +60,16 @@ class SimulatedObject:
             self.marker.scale.y = 2*self.config.dimensions[1]
             self.marker.scale.z = self.config.dimensions[0]
 
+        elif self.config.object_type == 'sphere':
+            assert len(self.config.dimensions) == 1, 'Sphere object type must have only 1 dimension'
+            self.geometry = open3d.t.geometry.TriangleMesh.create_sphere(
+                radius=self.config.dimensions[0]
+            )
+            self.marker.type = Marker.SPHERE
+            self.marker.scale.x = 2*self.config.dimensions[0]
+            self.marker.scale.y = 2*self.config.dimensions[0]
+            self.marker.scale.z = 2*self.config.dimensions[0]
+
         elif self.config.object_type == 'mesh':
             assert len(self.config.file_path), 'No mesh file passed for mesh object'
             self.geometry = open3d.t.geometry.TriangleMesh.from_legacy(
