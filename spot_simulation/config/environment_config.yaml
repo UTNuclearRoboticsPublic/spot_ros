@@ -9,6 +9,7 @@ spot_simulation:
         dimensions: [1.0, 0.5, 0.75] # x, y, z lengths
         location: [2.0, 0.0, 0.375]
         yaw: 90.0
+        rgb: [1.0, 1.0, 0.0]
 
       room:
         object_type: box
@@ -21,11 +22,13 @@ spot_simulation:
         location: [0.0, 2.0, 1.0]
         roll: 90.0
         pitch: 15.0
+        rgb: [0.0, 0.0, 1.0]
 
       sphere:
         object_type: sphere
         dimensions: [0.75] # radius
         location: [-3.0, 0.0, 2.0]
+        rgb: [0.0, 1.0, 1.0]
 
       monkey:
         object_type: mesh

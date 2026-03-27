@@ -7,7 +7,7 @@ from .simulated_robot import resolve_package
 class SimulatedObject:
     object_id = 0
 
-    def __init__(self, object_config):
+    def __init__(self, object_config, object_name: str):
         self.pose = np.eye(4)
         self.pose[0:3, 3] = np.array(object_config.location)
         self.pose[0:3, 0:3] = Rotation.from_euler(
@@ -20,13 +20,14 @@ class SimulatedObject:
         self.marker.header.frame_id = 'odom'
         self.marker.action = Marker.ADD
         self.marker.id = SimulatedObject.object_id
+        self.marker.ns = object_name
         self.marker.pose.position.x = object_config.location[0]
         self.marker.pose.position.y = object_config.location[1]
         self.marker.pose.position.z = object_config.location[2]
         self.marker.color.a = 1.0
-        self.marker.color.r = 0.5
-        self.marker.color.b = 0.5
-        self.marker.color.g = 0.5
+        self.marker.color.r = object_config.rgb[0]
+        self.marker.color.b = object_config.rgb[1]
+        self.marker.color.g = object_config.rgb[2]
         q = Rotation.from_matrix(self.pose[:3, :3]).as_quat(scalar_first=True)
         self.marker.pose.orientation.w = q[0]
         self.marker.pose.orientation.x = q[1]

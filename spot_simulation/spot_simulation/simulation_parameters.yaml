@@ -88,6 +88,15 @@ simulation_parameters:
         description: The parent object for the pose of this object. If omitted will default to the simulation frame
         default_value: ""
 
+      rgb:
+        type: double_array
+        read_only: True
+        description: The red channel for the object color
+        default_value: [0.5, 0.5, 0.5]
+        validation:
+          element_bounds<>: [0.0, 1.0]
+          fixed_size<>: [3]
+
   robots:
     __map_robot_names:
       urdf_path:
