@@ -17,14 +17,22 @@ simulation_parameters:
     validation:
       unique<>: []
 
+  world_frame:
+    type: string
+    description: The frame relative to which all transforms are published
+    read_only: True
+    default_value: odom
+    validation:
+      not_empty<>: []
+
   objects:
     __map_object_names:
       object_type:
         type: string
         read_only: True
-        description: The type of object to add. Options are [mesh, box, cylinder]
+        description: The type of object to add. Options are [mesh, box, cylinder, sphere]
         validation:
-          one_of<>: [[mesh, box, cylinder]]
+          one_of<>: [[mesh, box, cylinder, sphere]]
 
       dimensions:
         type: double_array
@@ -80,6 +88,15 @@ simulation_parameters:
         description: The parent object for the pose of this object. If omitted will default to the simulation frame
         default_value: ""
 
+      rgb:
+        type: double_array
+        read_only: True
+        description: The red channel for the object color
+        default_value: [0.5, 0.5, 0.5]
+        validation:
+          element_bounds<>: [0.0, 1.0]
+          fixed_size<>: [3]
+
   robots:
     __map_robot_names:
       urdf_path:
@@ -97,6 +114,22 @@ simulation_parameters:
         read_only: True
         description: Xacro args in the form 'arg1:=val1 arg2:=val2'
         default_value: ""
+
+      odometry_frame:
+        type: string
+        read_only: True
+        description: The odometry frame for the published transform data
+        default_value: odom
+        validation:
+          not_empty<>: []
+
+      odometry_topic:
+        type: string
+        read_only: True
+        description: The topic on which to publish odometry data. Will be prepended with the configured namespace. Do not include leading or trailing slashes.
+        default_value: odom
+        validation:
+          not_empty<>: []
 
       update_rate:
         type: double

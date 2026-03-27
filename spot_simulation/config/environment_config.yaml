@@ -1,0 +1,38 @@
+spot_simulation:
+  ros__parameters:
+    world_frame: odom
+
+    object_names: [cube, room, cylinder, sphere, monkey]
+    objects:
+      cube:
+        object_type: box
+        dimensions: [1.0, 0.5, 0.75] # x, y, z lengths
+        location: [2.0, 0.0, 0.375]
+        yaw: 90.0
+        rgb: [1.0, 1.0, 0.0]
+
+      room:
+        object_type: box
+        dimensions: [10.0, 10.0, 4.5] # x, y, z lengths
+        location: [0.0, 0.0, 2.25]
+
+      cylinder:
+        object_type: cylinder
+        dimensions: [2.0, 0.5] # length (along z-axis), radius (in xy plane)
+        location: [0.0, 2.0, 1.0]
+        roll: 90.0
+        pitch: 15.0
+        rgb: [0.0, 0.0, 1.0]
+
+      sphere:
+        object_type: sphere
+        dimensions: [0.75] # radius
+        location: [-3.0, 0.0, 2.0]
+        rgb: [0.0, 1.0, 1.0]
+
+      monkey:
+        object_type: mesh
+        file_path: package://spot_simulation/mesh/Suzanne.stl
+        mesh_scale: 0.5
+        location: [-1.0, -3.0, 1.2]
+        yaw: 135.0

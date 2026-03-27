@@ -1,7 +1,7 @@
 spot_simulation:
   ros__parameters:
     robot_names: [spot]
-    sensor_names: [ouster, hand_depth_camera]
+    sensor_names: [lidar, hand_depth_camera]
 
     robots:
       spot:
@@ -11,6 +11,7 @@ spot_simulation:
         initial_transform:
           translation: [0.0, 0.0, 0.51]
         update_rate: 100.0
+        odometry_topic: odometry
 
     sensors:
       hand_depth_camera:
@@ -30,9 +31,9 @@ spot_simulation:
           vertical_resolution: 171
           encoding: 16UC1
 
-      ouster:
+      lidar:
         sensor_type: lidar
-        frame_id: os_sensor
+        frame_id: lidar_frame
         noise_std_dev: 0.01
         min_range: 0.10
         max_range: 100.0

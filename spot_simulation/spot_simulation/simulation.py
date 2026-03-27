@@ -52,7 +52,7 @@ class Simulation(Node):
         environment_markers = MarkerArray()
         for object_name in self.simulation_parameters.object_names:
             self.get_logger().info(f'Loading object "{object_name}": ')
-            self.objects[object_name] = SimulatedObject(self.simulation_parameters.objects.get_entry(object_name))
+            self.objects[object_name] = SimulatedObject(self.simulation_parameters.objects.get_entry(object_name), object_name)
             self.scene.add_triangles(self.objects[object_name].geometry)
             environment_markers.markers.append(self.objects[object_name].marker)
         self.geometry_markers.publish(environment_markers)
@@ -109,7 +109,7 @@ class Simulation(Node):
         frame_id = self.simulation_parameters.sensors.get_entry(sensor_name).frame_id
         try:
             transform = self.tf_buffer.lookup_transform(
-                target_frame='odom',
+                target_frame=self.simulation_parameters.world_frame,
                 source_frame=frame_id,
                 time=Time(),
                 timeout=Duration(seconds=0.1)
