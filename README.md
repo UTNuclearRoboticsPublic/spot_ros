@@ -69,8 +69,14 @@ The simulation works by projecting rays from the robot's sensors to a pre-define
 To install dependencies run the following commands from your colcon workspace root directory
 
 ```bash
-pip install open3d scipy
+python3 -m pip install -U open3d "scipy>=1.8"
 rosdep install --from-paths src/spot_ros/spot_simulation -i -y
+```
+
+Also due to a bug in the Humble release of the [Generate Parameters Library](https://github.com/PickNikRobotics/generate_parameter_library), it is necessary to build from source for proper parameter generation
+
+```bash
+git clone -b humble https://github.com/PickNikRobotics/generate_parameter_library 
 ```
 
 Additionally, you will want to configure your simulation environment with objects and sensors. Refer to the  sample [environment configuration file](spot_simulation/config/cube_config.yaml) for examples on configuring the environment and the [robot configuration file](spot_simulation/config/spot_config.yaml) for examples of how to modify the robot and sensors. The simulation pulls the same accessories and URDF extensions and the main description launch. To run the simulation, execute
