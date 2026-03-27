@@ -2,6 +2,7 @@ import open3d
 import numpy as np
 from visualization_msgs.msg import Marker
 from scipy.spatial.transform import Rotation
+from .simulated_robot import resolve_package
 
 class SimulatedObject:
     object_id = 0
@@ -72,11 +73,12 @@ class SimulatedObject:
 
         elif self.config.object_type == 'mesh':
             assert len(self.config.file_path), 'No mesh file passed for mesh object'
+            absolute_path = resolve_package(self.config.file_path)
             self.geometry = open3d.t.geometry.TriangleMesh.from_legacy(
-                open3d.io.read_triangle_mesh(self.config.file_path).scale(object_config.mesh_scale, center=np.array([0.0, 0.0, 0.0]))
+                open3d.io.read_triangle_mesh(absolute_path).scale(object_config.mesh_scale, center=np.array([0.0, 0.0, 0.0]))
             )
             self.marker.type = Marker.MESH_RESOURCE
-            self.marker.mesh_resource = f'file://{self.config.file_path}'
+            self.marker.mesh_resource = f'file://{absolute_path}'
             self.marker.scale.x = object_config.mesh_scale
             self.marker.scale.y = object_config.mesh_scale
             self.marker.scale.z = object_config.mesh_scale

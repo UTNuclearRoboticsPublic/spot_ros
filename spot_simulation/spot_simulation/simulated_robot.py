@@ -10,6 +10,20 @@ from geometry_msgs.msg import Twist, TransformStamped
 from urdf_parser_py.urdf import Robot as URDFRobot
 from ament_index_python import get_package_share_directory
 
+# Utility function to handle package URI format
+def resolve_package(line: str):
+    pkg_idx = line.find('package://')
+    if pkg_idx == -1:
+        start_idx = line.find('file://')
+        if start_idx == -1:
+            return line
+        else:
+            return line.removeprefix('file://')
+
+    end_idx = line.find('/', pkg_idx+len('package://')+1)
+    package_name = line[pkg_idx + len('package://'):end_idx]
+    return line.replace('package://'+package_name, get_package_share_directory(package_name))
+
 class SimulatedRobot:
     def __init__(self, robot_config, node: Node):
         self.node = node
@@ -104,21 +118,7 @@ class SimulatedRobot:
 
         self.odom_pub.publish(odom)
 
-    def prepare_urdf_file(self, filepath: str, xacro_args: str|dict = '') -> None:
-
-        # Utility function to handle package URI format
-        def resolve_package(line: str):
-            pkg_idx = line.find('package://')
-            if pkg_idx == -1:
-                start_idx = line.find('file://')
-                if start_idx == -1:
-                    return line
-                else:
-                    return line.removeprefix('file://')
-
-            end_idx = line.find('/', pkg_idx+len('package://')+1)
-            package_name = line[pkg_idx + len('package://'):end_idx]
-            return line.replace('package://'+package_name, get_package_share_directory(package_name))
+    def prepare_urdf_file(self, filepath: str, xacro_args: str|dict = '') -> str:
 
         filepath = resolve_package(filepath)
         _, extension = os.path.splitext(filepath)
