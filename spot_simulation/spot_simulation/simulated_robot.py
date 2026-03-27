@@ -49,7 +49,7 @@ class SimulatedRobot:
 
         self.odom_pub = node.create_publisher(
             msg_type=Odometry,
-            topic=f'{robot_config.namespace}/odom',
+            topic=f'{robot_config.namespace}/{robot_config.odometry_topic}',
             qos_profile=10
         )
 
@@ -59,7 +59,7 @@ class SimulatedRobot:
 
         self.transform_pub = TransformBroadcaster(node)
         self.transform = TransformStamped()
-        self.transform.header.frame_id = 'odom'
+        self.transform.header.frame_id = robot_config.odometry_frame
         self.transform.child_frame_id = self.urdf_model.get_root()
 
     def twist_callback(self, twist: Twist):

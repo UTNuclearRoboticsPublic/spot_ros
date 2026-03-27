@@ -17,6 +17,14 @@ simulation_parameters:
     validation:
       unique<>: []
 
+  world_frame:
+    type: string
+    description: The frame relative to which all transforms are published
+    read_only: True
+    default_value: odom
+    validation:
+      not_empty<>: []
+
   objects:
     __map_object_names:
       object_type:
@@ -97,6 +105,22 @@ simulation_parameters:
         read_only: True
         description: Xacro args in the form 'arg1:=val1 arg2:=val2'
         default_value: ""
+
+      odometry_frame:
+        type: string
+        read_only: True
+        description: The odometry frame for the published transform data
+        default_value: odom
+        validation:
+          not_empty<>: []
+
+      odometry_topic:
+        type: string
+        read_only: True
+        description: The topic on which to publish odometry data. Will be prepended with the configured namespace. Do not include leading or trailing slashes.
+        default_value: odom
+        validation:
+          not_empty<>: []
 
       update_rate:
         type: double

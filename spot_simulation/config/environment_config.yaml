@@ -1,7 +1,8 @@
 spot_simulation:
   ros__parameters:
-    object_names: [cube, room, cylinder, sphere, monkey]
+    world_frame: odom
 
+    object_names: [cube, room, cylinder, sphere, monkey]
     objects:
       cube:
         object_type: box

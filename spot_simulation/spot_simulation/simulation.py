@@ -109,7 +109,7 @@ class Simulation(Node):
         frame_id = self.simulation_parameters.sensors.get_entry(sensor_name).frame_id
         try:
             transform = self.tf_buffer.lookup_transform(
-                target_frame='odom',
+                target_frame=self.simulation_parameters.world_frame,
                 source_frame=frame_id,
                 time=Time(),
                 timeout=Duration(seconds=0.1)

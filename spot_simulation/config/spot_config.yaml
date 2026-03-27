@@ -11,6 +11,7 @@ spot_simulation:
         initial_transform:
           translation: [0.0, 0.0, 0.51]
         update_rate: 100.0
+        odometry_topic: odometry
 
     sensors:
       hand_depth_camera:
