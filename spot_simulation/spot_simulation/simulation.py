@@ -19,6 +19,7 @@ from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
 from .simulated_robot import SimulatedRobot
 from .simulated_lidar import SimulatedLiDAR
 from .simulated_object import SimulatedObject
+from .simulated_rgb_camera import SimulatedRGBCamera
 from .simulated_depth_camera import SimulatedDepthCamera
 from .simulation_parameters import simulation_parameters as simulation_parameter_module
 
@@ -78,7 +79,24 @@ class Simulation(Node):
                     topic=sensor_config.depth_config.info_topic,
                     qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
                 )
+            elif sensor_config.sensor_type == 'rgb_camera':
+                self.sensors[sensor_name] = SimulatedRGBCamera(sensor_config)
+                self.sensor_pubs[sensor_name] = self.create_publisher(
+                    msg_type=Image,
+                    topic=sensor_config.topic,
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
+                )
+                self.sensor_info_pubs[sensor_name] = self.create_publisher(
+                    msg_type=CameraInfo,
+                    topic=sensor_config.rgb_config.info_topic,
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
+                )
+
             self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_callback_group))
+
+        # Start the camera rendering thread
+        SimulatedRGBCamera.start(self.objects)
+
         for robot_name in self.simulation_parameters.robot_names:
             self.get_logger().info(f'Loading robot "{robot_name}"')
             robot_config = self.simulation_parameters.robots.get_entry(robot_name)
@@ -126,7 +144,18 @@ class Simulation(Node):
     def updateSensor(self, sensor_name):
         if not self.updateSensorTransform(sensor_name): return
 
-        sensor = self.sensors.get(sensor_name)
+        sensor: SimulatedDepthCamera | SimulatedLiDAR | SimulatedRGBCamera = self.sensors.get(sensor_name)
+
+        # Handle the easy case of an RGB camera
+        if type(sensor) is SimulatedRGBCamera:
+            image: Image = sensor.getImage()
+            image.header.stamp = timestamp.to_msg()
+            sensor.camera_info.header.stamp = image.header.stamp
+            self.sensor_pubs[sensor_name].publish(image)
+            self.sensor_info_pubs[sensor_name].publish(sensor.camera_info)
+            return
+
+        # Otherwise it's a depth sensor and we have to cast rays
         rays = sensor.generate_rays(self.scene)
         hits = self.scene.cast_rays(rays)
         dists = hits['t_hit']

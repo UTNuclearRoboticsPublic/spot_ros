@@ -85,3 +85,4 @@ class SimulatedObject:
             self.marker.scale.z = object_config.mesh_scale
 
         self.geometry = self.geometry.transform(self.pose)
+        self.rendering_geometry = self.geometry.to_legacy().paint_uniform_color(object_config.rgb)
