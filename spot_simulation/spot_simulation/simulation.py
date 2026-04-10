@@ -108,7 +108,7 @@ class Simulation(Node):
         self.update_dt = 0.01
         self.callback_timers.append(self.create_timer(self.update_dt, self.updateRobotTransforms, MutuallyExclusiveCallbackGroup()))
 
-    def updateRobotTransforms(self):
+    def updateRobotTransforms(self) -> None:
         for robot in self.robots.values():
             robot.update_state(self.update_dt)
 
@@ -120,18 +120,17 @@ class Simulation(Node):
         resp.message = "Simulation Reset"
         return resp
 
-    def updateSensorTransform(self, sensor_name: str) -> bool:
+    def updateSensorTransform(self, sensor_name: str, timestamp: Time) -> bool:
         sensor = self.sensors.get(sensor_name)
         frame_id = self.simulation_parameters.sensors.get_entry(sensor_name).frame_id
         try:
             transform = self.tf_buffer.lookup_transform(
                 target_frame=self.simulation_parameters.world_frame,
                 source_frame=frame_id,
-                time=Time(),
+                time=timestamp,
                 timeout=Duration(seconds=0.1)
             )
         except TransformException as e:
-            self.get_logger().warn(f'{e}')
             return False
         q = transform.transform.rotation
         d = transform.transform.translation
@@ -141,8 +140,9 @@ class Simulation(Node):
 
         return True
 
-    def updateSensor(self, sensor_name):
-        if not self.updateSensorTransform(sensor_name): return
+    def updateSensor(self, sensor_name) -> None:
+        timestamp = self.get_clock().now()
+        if not self.updateSensorTransform(sensor_name, timestamp): return
 
         sensor: SimulatedDepthCamera | SimulatedLiDAR | SimulatedRGBCamera = self.sensors.get(sensor_name)
 
