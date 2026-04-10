@@ -11,7 +11,7 @@ from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import MarkerArray
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from sensor_msgs.msg import PointCloud2, Image, CameraInfo
 from scipy.spatial.transform import Rotation
 from tf2_ros import TransformListener, Buffer, TransformException
@@ -37,7 +37,6 @@ class Simulation(Node):
         self.objects: dict[str, SimulatedObject] = {} # List of objects in the scene
         self.robots: dict[str, SimulatedRobot]  = {} # Spot robot
         self.sensors: dict[str, SimulatedLiDAR|SimulatedDepthCamera] = {} # List of sensors in the scene or on the robot
-        self.sensor_cb_groups: dict[str] = {}
         self.scene = open3d.t.geometry.RaycastingScene()
         self.sensor_pubs: dict[str, Publisher] = {}
         self.sensor_info_pubs: dict[str, Publisher] = {} # For cameras
@@ -56,7 +55,8 @@ class Simulation(Node):
             self.scene.add_triangles(self.objects[object_name].geometry)
             environment_markers.markers.append(self.objects[object_name].marker)
         self.geometry_markers.publish(environment_markers)
-            
+
+        self.sensor_callback_group = ReentrantCallbackGroup()
         for sensor_name in self.simulation_parameters.sensor_names:
             self.get_logger().info(f'Loading sensor "{sensor_name}"')
             sensor_config = self.simulation_parameters.sensors.get_entry(sensor_name)
@@ -78,9 +78,7 @@ class Simulation(Node):
                     topic=sensor_config.depth_config.info_topic,
                     qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
                 )
-            self.sensor_cb_groups[sensor_name] = MutuallyExclusiveCallbackGroup()
-            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_cb_groups[sensor_name]))
-                
+            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_callback_group))
         for robot_name in self.simulation_parameters.robot_names:
             self.get_logger().info(f'Loading robot "{robot_name}"')
             robot_config = self.simulation_parameters.robots.get_entry(robot_name)
