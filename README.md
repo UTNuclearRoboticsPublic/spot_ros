@@ -79,7 +79,7 @@ Also due to a bug in the Humble release of the [Generate Parameters Library](htt
 git clone -b humble https://github.com/PickNikRobotics/generate_parameter_library 
 ```
 
-Additionally, you will want to configure your simulation environment with objects and sensors. Refer to the  sample [environment configuration file](spot_simulation/config/cube_config.yaml) for examples on configuring the environment and the [robot configuration file](spot_simulation/config/spot_config.yaml) for examples of how to modify the robot and sensors. The simulation pulls the same accessories and URDF extensions and the main description launch. To run the simulation, execute
+Additionally, you will want to configure your simulation environment with objects and sensors. Refer to the  sample [environment configuration file](spot_simulation/config/environment_config.yaml) for examples on configuring the environment and the [robot configuration file](spot_simulation/config/spot_config.yaml) for examples of how to modify the robot and sensors. The simulation pulls the same accessories and URDF extensions and the main description launch. To run the simulation, execute
 
 ```bash
 ros2 launch spot_simulation simulation.launch.xml
