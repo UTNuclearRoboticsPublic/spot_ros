@@ -1,0 +1,41 @@
+<launch>
+
+    <!-- Declare Parameters -->
+    <arg name="launch_rviz" default="true" description="Whether or not to launch the simulation rviz configuration"/>
+    <arg name="params" default="$(find-pkg-share spot_simulation)/config/spot_config.yaml" description="Path to the parameter file to load for spot"/>
+
+    <!-- Launch the MoveIt interface, which also publishes joint states -->
+    <include file="$(find-pkg-share spot_moveit_config)/launch/fake_controller.launch.py">
+        <arg name="rviz" value="false"/>
+    </include>
+
+    <!-- Publish camera transforms, which are usually determined through live queries to the robot -->
+    <include file="$(find-pkg-share spot_description)/launch/fake_camera_transforms.launch.py">
+        <arg name="has_arm" value="True"/>
+    </include>
+
+    <!-- Base footprint is not part of the URDF -->
+    <node pkg="tf2_ros" exec="static_transform_publisher"
+        args="--frame-id body --child-frame-id base_footprint --z -0.52"/>
+
+    <!-- Fake lidar frame -->
+    <node pkg="tf2_ros" exec="static_transform_publisher" name="fake_lidar_transform_publisher"
+        args="--frame-id body --child-frame-id lidar_frame --x -0.152 --z 0.267"/>
+
+    <!-- Launch the simulation -->
+    <node pkg="spot_simulation" exec="simulation">
+        <param from="$(find-pkg-share spot_simulation)/config/environment_config.yaml"/>
+        <param from="$(var params)"/>
+    </node>
+    <node pkg="spot_simulation" exec="simulated_servers"/>
+
+    <!-- Twist Mux -->
+    <node pkg="twist_mux" exec="twist_mux" name="twist_mux">
+        <remap from="/cmd_vel_out" to="/spot_driver/cmd_vel"/>
+        <param from="$(find-pkg-share spot_driver)/config/twist_mux.yaml"/>
+    </node>
+
+    <!-- If requested, launch RViz -->
+    <node pkg="rviz2" exec="rviz2" args="-d $(find-pkg-share spot_simulation)/rviz/simulation.rviz" if="$(var launch_rviz)"/>
+
+</launch>

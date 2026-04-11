@@ -1,0 +1,376 @@
+simulation_parameters:
+  object_names:
+    type: string_array
+    read_only: True
+    validation:
+      unique<>: []
+  
+  sensor_names:
+    type: string_array
+    read_only: True
+    validation:
+      unique<>: []
+
+  robot_names:
+    type: string_array
+    read_only: True
+    validation:
+      unique<>: []
+
+  world_frame:
+    type: string
+    description: The frame relative to which all transforms are published
+    read_only: True
+    default_value: odom
+    validation:
+      not_empty<>: []
+
+  objects:
+    __map_object_names:
+      object_type:
+        type: string
+        read_only: True
+        description: The type of object to add. Options are [mesh, box, cylinder, sphere]
+        validation:
+          one_of<>: [[mesh, box, cylinder, sphere]]
+
+      dimensions:
+        type: double_array
+        read_only: True
+        description: "The dimensions of a primitive being added. Formed as [x, y, z] for box and [h, r] for cylinders"
+        default_value: [0.0]
+        validation:
+          size_lt<>: 4
+
+      mesh_scale:
+        type: double
+        read_only: True
+        description: The scale of the mesh object
+        default_value: 1.0
+        validation:
+          gt<>: 0.0
+
+      file_path:
+        type: string
+        read_only: True
+        description: Path to a mesh resource to load into the simulation
+        default_value: ""
+
+      location:
+        type: double_array
+        read_only: True
+        description: Position of the object in the simulation frame
+        default_value: [0.0, 0.0, 0.0]
+        validation:
+          fixed_size<>: [3]
+
+      yaw:
+        type: double
+        read_only: True
+        description: The yaw rotation in degrees of the object in the simulation frame
+        default_value: 0.0
+
+      pitch:
+        type: double
+        read_only: True
+        description: The pitch rotation in degrees of the object in the simulation frame
+        default_value: 0.0
+
+      roll:
+        type: double
+        read_only: True
+        description: The roll rotation in degrees of the object in the simulation frame
+        default_value: 0.0
+
+      parent:
+        type: string
+        read_only: True
+        description: The parent object for the pose of this object. If omitted will default to the simulation frame
+        default_value: ""
+
+      rgb:
+        type: double_array
+        read_only: True
+        description: The red channel for the object color
+        default_value: [0.5, 0.5, 0.5]
+        validation:
+          element_bounds<>: [0.0, 1.0]
+          fixed_size<>: [3]
+
+  robots:
+    __map_robot_names:
+      urdf_path:
+        type: string
+        read_only: True
+        description: Path to a URDF or xacro file describing the robot
+
+      namespace:
+        type: string
+        read_only: True
+        description: Namespace to prepend to common interfaces such as /cmd_vel and /odom
+
+      xacro_args:
+        type: string
+        read_only: True
+        description: Xacro args in the form 'arg1:=val1 arg2:=val2'
+        default_value: ""
+
+      odometry_frame:
+        type: string
+        read_only: True
+        description: The odometry frame for the published transform data
+        default_value: odom
+        validation:
+          not_empty<>: []
+
+      odometry_topic:
+        type: string
+        read_only: True
+        description: The topic on which to publish odometry data. Will be prepended with the configured namespace. Do not include leading or trailing slashes.
+        default_value: odom
+        validation:
+          not_empty<>: []
+
+      update_rate:
+        type: double
+        read_only: True
+        description: The rate at which the robot state should publish
+        default_value: 10.0
+        validation: 
+          gt<>: 0.0
+
+      initial_transform:
+        translation:
+          type: double_array
+          read_only: True
+          description: The initial translation component of the odom -> robot transform
+          default_value: [0.0, 0.0, 0.0]
+          validation:
+            fixed_size<>: 3
+
+        yaw:
+          type: double
+          read_only: True
+          description: The initial yaw rotation in degrees of the robot in the odom frame
+          default_value: 0.0
+
+        pitch:
+          type: double
+          read_only: True
+          description: The initial pitch rotation in degrees of the robot in the odom frame
+          default_value: 0.0
+
+        roll:
+          type: double
+          read_only: True
+          description: The initial roll rotation in degrees of the robot in the odom frame
+          default_value: 0.0
+
+  sensors:
+    __map_sensor_names:
+      sensor_type:
+        type: string
+        read_only: True
+        description: The type of sensor. Options are [lidar, depth_camera, rgb_camera] # only lidar supported for now
+        validation:
+          one_of<>: [[lidar, depth_camera, rgb_camera]]
+
+      update_rate:
+        type: double
+        read_only: True
+        description: The rate at which the sensor should publish
+        default_value: 10.0
+        validation: 
+          gt<>: 0.0
+
+      topic:
+        type: string
+        read_only: True
+        description: The topic on which to publish the LiDAR pointcloud
+        default_value: '/lidar_points'
+      
+      best_effort:
+        type: bool
+        read_only: True
+        description: Whether or not to publish the pointcloud with Best Effort reliability
+        default_value: False
+
+      frame_id:
+        type: string
+        read_only: True
+        description: The frame of the sensor data. Also the origin of the sensor rays
+
+      noise_std_dev:
+          type: double
+          read_only: True
+          description: The standard deviation of gaussian noise to apply to range readings
+          default_value: 0.0
+          validation:
+            gt_eq<>: 0.0
+
+      min_range:
+          type: double
+          read_only: True
+          description: The minimum range at which the LiDAR returns readings
+          default_value: 0.0
+          validation:
+            gt_eq<>: 0.0
+
+      max_range:
+        type: double
+        read_only: True
+        description: The maximum range at which the LiDAR returns readings
+        default_value: 0.0
+        validation:
+          gt_eq<>: 0.0
+          
+      lidar_config:
+        min_horizontal_angle:
+          type: double
+          read_only: True
+          description: The minimum horizontal angle in degrees at which the LiDAR returns readings
+          default_value: -180.0
+        
+        max_horizontal_angle:
+          type: double
+          read_only: True
+          description: The maximum horizontal angle in degrees at which the LiDAR returns readings
+          default_value: 180.0
+
+        min_vertical_angle:
+          type: double
+          read_only: True
+          description: The minimum vertical angle in degrees at which the LiDAR returns readings
+          default_value: 0.0
+        
+        max_vertical_angle:
+          type: double
+          read_only: True
+          description: The maximum vertical angle in degrees at which the LiDAR returns readings
+          default_value: 0.0
+
+        num_vertical_channels:
+          type: int
+          read_only: True
+          description: The number of vertical channels for range readings
+          default_value: 16
+          validation: 
+            gt_eq<>: 1
+
+        num_horizontal_channels:
+          type: int
+          read_only: True
+          description: The number of horizontal channels for range readings
+          default_value: 512
+          validation: 
+            gt_eq<>: 1
+
+      depth_config:
+        fx:
+          type: double
+          read_only: True
+          description: The x-direction focal length of the camera
+          default_value: 0.0
+
+        fy:
+          type: double
+          read_only: True
+          description: The y-direction focal length of the camera
+          default_value: 0.0
+
+        cx:
+          type: double
+          read_only: True
+          description: The x-direction principal point of the camera
+          default_value: 0.0
+
+        cy:
+          type: double
+          read_only: True
+          description: The y-direction principal point of the camera
+          default_value: 0.0
+
+        horizontal_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the x-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        vertical_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the y-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        info_topic:
+          type: string
+          read_only: True
+          description: The topic on which to publish CameraInfo messages
+          default_value: ""
+
+        encoding:
+          type: string
+          read_only: True
+          description: The encoding for the depth image
+          default_value: 32FC1
+          validation:
+            one_of<>: [["32FC1", "16UC1"]]
+
+      rgb_config:
+        fx:
+          type: double
+          read_only: True
+          description: The x-direction focal length of the camera
+          default_value: 0.0
+
+        fy:
+          type: double
+          read_only: True
+          description: The y-direction focal length of the camera
+          default_value: 0.0
+
+        cx:
+          type: double
+          read_only: True
+          description: The x-direction principal point of the camera
+          default_value: 0.0
+
+        cy:
+          type: double
+          read_only: True
+          description: The y-direction principal point of the camera
+          default_value: 0.0
+
+        horizontal_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the x-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        vertical_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the y-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        info_topic:
+          type: string
+          read_only: True
+          description: The topic on which to publish CameraInfo messages
+          default_value: ""
+
+        encoding:
+          type: string
+          read_only: True
+          description: The encoding for the depth image
+          default_value: rgb8
+          validation:
+            one_of<>: [["rgb8", "bgr8"]]

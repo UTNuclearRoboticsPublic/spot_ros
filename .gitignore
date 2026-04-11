@@ -1,3 +1,4 @@
 *.pyc
 *.sw*
 spot_driver/spot_driver/image_server_parameters.py
+spot_simulation/spot_simulation/simulation_parameters.py
