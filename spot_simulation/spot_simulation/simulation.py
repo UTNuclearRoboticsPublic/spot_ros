@@ -11,7 +11,7 @@ from std_msgs.msg import Header
 from std_srvs.srv import Trigger
 from visualization_msgs.msg import MarkerArray
 from rclpy.executors import MultiThreadedExecutor
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from sensor_msgs.msg import PointCloud2, Image, CameraInfo
 from scipy.spatial.transform import Rotation
 from tf2_ros import TransformListener, Buffer, TransformException
@@ -19,6 +19,7 @@ from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
 from .simulated_robot import SimulatedRobot
 from .simulated_lidar import SimulatedLiDAR
 from .simulated_object import SimulatedObject
+from .simulated_rgb_camera import SimulatedRGBCamera
 from .simulated_depth_camera import SimulatedDepthCamera
 from .simulation_parameters import simulation_parameters as simulation_parameter_module
 
@@ -37,7 +38,6 @@ class Simulation(Node):
         self.objects: dict[str, SimulatedObject] = {} # List of objects in the scene
         self.robots: dict[str, SimulatedRobot]  = {} # Spot robot
         self.sensors: dict[str, SimulatedLiDAR|SimulatedDepthCamera] = {} # List of sensors in the scene or on the robot
-        self.sensor_cb_groups: dict[str] = {}
         self.scene = open3d.t.geometry.RaycastingScene()
         self.sensor_pubs: dict[str, Publisher] = {}
         self.sensor_info_pubs: dict[str, Publisher] = {} # For cameras
@@ -56,7 +56,8 @@ class Simulation(Node):
             self.scene.add_triangles(self.objects[object_name].geometry)
             environment_markers.markers.append(self.objects[object_name].marker)
         self.geometry_markers.publish(environment_markers)
-            
+
+        self.sensor_callback_group = ReentrantCallbackGroup()
         for sensor_name in self.simulation_parameters.sensor_names:
             self.get_logger().info(f'Loading sensor "{sensor_name}"')
             sensor_config = self.simulation_parameters.sensors.get_entry(sensor_name)
@@ -78,9 +79,24 @@ class Simulation(Node):
                     topic=sensor_config.depth_config.info_topic,
                     qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
                 )
-            self.sensor_cb_groups[sensor_name] = MutuallyExclusiveCallbackGroup()
-            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_cb_groups[sensor_name]))
-                
+            elif sensor_config.sensor_type == 'rgb_camera':
+                self.sensors[sensor_name] = SimulatedRGBCamera(sensor_config)
+                self.sensor_pubs[sensor_name] = self.create_publisher(
+                    msg_type=Image,
+                    topic=sensor_config.topic,
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
+                )
+                self.sensor_info_pubs[sensor_name] = self.create_publisher(
+                    msg_type=CameraInfo,
+                    topic=sensor_config.rgb_config.info_topic,
+                    qos_profile=10 if not sensor_config.best_effort else qos_profile_sensor_data
+                )
+
+            self.callback_timers.append(self.create_timer(1.0/sensor_config.update_rate, lambda name=sensor_name: self.updateSensor(name), self.sensor_callback_group))
+
+        # Start the camera rendering thread
+        SimulatedRGBCamera.start(self.objects)
+
         for robot_name in self.simulation_parameters.robot_names:
             self.get_logger().info(f'Loading robot "{robot_name}"')
             robot_config = self.simulation_parameters.robots.get_entry(robot_name)
@@ -92,7 +108,7 @@ class Simulation(Node):
         self.update_dt = 0.01
         self.callback_timers.append(self.create_timer(self.update_dt, self.updateRobotTransforms, MutuallyExclusiveCallbackGroup()))
 
-    def updateRobotTransforms(self):
+    def updateRobotTransforms(self) -> None:
         for robot in self.robots.values():
             robot.update_state(self.update_dt)
 
@@ -104,18 +120,17 @@ class Simulation(Node):
         resp.message = "Simulation Reset"
         return resp
 
-    def updateSensorTransform(self, sensor_name: str) -> bool:
+    def updateSensorTransform(self, sensor_name: str, timestamp: Time) -> bool:
         sensor = self.sensors.get(sensor_name)
         frame_id = self.simulation_parameters.sensors.get_entry(sensor_name).frame_id
         try:
             transform = self.tf_buffer.lookup_transform(
                 target_frame=self.simulation_parameters.world_frame,
                 source_frame=frame_id,
-                time=Time(),
+                time=timestamp,
                 timeout=Duration(seconds=0.1)
             )
         except TransformException as e:
-            self.get_logger().warn(f'{e}')
             return False
         q = transform.transform.rotation
         d = transform.transform.translation
@@ -125,10 +140,22 @@ class Simulation(Node):
 
         return True
 
-    def updateSensor(self, sensor_name):
-        if not self.updateSensorTransform(sensor_name): return
+    def updateSensor(self, sensor_name) -> None:
+        timestamp = self.get_clock().now()
+        if not self.updateSensorTransform(sensor_name, timestamp): return
 
-        sensor = self.sensors.get(sensor_name)
+        sensor: SimulatedDepthCamera | SimulatedLiDAR | SimulatedRGBCamera = self.sensors.get(sensor_name)
+
+        # Handle the easy case of an RGB camera
+        if type(sensor) is SimulatedRGBCamera:
+            image: Image = sensor.getImage()
+            image.header.stamp = timestamp.to_msg()
+            sensor.camera_info.header.stamp = image.header.stamp
+            self.sensor_pubs[sensor_name].publish(image)
+            self.sensor_info_pubs[sensor_name].publish(sensor.camera_info)
+            return
+
+        # Otherwise it's a depth sensor and we have to cast rays
         rays = sensor.generate_rays(self.scene)
         hits = self.scene.cast_rays(rays)
         dists = hits['t_hit']

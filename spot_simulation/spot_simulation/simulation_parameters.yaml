@@ -319,3 +319,58 @@ simulation_parameters:
           default_value: 32FC1
           validation:
             one_of<>: [["32FC1", "16UC1"]]
+
+      rgb_config:
+        fx:
+          type: double
+          read_only: True
+          description: The x-direction focal length of the camera
+          default_value: 0.0
+
+        fy:
+          type: double
+          read_only: True
+          description: The y-direction focal length of the camera
+          default_value: 0.0
+
+        cx:
+          type: double
+          read_only: True
+          description: The x-direction principal point of the camera
+          default_value: 0.0
+
+        cy:
+          type: double
+          read_only: True
+          description: The y-direction principal point of the camera
+          default_value: 0.0
+
+        horizontal_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the x-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        vertical_resolution:
+          type: int
+          read_only: True
+          description: The number of pixels along the y-direction
+          default_value: 0
+          validation:
+            gt_eq<>: 0
+
+        info_topic:
+          type: string
+          read_only: True
+          description: The topic on which to publish CameraInfo messages
+          default_value: ""
+
+        encoding:
+          type: string
+          read_only: True
+          description: The encoding for the depth image
+          default_value: rgb8
+          validation:
+            one_of<>: [["rgb8", "bgr8"]]
