@@ -252,7 +252,7 @@ spot_nav/local_costmap:
       width: 3
       height: 3
       resolution: 0.05
-      footprint: "[[0.52, 0.25], [0.52, -0.25], [-0.52, -0.25], [-0.52, 0.25]]"
+      footprint: "[[0.40, 0.20], [0.40, -0.20], [-0.40, -0.20], [-0.40, 0.20]]"
       plugins: ["obstacle_layer", "inflation_layer"] # voxel_layer
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
