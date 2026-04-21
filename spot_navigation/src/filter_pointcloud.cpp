@@ -25,29 +25,10 @@ public:
         sensor_frame_ = declare_parameter("sensor_frame", "velodyne");
         critical_links.back() = declare_parameter("tool_frame", "arm0_hand");
 
-        // We assume that the lidar is fixed relative to the body and is aligned with the body
-        // and that it is mounted with the NRG elevated lidar mount
-        /** TODO: Parameterize angle limits to work with other mounts **/
-        try {
-            const geometry_msgs::msg::TransformStamped sensor_tform_arm_base = tf_buffer.lookupTransform(
-                sensor_frame_,
-                "arm0_base_link",
-                tf2::TimePointZero,
-                std::chrono::seconds(20)  // extra time for ouster to get online
-            );
-
-            if (std::abs(sensor_tform_arm_base.transform.rotation.w) < 0.95) {
-                RCLCPP_ERROR(get_logger(), "Your lidar frame %s is not aligned with your robot. This code wasn't meant for that", sensor_frame_.c_str());
-                exit(1);
-            }
-        } catch (tf2::TransformException& e) {
-            RCLCPP_ERROR(get_logger(), e.what());
-            exit(1);
-        }
-
-        // Start a thread to keep track of the arm positions
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        arm_update_thread_ = std::thread(&PointcloudFilterComponent::updateTransforms, this);
+        // Use a one-shot timer to initialize so we don't block the constructor
+        init_timer_ = create_wall_timer(
+            std::chrono::milliseconds(100), 
+            std::bind(&PointcloudFilterComponent::initializeFilter, this));
 
         using namespace std::placeholders;
         rclcpp::SubscriptionOptions sub_opts;
@@ -58,15 +39,47 @@ public:
 
         stow_state_sub_ = create_subscription<spot_msgs::msg::ManipulatorStowState>("/spot_manipulation_driver/manipulator_state/stow_state", 1, 
             [this](spot_msgs::msg::ManipulatorStowState::SharedPtr state){arm_stowed_ = state->state == state->STOWSTATE_STOWED;});
+    }
+
+    void initializeFilter() {
+        init_timer_->cancel(); // Only run once
+
+        try {
+            // Check if transform exists without a long blocking wait in constructor context
+            if (!tf_buffer.canTransform(sensor_frame_, "arm0_base_link", tf2::TimePointZero, std::chrono::seconds(5))) {
+                RCLCPP_WARN(get_logger(), "Waiting for transform between %s and arm0_base_link...", sensor_frame_.c_str());
+                init_timer_ = create_wall_timer(std::chrono::seconds(2), std::bind(&PointcloudFilterComponent::initializeFilter, this));
+                return;
+            }
+
+            const geometry_msgs::msg::TransformStamped sensor_tform_arm_base = tf_buffer.lookupTransform(
+                sensor_frame_,
+                "arm0_base_link",
+                tf2::TimePointZero
+            );
+
+            if (std::abs(sensor_tform_arm_base.transform.rotation.w) < 0.95) {
+                RCLCPP_ERROR(get_logger(), "Your lidar frame %s is not aligned with your robot.", sensor_frame_.c_str());
+                return; 
+            }
+        } catch (tf2::TransformException& e) {
+            RCLCPP_ERROR(get_logger(), "TF Initialization failed: %s", e.what());
+            return;
+        }
+
+        // Start periodic updates using a ROS timer 
+        update_timer_ = create_wall_timer(
+            std::chrono::milliseconds(250),
+            std::bind(&PointcloudFilterComponent::updateTransforms, this));
 
         RCLCPP_INFO(get_logger(), "Spot pointcloud filter online");
     }
 
     void updateTransforms() {
-        while (rclcpp::ok()) {
+        try {
             for (std::size_t link_idx = 0; link_idx < critical_links.size(); link_idx++) {
                 const std::string& frame = critical_links[link_idx];
-                geometry_msgs::msg::TransformStamped sensor_tform_link= tf_buffer.lookupTransform(
+                geometry_msgs::msg::TransformStamped sensor_tform_link = tf_buffer.lookupTransform(
                     sensor_frame_,
                     frame,
                     tf2::TimePointZero
@@ -86,13 +99,16 @@ public:
                 // Add a buffer since frame locations are at the link centers
                 arm_max_pt += 0.10 * Eigen::Vector3d::Ones();
                 arm_min_pt -= 0.10 * Eigen::Vector3d::Ones();
+                transforms_ready_ = true;
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        } catch (tf2::TransformException& e) {
+            RCLCPP_DEBUG(get_logger(), "Could not update arm transforms: %s", e.what());
         }
     }
 
     void filterPointcloud(sensor_msgs::msg::PointCloud2::ConstSharedPtr pointcloud) {
+        if (!transforms_ready_ && !arm_stowed_) return;
+
         std::ptrdiff_t x_offset, y_offset, z_offset;
         for (const sensor_msgs::msg::PointField& field : pointcloud->fields) {
             if (field.name == "x") {
@@ -228,6 +244,9 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_sub;
     rclcpp::Subscription<spot_msgs::msg::ManipulatorStowState>::SharedPtr stow_state_sub_;
     
+    rclcpp::TimerBase::SharedPtr init_timer_;
+    rclcpp::TimerBase::SharedPtr update_timer_;
+
     std::string tool_frame_; // Optional tool frame if something is attached to the end effector
     std::string sensor_frame_;  // LiDAR frame
     std::array<std::string, 4> critical_links {
@@ -237,8 +256,8 @@ private:
     };
     std::array<Eigen::Vector3d, 4> critical_link_locs{};
     bool arm_stowed_ = true;
+    bool transforms_ready_ = false;
 
-    std::thread arm_update_thread_;
     std::mutex arm_update_mtx_;
     Eigen::Vector3d arm_min_pt;
     Eigen::Vector3d arm_max_pt;
