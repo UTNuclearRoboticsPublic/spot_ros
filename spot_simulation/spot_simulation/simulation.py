@@ -9,12 +9,14 @@ from rclpy.duration import Duration
 from rclpy.publisher import Publisher
 from std_msgs.msg import Header
 from std_srvs.srv import Trigger
+from spot_msgs.srv import SetSimulatedPose
 from visualization_msgs.msg import MarkerArray
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 from sensor_msgs.msg import PointCloud2, Image, CameraInfo
 from scipy.spatial.transform import Rotation
 from tf2_ros import TransformListener, Buffer, TransformException
+from tf2_geometry_msgs import PoseStamped # needed tf_buffer.transform
 from sensor_msgs_py.point_cloud2 import create_cloud_xyz32
 from .simulated_robot import SimulatedRobot
 from .simulated_lidar import SimulatedLiDAR
@@ -103,7 +105,9 @@ class Simulation(Node):
             self.robots[robot_name] = SimulatedRobot(robot_config, self)
             self.callback_timers.append(self.create_timer(1.0/robot_config.update_rate, lambda name=robot_name: self.robots[name].publish_state()))
 
-        self.reset_server = self.create_service(Trigger, "~/reset_simulation", self.resetRobotTransforms, callback_group=MutuallyExclusiveCallbackGroup())
+        self.service_callback_group = MutuallyExclusiveCallbackGroup()
+        self.reset_server = self.create_service(Trigger, "~/reset_simulation", self.resetRobotTransforms, callback_group=self.service_callback_group)
+        self.pose_server = self.create_service(SetSimulatedPose, "~/set_robot_pose", self.setRobotPose, callback_group=self.service_callback_group)
 
         self.update_dt = 0.01
         self.callback_timers.append(self.create_timer(self.update_dt, self.updateRobotTransforms, MutuallyExclusiveCallbackGroup()))
@@ -118,6 +122,41 @@ class Simulation(Node):
             robot.vel = robot.initial_vel.copy()
         resp.success = True
         resp.message = "Simulation Reset"
+        return resp
+
+    def setRobotPose(self, req: SetSimulatedPose.Request, resp: SetSimulatedPose.Response) -> SetSimulatedPose.Response:
+        if req.robot_name not in self.robots:
+            self.get_logger().warn(f'Unable to set the pose of unknown robot "{req.robot_name}"')
+            resp.success = False
+            return resp
+        robot = self.robots[req.robot_name]
+        
+        try:
+            world_pose = self.tf_buffer.transform(req.pose, self.simulation_parameters.world_frame, Duration(seconds=1.0))
+        except TransformException as e:
+            self.get_logger().warn(f'Unable to set the pose of robot: {e}\nTrying again at the current timestamp')
+            try:
+                req.pose.header.stamp.sec = req.pose.header.stamp.nanosec = 0
+                world_pose = self.tf_buffer.transform(req.pose, self.simulation_parameters.world_frame, Duration(seconds=1.0))
+            except TransformException as e:
+                self.get_logger().error(f'Still failed: {e}\n')
+                resp.success = False
+                return resp
+
+        q = world_pose.pose.orientation
+        d = world_pose.pose.position
+        rot = Rotation.from_quat([q.w, q.x, q.y, q.z], scalar_first=True)
+        if req.se2:
+            robot.pose[0:2, 3] = np.array([d.x, d.y])
+            yaw, _, _ = rot.as_euler('ZYX')
+            robot.pose[:3, :3] = Rotation.from_rotvec(np.array([0, 0, yaw])).as_matrix()
+        else:
+            robot.pose[0:3, 3] = np.array([d.x, d.y, d.z])
+            robot.pose[:3, :3] = rot.as_matrix()
+
+        self.get_logger().info(f'Set the robot pose to [x: {d.x:.3f}, y: {d.y:.3f}, z: {d.z:.3f}] | [w: {q.w:.3f}, x: {q.x:.3f}, y: {q.y:.3f}, z: {q.z:.3f}]')
+
+        resp.success = True
         return resp
 
     def updateSensorTransform(self, sensor_name: str, timestamp: Time) -> bool:

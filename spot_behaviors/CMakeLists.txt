@@ -41,6 +41,7 @@ add_library(${PROJECT_NAME} SHARED
   src/get_images.cpp
   src/get_gripper_holding_state.cpp
   src/get_stow_state.cpp
+  src/set_simulated_pose.cpp
 )
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp
