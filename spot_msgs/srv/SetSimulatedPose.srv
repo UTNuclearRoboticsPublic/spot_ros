@@ -1,0 +1,17 @@
+# spot_msgs/SetSimulatedPose.srv
+#
+# Set the pose of a simulated robot
+
+# Which robot to set the pose for
+string robot_name "spot"
+
+# The pose at which to set the robot
+geometry_msgs/PoseStamped pose
+
+# Whether to treat the pose as SE2
+bool se2 true
+
+---
+
+# Whether the operation was successful
+bool success

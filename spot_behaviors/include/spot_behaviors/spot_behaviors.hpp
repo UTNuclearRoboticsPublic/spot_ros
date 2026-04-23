@@ -48,6 +48,7 @@
 #include "spot_behaviors/get_images.hpp"
 #include "spot_behaviors/get_gripper_holding_state.hpp"
 #include "spot_behaviors/execute_stable_arm_command.hpp"
+#include "spot_behaviors/set_simulated_pose.hpp"
 
 namespace spot_behaviors {
 
@@ -59,6 +60,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     factory.registerNodeType<GetStowState>("GetStowState");
     factory.registerNodeType<GetGripperHoldingState>("GetGripperHoldingState");
     factory.registerNodeType<GetImages>("GetImages");
+    factory.registerNodeType<SetSimulatedPose>("SetSimulatedPose");
 
     // Register all of the behaviors in the package
     #define REGSITER_SPOT_BEHAVIOR(name) factory.registerNodeType<name>(#name, tf_buffer)
