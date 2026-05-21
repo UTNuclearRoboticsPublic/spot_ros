@@ -34,6 +34,7 @@ add_library(${PROJECT_NAME} SHARED
   src/walk_to_pose.cpp
   src/check_arm_stowed.cpp
   src/move_hand_to_pose.cpp
+  src/move_gripper.cpp
   src/check_hand_collision.cpp
   src/move_hand_through_poses.cpp
   src/gesture_sequence.cpp

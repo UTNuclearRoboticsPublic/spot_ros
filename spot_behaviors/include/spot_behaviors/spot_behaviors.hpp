@@ -41,6 +41,7 @@
 #include "spot_behaviors/dock_robot.hpp"
 #include "spot_behaviors/move_hand_through_poses.hpp"
 #include "spot_behaviors/move_hand_to_pose.hpp"
+#include "spot_behaviors/move_gripper.hpp"
 #include "spot_behaviors/walk_to_pose.hpp"
 #include "spot_behaviors/get_stow_state.hpp"
 #include "spot_behaviors/get_spot_ik.hpp"
@@ -68,6 +69,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(CheckHandCollision);
     REGSITER_SPOT_BEHAVIOR(DockRobot);
     REGSITER_SPOT_BEHAVIOR(MoveHandThroughPoses);
+    REGSITER_SPOT_BEHAVIOR(MoveGripper);
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
     REGSITER_SPOT_BEHAVIOR(GetSpotIK);
     REGSITER_SPOT_BEHAVIOR(TogglePayload);
