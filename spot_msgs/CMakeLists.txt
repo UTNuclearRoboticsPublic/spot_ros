@@ -34,6 +34,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ListGraph.srv"
   "srv/NonContactTrajectory.srv"
   "srv/SetLocomotion.srv"
+  "srv/SetSimulatedPose.srv"
   "srv/SetVelocity.srv"
   "srv/GestureSequence.srv"
   "srv/GetImages.srv"
