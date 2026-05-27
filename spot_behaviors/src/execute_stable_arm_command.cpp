@@ -42,11 +42,27 @@ BT::NodeStatus ExecuteStableArmCommand::onStart() {
         return BT::NodeStatus::FAILURE;
     }
 
+    // Erase any past state
+    success_.reset();
+    motion_goal_handle_.reset();
+    motion_goal_future_.reset();
+    motion_response_future_.reset();
+
     spot_msgs::action::StableArmCommand::Goal goal;
     goal.joint_trajectory = *joint_trajectory;
     goal.pose_waypoints = *end_effector_trajectory;
 
-    motion_response_future_ = motion_action_client_->async_send_goal(goal);
+    RCLCPP_INFO(get_logger(), "Requesting execution of known stable arm command");
+    rclcpp_action::Client<spot_msgs::action::StableArmCommand>::SendGoalOptions opts;
+    opts.goal_response_callback = [this](rclcpp_action::ClientGoalHandle<spot_msgs::action::StableArmCommand>::SharedPtr goal_handle) {
+        if (goal_handle) RCLCPP_INFO(get_logger(), "Motion request was accepted by the server");
+        else RCLCPP_WARN(get_logger(), "Motion request was rejected by the server");
+    };
+    opts.result_callback = [this](rclcpp_action::ClientGoalHandle<spot_msgs::action::StableArmCommand>::WrappedResult result) {
+        RCLCPP_INFO(get_logger(), "Received result with success value %d", +result.result->success);
+        success_ = result.result->success;
+    };
+    motion_response_future_ = motion_action_client_->async_send_goal(goal, opts);
     request_timestamp_ = now();
 
     return BT::NodeStatus::RUNNING;
@@ -56,16 +72,11 @@ BT::NodeStatus ExecuteStableArmCommand::onStart() {
 // ------------------------------------------------------------------------------------------------
 
 BT::NodeStatus ExecuteStableArmCommand::onRunning() {
-    if (hasOngoingMotionRequest()) {
-        return checkMotionRequestStatus();
-    }
-
-    else if (hasOngoingMotionExecution()) {
-        return checkMotionExecutionStatus();
-    }
-
-    else {
-        return BT::NodeStatus::FAILURE;
+    rclcpp::spin_some(this->get_node_base_interface());
+    if (success_.has_value()) {
+        return success_.value() ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
+    } else {
+        return BT::NodeStatus::RUNNING;
     }
 }
 
@@ -76,7 +87,9 @@ void ExecuteStableArmCommand::onHalted() {
     if (hasOngoingMotionRequest() || hasOngoingMotionExecution()) {
         motion_action_client_->async_cancel_all_goals();
         motion_goal_handle_.reset();
+        motion_goal_future_.reset();
         motion_response_future_.reset();
+        success_.reset();
     }
 }
 
@@ -105,11 +118,13 @@ BT::NodeStatus ExecuteStableArmCommand::checkMotionRequestStatus() {
 
         case rclcpp::FutureReturnCode::SUCCESS: {
             motion_goal_handle_ = motion_response_future_->get();
+            motion_goal_future_ = motion_action_client_->async_get_result(motion_goal_handle_);
             motion_response_future_.reset();
             if (!motion_goal_handle_) {
                 RCLCPP_WARN(get_logger(), "Plan rejected by server");
                 return BT::NodeStatus::FAILURE;
             }
+            RCLCPP_INFO(get_logger(), "Motion request was accepted by the server");
             return BT::NodeStatus::RUNNING;
         }
     }
@@ -120,7 +135,13 @@ BT::NodeStatus ExecuteStableArmCommand::checkMotionRequestStatus() {
 
 BT::NodeStatus ExecuteStableArmCommand::checkMotionExecutionStatus() {
     // Possibility two - goal is active and we check its status
-    rclcpp::spin_some(this->get_node_base_interface());
+    auto status = rclcpp::spin_until_future_complete(this->get_node_base_interface(), motion_goal_future_.value(), std::chrono::milliseconds(0));
+    if (status == rclcpp::FutureReturnCode::SUCCESS) {
+        RCLCPP_INFO(get_logger(), "Success from future!");
+        return BT::NodeStatus::SUCCESS;
+    }
+
+    // rclcpp::spin_some(this->get_node_base_interface());
     const int8_t goal_status = motion_goal_handle_->get_status();
     switch (goal_status){
         case action_msgs::msg::GoalStatus::STATUS_CANCELING:

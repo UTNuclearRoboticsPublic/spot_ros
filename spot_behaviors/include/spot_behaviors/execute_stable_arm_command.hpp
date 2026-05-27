@@ -88,7 +88,9 @@ protected:
     BT::NodeStatus checkMotionRequestStatus();
 
     // Action client goal handle - nullptr if no request is active
+    std::optional<bool> success_;
     rclcpp_action::ClientGoalHandle<spot_msgs::action::StableArmCommand>::SharedPtr motion_goal_handle_;
+    std::optional<std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::StableArmCommand>::WrappedResult>> motion_goal_future_;
     rclcpp::Time motion_start_time_;
     bool hasOngoingMotionExecution() const {return static_cast<bool>(motion_goal_handle_);}
     BT::NodeStatus checkMotionExecutionStatus();
