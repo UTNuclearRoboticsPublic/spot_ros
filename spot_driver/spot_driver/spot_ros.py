@@ -24,7 +24,7 @@ from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import SetParametersResult
 
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
+from geometry_msgs.msg import TwistStamped, Twist, Pose
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from std_srvs.srv import Trigger, SetBool
@@ -245,14 +245,16 @@ class SpotROS(Node):
         self.joint_state_pub.publish(joint_state)
         if len(tf_msg.transforms) > 0:
             self.tf_broadcaster.sendTransform(tf_msg.transforms)
-        
-        # Odom Twist #
-        twist_odom_msg = GetOdomTwistFromState(state.kinematic_state, self.spot_wrapper)
-        self.odom_twist_pub.publish(twist_odom_msg)
 
         # Odom #
         odom_msg = GetOdomFromState(state.kinematic_state, self.spot_wrapper, odom_mode == 'vision')
         self.odom_pub.publish(odom_msg)
+        
+        # Odom Twist #
+        twist_odom_msg = TwistStamped()
+        twist_odom_msg.header = odom_msg.header
+        twist_odom_msg.twist = odom_msg.twist.twist
+        self.odom_twist_pub.publish(twist_odom_msg)
         
         # Feet #
         foot_array_msg = FeetStateToMsg(state.foot_state)
@@ -775,7 +777,7 @@ class SpotROS(Node):
         self.estop_pub           = self.create_publisher(EStopStateArray           , '~/status/estop'          , 1)
         self.battery_pub         = self.create_publisher(BatteryStateArray         , '~/status/battery_states' , 1)
         self.dock_state_pub      = self.create_publisher(DockState                 , '~/status/dock_state'     , qos_profile=latched_qos)
-        self.odom_twist_pub      = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist'        , 1)
+        self.odom_twist_pub      = self.create_publisher(TwistStamped              , '~/odometry/twist'        , 1)
         self.joint_state_pub     = self.create_publisher(JointState                , '~/joint_states'          , 1)
         self.system_faults_pub   = self.create_publisher(SystemFaultState          , '~/status/system_faults'  , 10)
         self.behavior_faults_pub = self.create_publisher(BehaviorFaultState        , '~/status/behavior_faults', 10)
