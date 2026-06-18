@@ -38,7 +38,7 @@ from bosdyn.api import geometry_pb2, payload_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.client.math_helpers import SE3Pose, SE2Pose, Quat, Vec3, SE2Velocity
-from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot, get_a_tform_b, BODY_FRAME_NAME
+from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot, get_a_tform_b, BODY_FRAME_NAME, VISION_FRAME_NAME, ODOM_FRAME_NAME
 
 """Dictionaries for mapping BD joint names to more friendly names"""
 body_joint_names = {
@@ -467,7 +467,8 @@ def FeetStateToMsg(foot_states: FootStateProto) -> FootStateArray:
     return foot_array_msg
 
 def GetOdomTwistFromState(kinematic_state: KinematicStateProto,
-                          lease_manager: SpotLeaseManager) -> TwistWithCovarianceStamped:
+                          lease_manager: SpotLeaseManager,
+                          use_vision: bool) -> TwistWithCovarianceStamped:
     """Maps odometry data from robot state proto to ROS TwistWithCovarianceStamped message
 
     Args:
@@ -479,12 +480,22 @@ def GetOdomTwistFromState(kinematic_state: KinematicStateProto,
     twist_odom_msg = TwistWithCovarianceStamped()
     local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
     twist_odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
-    twist_odom_msg.twist.twist.linear.x = kinematic_state.velocity_of_body_in_odom.linear.x
-    twist_odom_msg.twist.twist.linear.y = kinematic_state.velocity_of_body_in_odom.linear.y
-    twist_odom_msg.twist.twist.linear.z = kinematic_state.velocity_of_body_in_odom.linear.z
-    twist_odom_msg.twist.twist.angular.x = kinematic_state.velocity_of_body_in_odom.angular.x
-    twist_odom_msg.twist.twist.angular.y = kinematic_state.velocity_of_body_in_odom.angular.y
-    twist_odom_msg.twist.twist.angular.z = kinematic_state.velocity_of_body_in_odom.angular.z
+    if use_vision:
+        twist_odom_msg.header.frame_id = VISION_FRAME_NAME
+        twist_odom_msg.twist.twist.linear.x = kinematic_state.velocity_of_body_in_vision.linear.x
+        twist_odom_msg.twist.twist.linear.y = kinematic_state.velocity_of_body_in_vision.linear.y
+        twist_odom_msg.twist.twist.linear.z = kinematic_state.velocity_of_body_in_vision.linear.z
+        twist_odom_msg.twist.twist.angular.x = kinematic_state.velocity_of_body_in_vision.angular.x
+        twist_odom_msg.twist.twist.angular.y = kinematic_state.velocity_of_body_in_vision.angular.y
+        twist_odom_msg.twist.twist.angular.z = kinematic_state.velocity_of_body_in_vision.angular.z
+    else:
+        twist_odom_msg.header.frame_id = ODOM_FRAME_NAME
+        twist_odom_msg.twist.twist.linear.x = kinematic_state.velocity_of_body_in_odom.linear.x
+        twist_odom_msg.twist.twist.linear.y = kinematic_state.velocity_of_body_in_odom.linear.y
+        twist_odom_msg.twist.twist.linear.z = kinematic_state.velocity_of_body_in_odom.linear.z
+        twist_odom_msg.twist.twist.angular.x = kinematic_state.velocity_of_body_in_odom.angular.x
+        twist_odom_msg.twist.twist.angular.y = kinematic_state.velocity_of_body_in_odom.angular.y
+        twist_odom_msg.twist.twist.angular.z = kinematic_state.velocity_of_body_in_odom.angular.z
     return twist_odom_msg
 
 def GetOdomFromState(kinematic_state: KinematicStateProto,
@@ -503,12 +514,12 @@ def GetOdomFromState(kinematic_state: KinematicStateProto,
     local_time = lease_manager.robotToLocalTime(kinematic_state.acquisition_timestamp)
     odom_msg.header.stamp = ROSTime(sec=local_time.seconds, nanosec=local_time.nanos)
     if use_vision == True:
-        odom_msg.header.frame_id = 'vision'
+        odom_msg.header.frame_id = VISION_FRAME_NAME
         tform_body = get_vision_tform_body(kinematic_state.transforms_snapshot)
     else:
-        odom_msg.header.frame_id = 'odom'
+        odom_msg.header.frame_id = ODOM_FRAME_NAME
         tform_body = get_odom_tform_body(kinematic_state.transforms_snapshot)
-    odom_msg.child_frame_id = 'body'
+    odom_msg.child_frame_id = BODY_FRAME_NAME
     pose_odom_msg = PoseWithCovariance()
     pose_odom_msg.pose.position.x = tform_body.position.x
     pose_odom_msg.pose.position.y = tform_body.position.y
@@ -519,8 +530,7 @@ def GetOdomFromState(kinematic_state: KinematicStateProto,
     pose_odom_msg.pose.orientation.w = tform_body.rotation.w
 
     odom_msg.pose = pose_odom_msg
-    twist_odom_msg = GetOdomTwistFromState(kinematic_state, lease_manager).twist
-    odom_msg.twist = twist_odom_msg
+    odom_msg.twist = GetOdomTwistFromState(kinematic_state, lease_manager, use_vision).twist
     return odom_msg
 
 def DockStateToMsg(dock_state: DockStateProto) -> DockState:
