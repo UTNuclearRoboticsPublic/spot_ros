@@ -291,7 +291,7 @@ def generate_launch_description():
                 name='velodyne_container',
                 namespace='',
                 package='rclcpp_components',
-                executable='component_container',
+                executable='component_container_mt',
                 composable_node_descriptions=[
                     ComposableNode(
                         package='velodyne_driver',
@@ -300,7 +300,8 @@ def generate_launch_description():
                         parameters=[
                             PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                             {'device_ip': LaunchConfiguration('velodyne_ip')}
-                        ]
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}]
                     ),
                     ComposableNode(
                         package='velodyne_pointcloud',
@@ -312,7 +313,8 @@ def generate_launch_description():
                         ],
                         remappings=[
                             ('velodyne_points', 'unfiltered_velodyne_points')
-                        ]
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}]
                     ),
                     ComposableNode(
                         name='spot_pointcloud_filter_component',
@@ -321,7 +323,8 @@ def generate_launch_description():
                         remappings=[
                             ('cloud_in', 'unfiltered_velodyne_points'),
                             ('cloud_out','velodyne_points')
-                        ]
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}]
                     )
                 ]
             )

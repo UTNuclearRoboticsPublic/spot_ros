@@ -33,8 +33,8 @@ public:
         using namespace std::placeholders;
         rclcpp::SubscriptionOptions sub_opts;
         sub_opts.use_intra_process_comm = rclcpp::IntraProcessSetting::Enable;
-        pointcloud_pub = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_out", 10);
-        pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
+        pointcloud_pub = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_out", rclcpp::SensorDataQoS());
+        pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", rclcpp::SensorDataQoS(), 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
         stow_state_sub_ = create_subscription<spot_msgs::msg::ManipulatorStowState>("/spot_manipulation_driver/manipulator_state/stow_state", 1, 
