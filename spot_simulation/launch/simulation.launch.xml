@@ -1,5 +1,8 @@
 <launch>
 
+    <arg name="has_arm" default="true"/>
+    <arg name="controller_configuration" default="Logitech"/>
+
     <!-- Declare Parameters -->
     <arg name="launch_rviz" default="true" description="Whether or not to launch the simulation rviz configuration"/>
     <arg name="params" default="$(find-pkg-share spot_simulation)/config/spot_config.yaml" description="Path to the parameter file to load for spot"/>
@@ -34,6 +37,13 @@
         <remap from="/cmd_vel_out" to="/spot_driver/cmd_vel"/>
         <param from="$(find-pkg-share spot_driver)/config/twist_mux.yaml"/>
     </node>
+
+    <!-- Gamepad -->
+    <include file="$(find-pkg-share spot_bringup)/launch/gamepad.launch.py">
+        <arg name="has_arm" value="$(var has_arm)"/>
+        <arg name="controller_configuration" value="$(var controller_configuration)"/>
+        <arg name="dock_id" value="520"/>
+    </include>
 
     <!-- If requested, launch RViz -->
     <node pkg="rviz2" exec="rviz2" args="-d $(find-pkg-share spot_simulation)/rviz/simulation.rviz" if="$(var launch_rviz)"/>
