@@ -3,6 +3,7 @@
 #include <thread>
 #include <ranges>
 #include <cstring>
+#include <execution>
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
 #include <rcpputils/endian.hpp>
@@ -31,10 +32,12 @@ public:
             std::bind(&PointcloudFilterComponent::initializeFilter, this));
 
         using namespace std::placeholders;
+        rclcpp::PublisherOptions pub_opts;
+        pub_opts.use_intra_process_comm = rclcpp::IntraProcessSetting::Enable;
+        pointcloud_pub = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_out", 10, pub_opts);
         rclcpp::SubscriptionOptions sub_opts;
         sub_opts.use_intra_process_comm = rclcpp::IntraProcessSetting::Enable;
-        pointcloud_pub = create_publisher<sensor_msgs::msg::PointCloud2>("cloud_out", 10);
-        pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", 10, 
+        pointcloud_sub = create_subscription<sensor_msgs::msg::PointCloud2>("cloud_in", rclcpp::SensorDataQoS{}, 
                 std::bind(&PointcloudFilterComponent::filterPointcloud, this, _1), sub_opts);
 
         stow_state_sub_ = create_subscription<spot_msgs::msg::ManipulatorStowState>("/spot_manipulation_driver/manipulator_state/stow_state", 1, 
@@ -89,16 +92,16 @@ public:
 
             {
                 std::lock_guard guard(arm_update_mtx_);
-                arm_min_pt.x() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.x();})->x();
-                arm_min_pt.y() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.y();})->y();
-                arm_min_pt.z() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.z();})->z();
-                arm_max_pt.x() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.x();})->x();
-                arm_max_pt.y() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.y();})->y();
-                arm_max_pt.z() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.z();})->z();
+                arm_min_pt_.x() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.x();})->x();
+                arm_min_pt_.y() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.y();})->y();
+                arm_min_pt_.z() = std::ranges::min_element(critical_link_locs, {}, [](auto& pt){return pt.z();})->z();
+                arm_max_pt_.x() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.x();})->x();
+                arm_max_pt_.y() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.y();})->y();
+                arm_max_pt_.z() = std::ranges::max_element(critical_link_locs, {}, [](auto& pt){return pt.z();})->z();
 
                 // Add a buffer since frame locations are at the link centers
-                arm_max_pt += 0.10 * Eigen::Vector3d::Ones();
-                arm_min_pt -= 0.10 * Eigen::Vector3d::Ones();
+                arm_max_pt_ += 0.10 * Eigen::Vector3d::Ones();
+                arm_min_pt_ -= 0.10 * Eigen::Vector3d::Ones();
                 transforms_ready_ = true;
             }
         } catch (tf2::TransformException& e) {
@@ -125,16 +128,22 @@ public:
         filtered_cloud->header = pointcloud->header;
         filtered_cloud->height = 1;
         filtered_cloud->is_bigendian = pointcloud->is_bigendian;
-        filtered_cloud->is_dense = pointcloud->is_dense;
+        filtered_cloud->is_dense = true;
         filtered_cloud->point_step = pointcloud->point_step;
-        filtered_cloud->data.reserve(pointcloud->data.size());
+        filtered_cloud->data.resize(pointcloud->data.size());
 
         const bool reverse_bytes = (!filtered_cloud->is_bigendian && rcpputils::endian::native == rcpputils::endian::big)
                                 || (filtered_cloud->is_bigendian && rcpputils::endian::native == rcpputils::endian::little);
-        
-        std::size_t new_size = 0;
-        for (auto data_ptr = pointcloud->data.begin(); data_ptr != pointcloud->data.end(); std::advance(data_ptr, pointcloud->point_step)) {
-            auto point_span = std::span<const uint8_t>(data_ptr, pointcloud->point_step);
+
+        // Extract arm bounding box
+        std::unique_lock guard(arm_update_mtx_);
+        Eigen::Vector3d arm_min_pt = arm_min_pt_;
+        Eigen::Vector3d arm_max_pt = arm_max_pt_;
+        guard.unlock();
+
+        auto isPointValid = [&](const std::size_t pt_idx) -> bool {
+            const uint8_t* const data_start = &pointcloud->data[pt_idx * pointcloud->point_step];
+            auto point_span = std::span<const uint8_t>(data_start, pointcloud->point_step);
 
             auto x_span = point_span.subspan(x_offset, 4);
             auto y_span = point_span.subspan(y_offset, 4);
@@ -151,7 +160,7 @@ public:
                 std::reverse(reinterpret_cast<std::byte*>(&z), reinterpret_cast<std::byte*>(&z) + sizeof(float));
             }
 
-            bool accept_point = true;
+            if (std::isnan(x) || std::isnan(y) || std::isnan(z)) return false;
             
             // Check the ray direction. We don't want points pointing forward and down
             // since it hits the arm and body and creates a "bleeding points" effect
@@ -161,14 +170,14 @@ public:
             static constexpr float arm_threshold = 7.5f * deg2rad;
             static constexpr float arm_base_elevation_threshold = -14.0f * deg2rad;
             static constexpr float arm_base_threshold = 18.5f * deg2rad;
-            static constexpr float lidar_cable_threshold = (180.0f - 22.5f) * deg2rad;
+            static constexpr float lidar_cable_threshold = (180.0f - 25.0f) * deg2rad;
             static constexpr float lidar_elevation_threshold = -20.0f * deg2rad;
             
             if (z < 0) {
                 // Check for arm obstruction
                 const float azimuthal_angle = std::abs(std::atan2(y, x));
                 if (azimuthal_angle < arm_threshold) {
-                    accept_point = false;
+                    return false;
                 } 
                 
                 const Eigen::Vector3f ray_dir = Eigen::Vector3f(x, y, z).normalized();
@@ -179,28 +188,26 @@ public:
                     if (azimuthal_angle < body_threshold) {
                         // Check for body obstruction
                         if (elevation_angle < body_elevation_threshold) {
-                            accept_point = false;                    
+                            return false;                    
                         }
                         // Check for arm base obstruction
                         else if (azimuthal_angle < arm_base_threshold && elevation_angle < arm_base_elevation_threshold) {
-                            accept_point = false;
+                            return false;
                         }
                     }
                 } 
                 // Rear obstructions (lidar cable)
                 else {
                     if ((azimuthal_angle > lidar_cable_threshold) && (elevation_angle < lidar_elevation_threshold)) {
-                        accept_point = false;
+                        return false;
                     }
                 }
             } 
 
             // If the arm is deployed, we also need to check against that
             // For computationaly feasibility, we just check against the entire arm AABB
-            if (accept_point && !arm_stowed_) {
+            if (!arm_stowed_) {
                 const Eigen::Array3d ray_dir = Eigen::Vector3d(x, y, z).normalized().array();
-                std::lock_guard guard(arm_update_mtx_);
-
                 // Ray-BoundingBox intersection algorithm
                 double tmin = -std::numeric_limits<float>::infinity();
                 double tmax = std::numeric_limits<float>::infinity();
@@ -224,17 +231,31 @@ public:
                 }
 
                 if (tmin < tmax && tmax > 0){
-                    accept_point = false;
+                    return false;
                 }
             }
 
-            if (!accept_point) continue;
-            new_size++;
-            filtered_cloud->data.insert(filtered_cloud->data.end(), data_ptr, std::next(data_ptr, pointcloud->point_step));
-        }
+            return true;
+        };
         
+        std::vector<bool> valid_points(pointcloud->width * pointcloud->height, false);
+        std::vector<std::size_t> point_indices(valid_points.size());
+        std::iota(point_indices.begin(), point_indices.end(), 0);
+        std::transform(std::execution::par_unseq, point_indices.begin(), point_indices.end(), valid_points.begin(), isPointValid);
+
+        auto data_ptr = filtered_cloud->data.begin();
+        std::size_t new_size = 0;
+        for (const std::size_t pt_idx : point_indices) {
+            if (valid_points[pt_idx]) {
+                std::memcpy(data_ptr.base(), &pointcloud->data[pt_idx * pointcloud->point_step], pointcloud->point_step);
+                data_ptr += pointcloud->point_step;
+                new_size++;
+            }
+        }
+
         filtered_cloud->row_step = new_size * pointcloud->point_step;
         filtered_cloud->width = new_size;
+        filtered_cloud->data.resize(new_size * pointcloud->point_step);
         pointcloud_pub->publish(std::move(filtered_cloud));
     }
 private:
@@ -259,8 +280,8 @@ private:
     bool transforms_ready_ = false;
 
     std::mutex arm_update_mtx_;
-    Eigen::Vector3d arm_min_pt;
-    Eigen::Vector3d arm_max_pt;
+    Eigen::Vector3d arm_min_pt_;
+    Eigen::Vector3d arm_max_pt_;
 };
 
 } // namespace spot_navigation
