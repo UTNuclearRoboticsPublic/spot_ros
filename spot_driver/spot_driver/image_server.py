@@ -149,8 +149,11 @@ class SpotImageServer(Node):
             is_active_topic = self.camera_pubs[source_name].image_pub.get_subscription_count() > 0 or self.camera_pubs[source_name].info_pub.get_subscription_count() > 0
             if not is_active_topic: return
             
-            self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
-            self.image_response_futures[source_name].add_done_callback(self.publish_image_callback)
+            try:
+                self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
+                self.image_response_futures[source_name].add_done_callback(self.publish_image_callback)
+            except Exception as e:
+                self.get_logger().warn(f'Failed to request image from {source_name}: {e}')
 
     def publish_image_callback(self, response_future: Future):
         try:

@@ -255,12 +255,18 @@ class SpotLeaseManager():
             return False, f'Error updating payload: {e}'
     
     def setLeaseQueryResult(self, future: Future) -> None:
-        self._lease_proto = future.result()
+        try:
+            self._lease_proto = future.result()
+        except (ResponseError, RpcError) as e:
+            self.logger.warn(f"Lease query returned an error: {e}")
 
     def updateLeaseInfo(self) -> None:
-        if self._lease_query_future is None or self._lease_query_future.done():
-            self._lease_query_future = self._lease_client.list_leases_async()
-            self._lease_query_future.add_done_callback(self.setLeaseQueryResult)
+        try:
+            if self._lease_query_future is None or self._lease_query_future.done():
+                self._lease_query_future = self._lease_client.list_leases_async()
+                self._lease_query_future.add_done_callback(self.setLeaseQueryResult)
+        except (ResponseError, RpcError) as e:
+            self.logger.warn(f"Failed to query lease info: {e}")
     
     def registerLeaseOwner(self, owner_id, force: bool = False) -> Tuple[bool, Text]:
         if self.isRegisteredLeaseOwner(owner_id):
@@ -379,27 +385,62 @@ class SpotLeaseManager():
         return self._estop_client.get_status()
 
     def assertEStop(self, severe=True) -> Tuple[bool, str]:
-        """Forces the robot into eStop state.
+        """Forces the robot into eStop state, latched until disengageEStop() is called.
 
-        Args:
-            severe: Default True - If true, will cut motor power immediately.  If false, will try to settle the robot on the ground first
-        """
+        NOTE: assert via the keepalive, not EstopEndpoint one-shots. The
+        keepalive thread re-asserts its own desired level (ESTOP_LEVEL_NONE)
+        every estop_timeout/3 s, so one-shot asserts self-cleared within ~3 s.
+        Setting the keepalive's desired level makes the estop latch until
+        explicitly cleared.
+ 
+         Args:
+            severe: Default True - If true, cut motor power immediately
+                    (ESTOP_LEVEL_CUT). If false, settle the robot on the
+                    ground before cutting power (ESTOP_LEVEL_SETTLE_THEN_CUT).
+         """
+        if self._estop_keepalive is None:
+            return False, "No EStop keepalive; claim the robot first"
         try:
             if severe:
-                self._estop_endpoint.stop()
+                self._estop_keepalive.stop()
                 self.logger.error("Severe EStop triggered")
             else:
-                self._estop_endpoint.settle_then_cut()
+                self._estop_keepalive.settle_then_cut()
                 self.logger.warn("EStop triggered")
         except Exception as e:
-            return False, f"{e}"
-
+             return False, f"{e}"
+ 
         return True, "Successfully triggered e-stop"
 
+    def disengageEStop(self) -> Tuple[bool, Text]:
+        """Clear an estop latched by assertEStop() (asserts ESTOP_LEVEL_NONE).
+
+        Allows the robot to be powered on again; does not power motors or
+        tear down the endpoint/keepalive. Matches the official spot_wrapper's 
+        disengageEStop(), which the estop/release service handler was originally 
+        written against.
+        """
+        if self._estop_keepalive is None:
+            return False, "No EStop keepalive; claim the robot first"
+        try:
+            self._estop_keepalive.allow()
+        except Exception as e:
+            return False, f"Exception while attempting to disengage estop: {e}"
+        return True, "EStop disengaged; robot can be powered on again"
+
     def _releaseEStop(self) -> None:
-        """Stop eStop keepalive"""
+        """Settle the robot, cut motor power, then shut down the eStop keepalive.
+
+        Teardown helper for shutdown paths only; estop/release maps to
+        disengageEStop(). settle_then_cut() settles the robot (typically
+        sitting) before the cut, rather than dropping it via stop()'s
+        immediate ESTOP_LEVEL_CUT; shutdown() terminates the check-in thread
+        (previously leaked). The endpoint then expires and the robot stays
+        estopped.
+        """
         if self._estop_keepalive:
-            self._estop_keepalive.stop()
+            self._estop_keepalive.settle_then_cut()
+            self._estop_keepalive.shutdown()
             self._estop_keepalive = None
             self._estop_endpoint = None
 
@@ -437,6 +478,7 @@ class SpotLeaseManager():
                 block_until_arm_arrives(self._robot_command_client, cmd_id, timeout_sec=5.0)
             except:
                 pass
+        powered_off, msg = False, 'safe_power_off raised an exception'
         try:
             powered_off, msg = self.safe_power_off()
         except Exception as e:

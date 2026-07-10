@@ -431,13 +431,28 @@ class SpotROS(Node):
         return res
 
     def handle_estop_disengage(self, _, res:Trigger.Response) -> Trigger.Response:
-        """ROS service handler to disengage the eStop on the robot."""
+        """ROS service handler to disengage (clear) a previously asserted software eStop.
+
+        Completes the estop service triple: estop/hard asserts ESTOP_LEVEL_CUT,
+        estop/gentle asserts ESTOP_LEVEL_SETTLE_THEN_CUT, estop/release clears
+        the assertion (ESTOP_LEVEL_NONE) so the robot can be powered on again.
+        Does not power motors and does not tear down the estop endpoint.
+        """
         res.success, res.message = self.spot_wrapper._lease_manager.disengageEStop()
         return res
 
     def handle_clear_behavior_fault(self, req, res: ClearBehaviorFault.Response) -> ClearBehaviorFault.Response:
         """ROS service handler for clearing behavior faults"""
-        res.success, res.message = self.spot_wrapper.clear_behavior_fault(req.id)
+        # NOTE: previously called self.spot_wrapper.clear_behavior_fault(), which
+        # does not exist; the resulting AttributeError crashed the driver.
+        try:
+            self.spot_wrapper._lease_manager.command_client.clear_behavior_fault(
+                behavior_fault_id=req.id, lease=None)
+            res.success = True
+            res.message = 'Success'
+        except Exception as e:
+            res.success = False
+            res.message = str(e)
         return res
     
     def handle_register_payload(self, req: RegisterPayload.Request, res: RegisterPayload.Response) -> RegisterPayload.Response:
@@ -476,27 +491,36 @@ class SpotROS(Node):
         res.success, res.message = self.spot_wrapper._lease_manager.toggle_payload(identifier, req.secret, req.attached, use_name)
         return res
 
-    def handle_stair_mode(self, req) -> SetBool.Response:
+    def handle_stair_mode(self, req, res: SetBool.Response) -> SetBool.Response:
         """ROS service handler to set a stair mode to the robot."""
+        # NOTE: ROS 2 messages are keyword-only; the previous positional
+        # SetBool.Response(...) raised TypeError (including inside the except
+        # branch, which crashed the driver). set_mobility_params() also takes
+        # keyword fields, not a MobilityParams proto, so the proto is mutated
+        # in place instead (same pattern as parameters_callback).
         try:
-            mobility_params = self.spot_wrapper.get_mobility_params()
-            mobility_params.stair_hint = req.data
-            self.spot_wrapper.set_mobility_params(mobility_params)
-            return SetBool.Response(True, 'Success')
+            self.spot_wrapper.get_mobility_params().stair_hint = req.data
+            res.success = True
+            res.message = 'Success'
         except Exception as e:
-            return SetBool.Response(False, Text(e))
+            res.success = False
+            res.message = str(e)
+        return res
 
-    def handle_locomotion_mode(self, req) -> SetLocomotion.Response:
+    def handle_locomotion_mode(self, req, res: SetLocomotion.Response) -> SetLocomotion.Response:
         """ROS service handler to set locomotion mode"""
+        # NOTE: same fixes as handle_stair_mode (keyword-only responses,
+        # in-place mobility params mutation).
         try:
-            mobility_params = self.spot_wrapper.get_mobility_params()
-            mobility_params.locomotion_hint = req.locomotion_mode
-            self.spot_wrapper.set_mobility_params( mobility_params )
-            return SetLocomotion.Response(True, 'Success')
+            self.spot_wrapper.get_mobility_params().locomotion_hint = req.locomotion_mode
+            res.success = True
+            res.message = 'Success'
         except Exception as e:
-            return SetLocomotion.Response(False, Text(e))
+            res.success = False
+            res.message = str(e)
+        return res
 
-    def handle_max_vel(self, req: SetVelocity.Request) -> SetVelocity.Response:
+    def handle_max_vel(self, req: SetVelocity.Request, res: SetVelocity.Response) -> SetVelocity.Response:
         """
         Handle a max_velocity service call. This will modify the mobility params to set a limit on the maximum
         velocity that the robot can move during motion commmands. This affects trajectory commands and velocity
@@ -507,10 +531,17 @@ class SpotROS(Node):
 
         Returns: SetVelocity.Response
         """
-        if (req.velocity_limit.linear.x >= 0.0 or
-            req.velocity_limit.linear.y >= 0.0 or
-            req.velocity_limit.linear.z >= 0.0):
-            return SetVelocity.Response(False, 'Cannot set a non-positive velocity limit.')
+        # NOTE: the previous implementation had an inverted validity check
+        # (rejected all positive limits), constructed responses positionally
+        # (TypeError - ROS 2 messages are keyword-only), and passed a
+        # MobilityParams proto into set_mobility_params(), whose signature
+        # takes keyword fields.
+        if (req.velocity_limit.linear.x <= 0.0 or
+            req.velocity_limit.linear.y <= 0.0 or
+            req.velocity_limit.angular.z <= 0.0):
+            res.success = False
+            res.message = 'Cannot set a non-positive velocity limit.'
+            return res
 
         try:
             mobility_params = self.spot_wrapper.get_mobility_params()
@@ -518,10 +549,17 @@ class SpotROS(Node):
                 SE2VelocityLimit(max_vel=math_helpers.SE2Velocity(req.velocity_limit.linear.x,
                                                                   req.velocity_limit.linear.y,
                                                                   req.velocity_limit.angular.z).to_proto()))
-            self.spot_wrapper.set_mobility_params(mobility_params)
-            return SetVelocity.Response(True, 'Success')
+            # Keep the manual cmd_vel clamps consistent with the new limit,
+            # mirroring what set_mobility_params(speed_limit=...) does.
+            self.spot_wrapper._max_cmd_x = req.velocity_limit.linear.x
+            self.spot_wrapper._max_cmd_y = req.velocity_limit.linear.y
+            self.spot_wrapper._max_cmd_rot = req.velocity_limit.angular.z
+            res.success = True
+            res.message = 'Success'
         except Exception as e:
-            return SetVelocity.Response(False, e)
+            res.success = False
+            res.message = str(e)
+        return res
 
     def handle_walk_to(self, goal_handle: ServerGoalHandle) -> WalkTo.Result:
         req: WalkTo.Goal = goal_handle.request
@@ -634,39 +672,34 @@ class SpotROS(Node):
         except Exception as e:
             self._logger.error(f"Error setting body pose: {e}")
 
-    def handle_list_graph(self, upload_path) -> ListGraph.Response:
+    def handle_list_graph(self, req: ListGraph.Request, res: ListGraph.Response) -> ListGraph.Response:
         """ROS service handler for listing graph_nav waypoint_ids"""
-        resp = self.spot_wrapper.list_graph(upload_path)
-        return ListGraph.Response(resp)
+        # NOTE: GraphNav support was never ported into SpotBodyWrapper. The
+        # previous implementation crashed the driver on every call: its
+        # signature took a single argument, but rclpy invokes service
+        # callbacks as callback(request, response), so a TypeError was raised
+        # before the body even ran. Behind that were two more latent defects:
+        # spot_wrapper.list_graph() does not exist (AttributeError), and
+        # ListGraph.Response(resp) was constructed positionally, which ROS 2
+        # message types do not allow. Return an empty waypoint list until
+        # GraphNav is implemented.
+        self.get_logger().warn('list_graph: GraphNav is not supported by this driver')
+        return res
 
-    def handle_navigate_to_feedback(self) -> None:
-        """Thread function to send navigate_to feedback"""
-        rate = self.create_rate(10)
-        while rclpy.ok() and self.run_navigate_to:
-            localization_state = self.spot_wrapper._graph_nav_client.get_localization_state()
-            if localization_state.localization.waypoint_id:
-                self.navigate_as.publish_feedback(NavigateTo.Feedback(localization_state.localization.waypoint_id))
-            rate.sleep()
-
-    def handle_navigate_to(self, msg) -> None:
-        """ROS service handler to run mission of the robot.  The robot will replay a mission"""
-        # create thread to periodically publish feedback
-        feedback_thread = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
-        self.run_navigate_to = True
-        feedback_thread.start()
-        # run navigate_to
-        resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
-                                             navigate_to = msg.navigate_to,
-                                             initial_localization_fiducial = msg.initial_localization_fiducial,
-                                             initial_localization_waypoint = msg.initial_localization_waypoint)
-        self.run_navigate_to = False
-        feedback_thread.join()
-
-        # check status
-        if resp[0]:
-            self.navigate_as.set_succeeded(NavigateTo.Result(resp[0], resp[1]))
-        else:
-            self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
+    def handle_navigate_to(self, goal_handle: ServerGoalHandle) -> NavigateTo.Result:
+        """ROS action handler for GraphNav navigation."""
+        # NOTE: GraphNav support was never ported into SpotBodyWrapper. The
+        # previous implementation referenced nonexistent attributes
+        # (spot_wrapper.navigate_to, spot_wrapper._graph_nav_client,
+        # self.navigate_as) and the ROS 1 actionlib API (set_succeeded /
+        # set_aborted; rclpy uses goal_handle.succeed() / .abort()). Unlike
+        # the broken services, this did not kill the node: rclpy action
+        # execute callbacks are wrapped in a try/except that aborts the goal.
+        # It did, however, leak a feedback thread stuck in Rate.sleep().
+        # Abort cleanly until GraphNav is implemented.
+        self.get_logger().warn('navigate_to: GraphNav is not supported by this driver')
+        goal_handle.abort()
+        return NavigateTo.Result(success=False, message='GraphNav is not supported by this driver')
 
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
         if (self.spot_wrapper is None):
@@ -870,9 +903,17 @@ class SpotROS(Node):
             callback_group=srv_group
         )
 
-        # Publish initial dock state. Wait for first response
+        # Publish initial dock state. Wait (bounded, throttled) for first response.
+        # NOTE: this was previously an unthrottled busy-wait with no exception
+        # handling and no timeout: it hammered the docking service at maximum
+        # RPC rate, crashed the driver on any transient RpcError during
+        # startup, and hung forever if the state never left UNKNOWN.
+        dock_state_deadline = pyTime.time() + 10.0
         while self.spot_wrapper.get_docking_state().status == DockState.DOCK_STATUS_UNKNOWN:
-            pass
+            if pyTime.time() > dock_state_deadline:
+                self.get_logger().warn('Timed out waiting for initial dock state; continuing startup')
+                break
+            pyTime.sleep(0.1)
         self.update_dock_state()
 
         self.get_logger().info('Spot driver startup complete.')

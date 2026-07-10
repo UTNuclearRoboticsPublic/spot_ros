@@ -186,21 +186,21 @@ spot_nav/controller_server:
       time_steps: 56
       model_dt: 0.05
       batch_size: 2000
-      vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 0.4
+      vx_std: 0.1
+      vy_std: 0.1
+      wz_std: 0.2
 
-      vx_max: 0.5
-      vx_min: -0.5
-      vy_max: 0.2
-      vy_min: -0.2
+      vx_max: 0.3
+      vx_min: -0.3
+      vy_max: 0.1
+      vy_min: -0.1
       wz_max: 1.0
       wz_min: -1.0
 
-      ax_max: 5.0
-      ax_min: -5.0
-      ay_max: 3.0
-      ay_min: -3.0
+      ax_max: 2.5
+      ax_min: -2.5
+      ay_max: 1.5
+      ay_min: -1.5
       az_max: 3.5
 
       TrajectoryValidator:
@@ -263,7 +263,7 @@ spot_nav/local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 10.0
-        inflation_radius: 0.75
+        inflation_radius: 0.5
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
