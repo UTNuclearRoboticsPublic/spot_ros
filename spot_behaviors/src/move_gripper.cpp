@@ -33,7 +33,7 @@ MoveGripper::MoveGripper(const std::string& name, const BT::NodeConfiguration& c
     BT::StatefulActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
 {
-    gripper_client_ = this->create_client<spot_msgs::srv::GripperAngleMove>("~/set_gripper_angle");
+    gripper_client_ = this->create_client<spot_msgs::srv::GripperAngleMove>("/spot_manipulation_driver/set_gripper_angle");
 }
 
 BT::PortsList MoveGripper::providedPorts() {
