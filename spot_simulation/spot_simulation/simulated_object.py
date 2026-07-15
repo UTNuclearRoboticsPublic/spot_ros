@@ -1,8 +1,11 @@
+import os
+import sys
 import open3d
 import numpy as np
 from visualization_msgs.msg import Marker
 from scipy.spatial.transform import Rotation
 from .simulated_robot import resolve_package
+from rclpy.logging import get_logger
 
 class SimulatedObject:
     object_id = 0
@@ -75,6 +78,9 @@ class SimulatedObject:
         elif self.config.object_type == 'mesh':
             assert len(self.config.file_path), 'No mesh file passed for mesh object'
             absolute_path = resolve_package(self.config.file_path)
+            if not os.path.exists(absolute_path):
+                get_logger('SimulatedObject').error(f'Cannot load mesh from path "{absolute_path}". It does not exist')
+                sys.exit(1)
             self.geometry = open3d.t.geometry.TriangleMesh.from_legacy(
                 open3d.io.read_triangle_mesh(absolute_path).scale(object_config.mesh_scale, center=np.array([0.0, 0.0, 0.0]))
             )

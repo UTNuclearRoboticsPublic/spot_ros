@@ -1,28 +1,6 @@
 ############################################################################################
 #      Title     : spot_ros.py
 #      Project   : spot_ros
-#      Copyright : Copyright© The University of Texas at Austin, 2022. All rights reserved.
-#                
-#          All files within this directory are subject to the following, unless an alternative
-#          license is explicitly included within the text of each file.
-#
-#          This software and documentation constitute an unpublished work
-#          and contain valuable trade secrets and proprietary information
-#          belonging to the University. None of the foregoing material may be
-#          copied or duplicated or disclosed without the express, written
-#          permission of the University. THE UNIVERSITY EXPRESSLY DISCLAIMS ANY
-#          AND ALL WARRANTIES CONCERNING THIS SOFTWARE AND DOCUMENTATION,
-#          INCLUDING ANY WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A
-#          PARTICULAR PURPOSE, AND WARRANTIES OF PERFORMANCE, AND ANY WARRANTY
-#          THAT MIGHT OTHERWISE ARISE FROM COURSE OF DEALING OR USAGE OF TRADE.
-#          NO WARRANTY IS EITHER EXPRESS OR IMPLIED WITH RESPECT TO THE USE OF
-#          THE SOFTWARE OR DOCUMENTATION. Under no circumstances shall the
-#          University be liable for incidental, special, indirect, direct or
-#          consequential damages or loss of profits, interruption of business,
-#          or related expenses which may arise from use of software or documentation,
-#          including but not limited to those resulting from defects in software
-#          and/or documentation, or loss or inaccuracy of data of any kind.
-#
 ############################################################################################
 
 from typing import List, Text
@@ -46,7 +24,7 @@ from rcl_interfaces.msg import ParameterType
 from rcl_interfaces.msg import SetParametersResult
 
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import TwistWithCovarianceStamped, Twist, Pose
+from geometry_msgs.msg import TwistStamped, Twist, Pose
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import PointCloud2
 from std_srvs.srv import Trigger, SetBool
@@ -267,14 +245,16 @@ class SpotROS(Node):
         self.joint_state_pub.publish(joint_state)
         if len(tf_msg.transforms) > 0:
             self.tf_broadcaster.sendTransform(tf_msg.transforms)
-        
-        # Odom Twist #
-        twist_odom_msg = GetOdomTwistFromState(state.kinematic_state, self.spot_wrapper)
-        self.odom_twist_pub.publish(twist_odom_msg)
 
         # Odom #
         odom_msg = GetOdomFromState(state.kinematic_state, self.spot_wrapper, odom_mode == 'vision')
         self.odom_pub.publish(odom_msg)
+        
+        # Odom Twist #
+        twist_odom_msg = TwistStamped()
+        twist_odom_msg.header = odom_msg.header
+        twist_odom_msg.twist = odom_msg.twist.twist
+        self.odom_twist_pub.publish(twist_odom_msg)
         
         # Feet #
         foot_array_msg = FeetStateToMsg(state.foot_state)
@@ -830,7 +810,7 @@ class SpotROS(Node):
         self.estop_pub           = self.create_publisher(EStopStateArray           , '~/status/estop'          , 1)
         self.battery_pub         = self.create_publisher(BatteryStateArray         , '~/status/battery_states' , 1)
         self.dock_state_pub      = self.create_publisher(DockState                 , '~/status/dock_state'     , qos_profile=latched_qos)
-        self.odom_twist_pub      = self.create_publisher(TwistWithCovarianceStamped, '~/odometry/twist'        , 1)
+        self.odom_twist_pub      = self.create_publisher(TwistStamped              , '~/odometry/twist'        , 1)
         self.joint_state_pub     = self.create_publisher(JointState                , '~/joint_states'          , 1)
         self.system_faults_pub   = self.create_publisher(SystemFaultState          , '~/status/system_faults'  , 10)
         self.behavior_faults_pub = self.create_publisher(BehaviorFaultState        , '~/status/behavior_faults', 10)
