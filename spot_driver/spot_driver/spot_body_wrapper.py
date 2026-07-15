@@ -53,7 +53,6 @@ class SpotBodyWrapper():
         self._point_cloud_proto = None
 
         self._robot_id = None
-        self._last_dock_state = None
         self._is_sitting = True
         self._is_standing = False
         self._mobility_params = RobotCommandBuilder.mobility_params()
@@ -336,22 +335,9 @@ class SpotBodyWrapper():
         return success, message, command_id
 
     def get_docking_state(self, **kwargs) -> DockStateProto:
-        """Get docking state of robot.
-        
-        Never raises on transient RPC failures: this is called from 10 Hz ROS
-        timer callbacks, where an uncaught RpcError propagates out of
-        rclpy.spin() and kills the node. On failure, returns the last
-        successfully retrieved state (or a default proto with
-        DOCK_STATUS_UNKNOWN if none has been retrieved yet).
-        """
-        try:
-            self._last_dock_state = self._docking_client.get_docking_state(**kwargs)
-        except (ResponseError, RpcError) as e:
-            self._logger.warn(f"Failed to get docking state ({e}); using last known state")
-            if self._last_dock_state is None:
-                self._last_dock_state = docking_pb2.DockState()
-        return self._last_dock_state
-
+        """Get docking state of robot."""
+        state = self._docking_client.get_docking_state(**kwargs)
+        return state
 
     def set_mobility_params(self,
                             body_height_offset: float = 0.0,
