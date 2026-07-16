@@ -9,9 +9,10 @@ import yaml
 import time as pyTime
 import math
 
-import rclpy.action
 import rclpy.duration
 import rclpy.utilities
+from rclpy.action import ActionServer
+from rclpy.action.server import ServerGoalHandle, GoalResponse
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from rclpy.time import Time
@@ -502,10 +503,27 @@ class SpotROS(Node):
             return SetVelocity.Response(True, 'Success')
         except Exception as e:
             return SetVelocity.Response(False, e)
+        
+    def handle_new_goal(self, goal_request):
+        if not self.spot_wrapper._lease_manager.robot.is_powered_on():
+            self.get_logger().warn('Cannot accept movement goal: robot is not powered on')
+            return GoalResponse.REJECT
+        else:
+            return GoalResponse.ACCEPT
+
+    def handle_walk_to_accepted(self, goal_handle: ServerGoalHandle) -> None:
+        if self.walk_to_active:
+            self.get_logger().info('Received new goal during execution. Preempting previous goal')
+            self.updated_walk_to_goal = goal_handle
+        else:
+            self.get_logger().info('Received new WalkTo goal')
+            goal_handle.execute()
 
     def handle_walk_to(self, goal_handle: ServerGoalHandle) -> WalkTo.Result:
         req: WalkTo.Goal = goal_handle.request
         resp = WalkTo.Result()
+        self.walk_to_active = True
+        self.updated_walk_to_goal = None
 
         feedback_strings = {
             "STATUS" : [
@@ -530,10 +548,13 @@ class SpotROS(Node):
         }
 
         # Check to see if the pose is very old - if it is then update to now time
-        time_offset: rclpy.duration.Duration = self.get_clock().now() - Time.from_msg(req.target_pose.header.stamp)
-        if time_offset > rclpy.duration.Duration(seconds=10):
-            self._logger.warn("Received WalkTo goal with a very old timestamp. Updating with current timestamp")
-            req.target_pose.header.stamp = self.get_clock().now().to_msg()
+        msg_time = Time.from_msg(req.target_pose.header.stamp)
+        seconds, nanoseconds = msg_time.seconds_nanoseconds()
+        if seconds or nanoseconds:
+            time_offset: rclpy.duration.Duration = self.get_clock().now() - msg_time
+            if time_offset > rclpy.duration.Duration(seconds=10):
+                self._logger.warn("Received WalkTo goal with a very old timestamp. Updating with current timestamp")
+                req.target_pose.header.stamp = self.get_clock().now().to_msg()
 
         # Transform the target frame into the odom frame
         try:
@@ -554,6 +575,8 @@ class SpotROS(Node):
         def abort(message: str):
             self.get_logger().error(message)
             self.spot_wrapper.stop()
+            self.walk_to_active = False
+            self.updated_walk_to_goal = None
             goal_handle.abort()
             resp.success = False
             resp.message = message
@@ -571,6 +594,14 @@ class SpotROS(Node):
 
         update_rate = self.create_rate(10.0)
         while rclpy.ok():
+            # Check to see if we've received a new goal
+            if self.updated_walk_to_goal is not None:
+                resp.success = False
+                resp.message = "Preempted by new goal"
+                goal_handle.abort()
+                self.updated_walk_to_goal.execute()
+                return resp
+
             # Check to see if we've concluded
             try:
                 command_feedback = self.spot_wrapper._lease_manager.robot_command_feedback(command_id)
@@ -582,6 +613,7 @@ class SpotROS(Node):
                     self.get_logger().info("WalkTo action completed successfully")
                     goal_handle.succeed()
                     resp.success = True
+                    self.walk_to_active = False
                     resp.message = "WalkTo action completed successfully"
                     return resp
                 elif trajectory_feedback.status == WalkTo.Feedback.STATUS_UNKNOWN:
@@ -834,7 +866,7 @@ class SpotROS(Node):
 
         ## --- Action Servers --- ##
 
-        self._navigate_to_server = rclpy.action.ActionServer(
+        self._navigate_to_server = ActionServer(
             self,
             NavigateTo,
             '~/navigate_to',
@@ -842,11 +874,15 @@ class SpotROS(Node):
             callback_group=srv_group
         )
         
-        self._walk_to_server = rclpy.action.ActionServer(
+        self.walk_to_active = False
+        self.updated_walk_to_goal: ServerGoalHandle = None
+        self._walk_to_server = ActionServer(
             self,
             WalkTo,
             '~/walk_to',
             execute_callback=self.handle_walk_to,
+            goal_callback=self.handle_new_goal,
+            handle_accepted_callback=self.handle_walk_to_accepted,
             callback_group=srv_group
         )
 
