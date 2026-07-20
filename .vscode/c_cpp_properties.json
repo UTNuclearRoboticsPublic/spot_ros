@@ -1,0 +1,30 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_behaviors/include/**",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_utils/include/**",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_msgs/include/**",
+        "/home/cerberus/user_workspaces/system_ws/install/pointcloud_to_laserscan/include/**",
+        "/home/cerberus/user_workspaces/system_ws/install/parameter_traits/include/**",
+        "/home/cerberus/user_workspaces/system_ws/install/ouster_ros/include/**",
+        "/home/cerberus/user_workspaces/system_ws/install/ouster_sensor_msgs/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/src/spot_patrol/spot_patrol/include/**",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/src/spot_ros/spot_behaviors/include/**",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/src/spot_ros/spot_utils/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-arm64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

@@ -1,0 +1,38 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_bringup",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_bringup/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_manipulation_driver",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_manipulation_driver/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_driver",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_driver/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_msgs/local/lib/python3.10/dist-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_description",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_description/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/arm_trajectory_streaming",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/arm_trajectory_streaming/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/system_ws/install/ouster_sensor_msgs/local/lib/python3.10/dist-packages",
+        "/home/cerberus/user_workspaces/system_ws/build/generate_parameter_library_py",
+        "/home/cerberus/user_workspaces/system_ws/install/generate_parameter_library_py/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_bringup",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_bringup/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_manipulation_driver",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_manipulation_driver/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_driver",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_driver/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_msgs/local/lib/python3.10/dist-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/spot_description",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/spot_description/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/build/arm_trajectory_streaming",
+        "/home/cerberus/user_workspaces/dalton_ws/ros2_ws/install/arm_trajectory_streaming/lib/python3.10/site-packages",
+        "/home/cerberus/user_workspaces/system_ws/install/ouster_sensor_msgs/local/lib/python3.10/dist-packages",
+        "/home/cerberus/user_workspaces/system_ws/build/generate_parameter_library_py",
+        "/home/cerberus/user_workspaces/system_ws/install/generate_parameter_library_py/lib/python3.10/site-packages",
+        "/opt/ros/humble/lib/python3.10/site-packages",
+        "/opt/ros/humble/local/lib/python3.10/dist-packages"
+    ]
+}

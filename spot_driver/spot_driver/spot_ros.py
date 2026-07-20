@@ -56,6 +56,7 @@ from bosdyn.api import geometry_pb2
 from bosdyn.api.geometry_pb2 import SE2VelocityLimit
 from bosdyn.api.payload_pb2 import Payload, MountFrameName
 from bosdyn.client import math_helpers
+from bosdyn.client.exceptions import ResponseError
 from bosdyn.geometry import to_euler_zxy
 
 from .spot_lease_manager import SpotLeaseManager
@@ -618,7 +619,7 @@ class SpotROS(Node):
         resp = self.spot_wrapper.list_graph(upload_path)
         return ListGraph.Response(resp)
 
-    def handle_navigate_to_feedback(self) -> None:
+    def navigate_to_feedback(self) -> None:
         """Thread function to send navigate_to feedback"""
         rate = self.create_rate(10)
         while rclpy.ok() and self.run_navigate_to:
@@ -627,25 +628,50 @@ class SpotROS(Node):
                 self.navigate_as.publish_feedback(NavigateTo.Feedback(localization_state.localization.waypoint_id))
             rate.sleep()
 
-    def handle_navigate_to(self, msg) -> None:
-        """ROS service handler to run mission of the robot.  The robot will replay a mission"""
-        # create thread to periodically publish feedback
-        feedback_thread = threading.Thread(target = self.handle_navigate_to_feedback, args = ())
-        self.run_navigate_to = True
-        feedback_thread.start()
-        # run navigate_to
-        resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
-                                             navigate_to = msg.navigate_to,
-                                             initial_localization_fiducial = msg.initial_localization_fiducial,
-                                             initial_localization_waypoint = msg.initial_localization_waypoint)
-        self.run_navigate_to = False
-        feedback_thread.join()
+    def navigate_to_callback(self, msg) -> None:
+        """Callback for the spot_ros/navigate_to action server. Navigate to a waypoint in a BD map. """
+        
+        # # create thread to periodically publish feedback
+        # feedback_thread = threading.Thread(target = self.navigate_to_feedback, args = ())
+        # self.run_navigate_to = True
+        # feedback_thread.start()
+        # # run navigate_to
+        # resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
+        #                                      navigate_to = msg.navigate_to,
+        #                                      initial_localization_fiducial = msg.initial_localization_fiducial,
+        #                                      initial_localization_waypoint = msg.initial_localization_waypoint)
+        
+        # self.run_navigate_to = False
+        # feedback_thread.join()
 
-        # check status
-        if resp[0]:
-            self.navigate_as.set_succeeded(NavigateTo.Result(resp[0], resp[1]))
-        else:
-            self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
+        # # check status
+        # if resp[0]:
+        #     self.navigate_as.set_succeeded(NavigateTo.Result(resp[0], resp[1]))
+        # else:
+        #     self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
+
+        # Check localization state. If not localized, attempt to localize with nearest fiducial
+        # Could also localize to a nearby waypoint in the uploaded graph using _set_initial_localization_waypoint()
+        localization_state = self.spot_wrapper._graph_nav_client.get_localization_state()
+        if not localization_state.localization.waypoint_id:
+            self.spot_wrapper._graph_nav_interface._set_initial_localization_fiducial()        
+
+        # Navigate to the destination waypoint.
+        is_finished = False
+        while not is_finished:
+            # Issue the navigation command about twice a second such that it is easy to terminate the
+            # navigation command (with estop or killing the program).
+            # idk if looping is required 
+            try:
+                nav_to_cmd_id = self.spot_wrapper._graph_nav_client.navigate_to_full(msg.waypoint_id, cmd_duration = 1, route_params=None,
+                                travel_params=None, leases=None, timesync_endpoint=None, command_id=None,
+                                destination_waypoint_tform_body_goal=None, route_blocked_behavior=None)
+            except ResponseError as e:
+                    print(f'Error while navigating {e}')
+                    return False
+            pyTime.sleep(0.5)
+            is_finished = self.spot_wrapper._graph_nav_interface._check_success(nav_to_cmd_id)
+        return True
 
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
 
@@ -813,7 +839,8 @@ class SpotROS(Node):
             self,
             NavigateTo,
             '~/navigate_to',
-            execute_callback=self.handle_navigate_to,
+            self.navigate_to_callback,
+            # maybe change callback group
             callback_group=srv_group
         )
         
