@@ -193,9 +193,31 @@ class SpotROS(Node):
         self.declare_parameter('obstacle_avoidance_padding', 0.10,
             ParameterDescriptor(description='Desired padding around the body to use when attempting to avoid obstacles. Described in meters',
                                 type=ParameterType.PARAMETER_DOUBLE,
-                                floating_point_range=[FloatingPointRange(
-                                        from_value=0.0, to_value=0.5, step=0.0)],
+                                floating_point_range=[FloatingPointRange(from_value=0.0, to_value=0.5, step=0.0)],
                                 read_only=False))
+
+        self.declare_parameter('max_vel.x', 0.85,
+            ParameterDescriptor(description="Maximum velocity of the robot in the x-direction. Units of m/s",
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(from_value=0.15, to_value=2.0, step=0.0)],
+                                read_only=False))
+        
+        self.declare_parameter('max_vel.y', 0.5,
+            ParameterDescriptor(description="Maximum velocity of the robot in the y-direction. Units of m/s",
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(from_value=0.15, to_value=2.0, step=0.0)],
+                                read_only=False))
+        
+        self.declare_parameter('max_vel.theta', 1.0,
+            ParameterDescriptor(description="Maximum rotational velocity of the robot. Units of rad/s",
+                                type=ParameterType.PARAMETER_DOUBLE,
+                                floating_point_range=[FloatingPointRange(from_value=0.20, to_value=1.5, step=0.0)],
+                                read_only=False))
+
+        self.declare_parameter('data_capture_mode', False,
+            ParameterDescriptor(description='Whether we are in the mode to capture manipulation action-server goals.',
+                                type=ParameterType.PARAMETER_BOOL,
+                                read_only=True))
 
     def __del__(self):
         if self.status_timer is not None:
@@ -227,13 +249,14 @@ class SpotROS(Node):
             return
 
         odom_mode = self.get_parameter('odom_mode').value
+        data_capture_mode = self.get_parameter('data_capture_mode').value
         
         # joint states #
         joint_state = JointStatesToMsg(state.kinematic_state, self.spot_wrapper)
 
         # Add in the virtual joints #
         kinematic_model = self.get_parameter('kinematic_model').value
-        virtual_joint_state = GetVirtualJointValues(state.kinematic_state, kinematic_model)
+        virtual_joint_state = GetVirtualJointValues(state.kinematic_state, kinematic_model, data_capture_mode)
         joint_state.name.extend(virtual_joint_state.name)
         joint_state.position.extend(virtual_joint_state.position)
         joint_state.velocity.extend(virtual_joint_state.velocity)
@@ -543,11 +566,9 @@ class SpotROS(Node):
             resp.message = f"Unable to transform WalkTo target pose from {req.target_pose.header.frame_id} to the odom frame, aborting action: {e}"
             return resp
         
-        # Convert the ROS type to the corresponding protobuf types
-        target_pose_se2 = geometry_pb2.SE2Pose(
-            position=geometry_pb2.Vec2(x=target_pose_in_odom.pose.position.x, y=target_pose_in_odom.pose.position.y),
-            angle=2*math.atan2(target_pose_in_odom.pose.orientation.z, target_pose_in_odom.pose.orientation.w)
-        )
+        # Convert the ROS types to the corresponding protobuf types
+        target_pose_se2 = MsgToSE2Pose(target_pose_in_odom.pose).to_proto()
+        max_vel = MsgToSE2Vel(req.max_vel).to_proto()
 
         self.get_logger().info(f"Moving robot to position ({target_pose_se2.position.x, target_pose_se2.position.y}) in the odom frame")
 
@@ -561,7 +582,7 @@ class SpotROS(Node):
 
         # Make the command and make sure it was valid
         try:
-            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_se2, req.maximum_movement_time)
+            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_in_odom=target_pose_se2, max_vel=max_vel, max_duration=req.maximum_movement_time)
             if not command_accepted:
                 return abort(f"Unable to command robot to move. Reason: {message}")
             else:
@@ -578,7 +599,7 @@ class SpotROS(Node):
             except Exception as e:
                 return abort(f"Execption thrown while getting command feedback: {e}")
             try:
-                if trajectory_feedback.status == WalkTo.Feedback.STATUS_STOPPED:
+                if trajectory_feedback.body_movement_status == WalkTo.Feedback.BODY_STATUS_SETTLED:
                     self.get_logger().info("WalkTo action completed successfully")
                     goal_handle.succeed()
                     resp.success = True
@@ -674,6 +695,8 @@ class SpotROS(Node):
         return True
 
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
+        if (self.spot_wrapper is None):
+            return SetParametersResult(successful=True)
 
         for p in params:
             if p.name == 'odom_mode':
@@ -692,6 +715,20 @@ class SpotROS(Node):
                     return SetParametersResult(
                         successful=False,
                         reason="Parameter rates." + p.name + " must be positive.")
+            elif p.name == 'obstacle_avoidance_padding':
+                self.spot_wrapper._mobility_params.obstacle_avoidance_padding = p.value
+            elif p.name == "max_vel.x":
+                self.get_logger().info(f'Setting max-x to {p.value}')
+                self.spot_wrapper._mobility_params.vel_limit.max_vel.linear.x = p.value
+                self.spot_wrapper._max_cmd_x = p.value
+            elif p.name == "max_vel.y":
+                self.get_logger().info(f'Setting max-y to {p.value}')
+                self.spot_wrapper._mobility_params.vel_limit.max_vel.linear.y = p.value
+                self.spot_wrapper._max_cmd_y = p.value
+            elif p.name == "max_vel.theta":
+                self.get_logger().info(f'Setting max-theta to {p.value}')
+                self.spot_wrapper._mobility_params.vel_limit.max_vel.angular = p.value
+                self.spot_wrapper._max_cmd_rot = p.value
         
         return SetParametersResult(successful=True)
 
@@ -714,7 +751,15 @@ class SpotROS(Node):
         self.spot_wrapper = SpotBodyWrapper(self.get_logger(), self.get_parameter('hostname').value, has_eap_2, has_cam_payload)
 
         # Apply mobility parameters
-        self.spot_wrapper.set_mobility_params(obstacle_avoidance_padding=self.get_parameter('obstacle_avoidance_padding').value)
+        self.spot_wrapper.set_mobility_params(
+            obstacle_avoidance_padding=self.get_parameter('obstacle_avoidance_padding').value,
+            speed_limit=geometry_pb2.SE2Velocity(
+                linear=geometry_pb2.Vec2(
+                    x = self.get_parameter('max_vel.x').value,
+                    y = self.get_parameter('max_vel.y').value),
+                angular=self.get_parameter('max_vel.theta').value
+            )    
+        )
 
         # Dictionary of all param values in the 'rates' namespace
         status_rates_dict = {name: value.value for name, value in self.get_parameters_by_prefix('rates.status').items() }

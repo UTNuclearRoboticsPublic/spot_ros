@@ -52,6 +52,11 @@ from google.protobuf.duration_pb2 import Duration as PB2Duration
 from .spot_lease_manager import SpotLeaseManager
 from .type_hint_helpers import *
 
+# Manual cmd_vel velocity limits
+MAX_CMD_X = 1.0
+MAX_CMD_Y = 1.0
+MAX_CMD_ROT = 1.0
+
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
     def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
@@ -83,6 +88,10 @@ class SpotBodyWrapper():
         self._last_trajectory_command = None
         self._last_trajectory_command_precise = None
         self._last_velocity_command_time = None
+
+        self._max_cmd_x = MAX_CMD_X
+        self._max_cmd_y = MAX_CMD_Y
+        self._max_cmd_rot = MAX_CMD_ROT
 
         # Alex or Daniel will kow how to make this better
         self.bosdyn_map_folder_name = "doghouse_office"
@@ -335,13 +344,34 @@ class SpotBodyWrapper():
             return False, Text(e)
         return True, 'Success'
     
-    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_duration: float) -> Tuple[bool, Text]:
-        navigate_command = RobotCommandBuilder.synchro_se2_trajectory_command(
+    def walk_to(self, target_pose_in_odom: SE2PoseProto, max_vel: SE2VelProto, max_duration: float) -> Tuple[bool, Text]:
+        walk_params = spot_command_pb2.MobilityParams()
+        walk_params.CopyFrom(self._mobility_params)
+
+        # Only apply the speed limit if it is non-zero in at least one axis
+        if (max_vel.linear.x != 0 or max_vel.linear.y != 0 or max_vel.angular != 0):
+            walk_params.vel_limit.CopyFrom(
+                geometry_pb2.SE2VelocityLimit(
+                    max_vel=max_vel,
+                    min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
+                )
+            )
+        # Otherwise, we apply the negative of the configured max-vel as the min-vel
+        # NOTE: We never configure min vel directly in the main mobility params because it interfers with teleop
+        else:
+            max_vel = walk_params.vel_limit.max_vel
+            walk_params.vel_limit.min_vel.CopyFrom(
+                geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
+            )
+            
+        
+        walk_command = RobotCommandBuilder.synchro_se2_trajectory_command(
             goal_se2=target_pose_in_odom,
-            frame_name=ODOM_FRAME_NAME
+            frame_name=ODOM_FRAME_NAME,
+            params=walk_params
         )
 
-        success, message, command_id = self._lease_manager.robot_command(navigate_command, end_time_secs=time.time() + max_duration)
+        success, message, command_id = self._lease_manager.robot_command(walk_command, end_time_secs=time.time() + max_duration)
         return success, message, command_id
 
     def get_docking_state(self, **kwargs) -> DockStateProto:
@@ -355,7 +385,8 @@ class SpotBodyWrapper():
                             locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
                             stair_hint: bool = False,
                             external_force_params: BodyExternalParamsProto = None,
-                            obstacle_avoidance_padding: float = 0.10) -> None:
+                            obstacle_avoidance_padding: float = None,
+                            speed_limit: SE2VelProto = None) -> None:
         """Define body, locomotion, and stair parameters.
 
         Args:
@@ -363,9 +394,19 @@ class SpotBodyWrapper():
             footprint_R_body: (EulerZXY) - The orientation of the body frame with respect to the footprint frame (gravity aligned framed with yaw computed from the stance feet)
             locomotion_hint: Locomotion hint
             stair_hint: Boolean to define stair motion
+            obstacle_avoidance_padding: The distance that the robot will automatically keep between itself and its environment
+            speed_limit: The maximum (and mirrored minimum) speed that the robot is allowed to go
         """
         self._mobility_params = RobotCommandBuilder.mobility_params(body_height_offset, footprint_R_body, locomotion_hint, stair_hint, external_force_params)
-        self._mobility_params.obstacle_params.obstacle_avoidance_padding = obstacle_avoidance_padding
+        if obstacle_avoidance_padding is not None:
+            self._mobility_params.obstacle_params.obstacle_avoidance_padding = obstacle_avoidance_padding
+        if speed_limit is not None:
+            # Set speed limit for autonomous motions
+            self._mobility_params.vel_limit.max_vel.CopyFrom(speed_limit)
+            # Set speed limit for manual motions
+            self._max_cmd_x = speed_limit.linear.x
+            self._max_cmd_y = speed_limit.linear.y
+            self._max_cmd_rot = speed_limit.angular
 
     def get_mobility_params(self) -> MobilityParamsProto:
         """Get mobility params
@@ -381,7 +422,17 @@ class SpotBodyWrapper():
             v_rot: Angular velocity around the Z axis in radians per second
             cmd_duration: (optional) Time-to-live for the command in seconds.  Default is 100ms (assuming 10Hz command rate).
         """
-        # The robot will ignore commands too low, so we enforce a floor
+        # Prevent the robot from moving faster than the configured speed limit
+        speed_ratio = 1.0
+        if abs(v_x) > abs(self._max_cmd_x): speed_ratio = min(speed_ratio, abs(self._max_cmd_x/v_x))
+        if abs(v_y) > abs(self._max_cmd_y): speed_ratio = min(speed_ratio, abs(self._max_cmd_x/v_y))
+        if abs(v_rot) > abs(self._max_cmd_rot): speed_ratio = min(speed_ratio, abs(self._max_cmd_rot/v_rot))
+
+        v_x *= speed_ratio 
+        v_y *= speed_ratio 
+        v_rot *= speed_ratio 
+
+        # The robot will ignore commands too low, so we also enforce a floor
         MIN_SPEED = 0.15 # m/s
         commanded_speed = math.sqrt(v_x**2 + v_y**2)
         if (commanded_speed < MIN_SPEED) and (commanded_speed > MIN_SPEED/5):

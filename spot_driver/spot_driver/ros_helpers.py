@@ -59,7 +59,7 @@ from google.protobuf import timestamp_pb2
 from bosdyn.api import geometry_pb2, payload_pb2
 from bosdyn.api import image_pb2, robot_state_pb2, service_fault_pb2, point_cloud_pb2
 from bosdyn.api.docking import docking_pb2
-from bosdyn.client.math_helpers import SE3Pose, Quat, Vec3
+from bosdyn.client.math_helpers import SE3Pose, SE2Pose, Quat, Vec3, SE2Velocity
 from bosdyn.client.frame_helpers import get_odom_tform_body, get_vision_tform_body, validate_frame_tree_snapshot, get_a_tform_b, BODY_FRAME_NAME
 
 """Dictionaries for mapping BD joint names to more friendly names"""
@@ -167,6 +167,29 @@ def PoseToMsg(pose: SE3Pose):
             x = pose.rot.x,
             y = pose.rot.y,
             z = pose.rot.z
+        )
+    )
+
+def MsgToSE2Pose(msg: Pose) -> SE2Pose:
+    return SE2Pose.flatten(MsgToPose(msg))
+
+def SE2PoseToMsg(pose: SE2Pose) -> Pose:
+    return PoseToMsg(SE3Pose.from_se2(pose))
+
+def MsgToSE2Vel(msg: Twist) -> SE2Velocity:
+    return SE2Velocity(x = msg.linear.x, y = msg.linear.y, angular=msg.angular.z)
+
+def SE2VelToMsg(vel: SE2Velocity) -> Twist:
+    return Twist(
+        linear=Vector3(
+            x = vel.linear_velocity_x,
+            y = vel.linear_velocity_y,
+            z = 0
+        ),
+        angular=Vector3(
+            x = 0,
+            y = 0,
+            z = vel.angular_velocity
         )
     )
 
@@ -613,7 +636,7 @@ def GetTFFromState(kinematic_state: KinematicStateProto,
 
     return tf_msg
 
-def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model: str) -> JointState:
+def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model: str, data_capture_mode: bool) -> JointState:
     """
     Computes virtual joint states based on the selected kinematic model.
     Returns a JointState message with corresponding virtual joint names and states.
@@ -623,6 +646,7 @@ def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model:
     tform_odom_to_gpe  = SE3Pose.from_proto(transform_map.get("gpe").parent_tform_child)  
     tform_flat_body_to_body = SE3Pose.from_proto(transform_map.get("flat_body").parent_tform_child).inverse()
     tform_gpe_to_body  = (tform_body_to_odom * tform_odom_to_gpe).inverse()
+    vision_tform_body = get_vision_tform_body(kinematic_state.transforms_snapshot)
 
     joint_state = JointState()
 
@@ -654,11 +678,36 @@ def GetVirtualJointValues(kinematic_state: KinematicStateProto, kinematic_model:
         joint_state.effort.append(0)
 
     elif kinematic_model == "mobile_manipulation":
-        for joint_name in ["body_x", "body_y", "body_or"]:
+        # Virtual base joints for MM control
+        body_manipulation_joints = ["body_x", "body_y", "body_or"]
+        body_joint_positions = [0.0, 0.0, 0.0]
+    
+        for i, joint_name in enumerate(body_manipulation_joints):
             joint_state.name.append(joint_name)
-            joint_state.position.append(0)
-            joint_state.velocity.append(0)
-            joint_state.effort.append(0)
+            joint_state.position.append(body_joint_positions[i])
+            joint_state.velocity.append(0.0)
+            joint_state.effort.append(0.0)
+    
+        # If in data capture mode, also add the virtual body_manipulation_joints in vision frame
+        if data_capture_mode:
+            body_manipulation_joints_vision = [joint + "_vision" for joint in body_manipulation_joints]
+    
+            # Transform body manipulation joint positions to vision frame
+            bx, by, _ = vision_tform_body.transform_point(
+                body_joint_positions[0], # x
+                body_joint_positions[1], # y
+                0.0
+            )
+            
+            body_or_vision = vision_tform_body.rot.to_yaw()
+    
+            body_joint_positions_vision = [bx, by, body_or_vision]
+    
+            for i, joint_name in enumerate(body_manipulation_joints_vision):
+                joint_state.name.append(joint_name)
+                joint_state.position.append(body_joint_positions_vision[i])
+                joint_state.velocity.append(0.0)
+                joint_state.effort.append(0.0)
 
     elif kinematic_model == "none":
         pass
