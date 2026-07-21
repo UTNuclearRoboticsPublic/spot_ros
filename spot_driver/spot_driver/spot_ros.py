@@ -651,25 +651,6 @@ class SpotROS(Node):
 
     def navigate_to_callback(self, msg) -> None:
         """Callback for the spot_ros/navigate_to action server. Navigate to a waypoint in a BD map. """
-        
-        # # create thread to periodically publish feedback
-        # feedback_thread = threading.Thread(target = self.navigate_to_feedback, args = ())
-        # self.run_navigate_to = True
-        # feedback_thread.start()
-        # # run navigate_to
-        # resp = self.spot_wrapper.navigate_to(upload_path = msg.upload_path,
-        #                                      navigate_to = msg.navigate_to,
-        #                                      initial_localization_fiducial = msg.initial_localization_fiducial,
-        #                                      initial_localization_waypoint = msg.initial_localization_waypoint)
-        
-        # self.run_navigate_to = False
-        # feedback_thread.join()
-
-        # # check status
-        # if resp[0]:
-        #     self.navigate_as.set_succeeded(NavigateTo.Result(resp[0], resp[1]))
-        # else:
-        #     self.navigate_as.set_aborted(NavigateTo.Result(resp[0], resp[1]))
 
         # Check localization state. If not localized, attempt to localize with nearest fiducial
         # Could also localize to a nearby waypoint in the uploaded graph using _set_initial_localization_waypoint()
@@ -885,7 +866,6 @@ class SpotROS(Node):
             NavigateTo,
             '~/navigate_to',
             self.navigate_to_callback,
-            # maybe change callback group
             callback_group=srv_group
         )
         
