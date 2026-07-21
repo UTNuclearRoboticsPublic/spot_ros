@@ -20,7 +20,6 @@ from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
 from bosdyn.client.point_cloud import PointCloudClient, build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
-from bosdyn.client.robot_state import RobotStateClient
 from bosdyn.client.graph_nav import GraphNavClient
 from graph_nav_interface import GraphNavInterface
 
@@ -123,12 +122,11 @@ class SpotBodyWrapper():
         
         try:
             self._graph_nav_client = self._lease_manager.robot.ensure_client(GraphNavClient.default_service_name)
-            self._robot_state_client = self._lease_manager.robot.ensure_client(RobotStateClient.default_service_name)
             self._graph_nav_interface = GraphNavInterface(upload_path = self.bosdyn_map_filepath, SpotBodyWrapperInstance=self)
             self._graph_nav_interface._upload_graph_and_snapshots()
 
         except Exception as e:
-            self.logger.error('Unable to create graph nav client service: ' + Text(e))
+            self.logger.error('Unable to create graph nav client services: ' + Text(e))
             return False
 
         if self._has_cam_payload:

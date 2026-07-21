@@ -638,6 +638,7 @@ class SpotROS(Node):
         if not localization_state.localization.waypoint_id:
             self.spot_wrapper._graph_nav_interface._set_initial_localization_fiducial()        
 
+        # TODO move this into a body wrapper function and add navigation to generic, non-waypoint poses.  
         # Navigate to the destination waypoint.
         is_finished = False
         while not is_finished:
