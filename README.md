@@ -60,6 +60,39 @@ Some common arguments are summarized here:
 - `launch_pointcloud_service`, possible values: `True`, `False`
 - `controller_configuration`, possible values: `Dualsense5`, `Logitech`
 - `use_proprietary_meshes`, possible values: `True`, `False`
+
+## Running the Kinematic Simulation
+This package provides a convenience kinematics simulation for navigation, motion planning, teleoperation, or other similar applications. It is fairly limited in scope, however, and cannot detect or react to collisions or dynamic objects, making it unsuitable for testing pick-and-place, door opening, or other environment interaction focused tasks. 
+
+The simulation works by projecting rays from the robot's sensors to a pre-defined mesh or primitive environment to simulate sensor data. It also reacts to standard robot commands such as the `/spot_driver/cmd_vel` topic, the `/spot_manipulation_driver/stow` and `/spot_manipulation_driver/unstow` services, and the `/follow_joint_trajectory` action server, among others.
+
+To install dependencies run the following commands from your colcon workspace root directory
+
+```bash
+python3 -m pip install -U open3d "scipy>=1.8"
+rosdep install --from-paths src/spot_ros/spot_simulation -i -y
+```
+
+Also due to a bug in the Humble release of the [Generate Parameters Library](https://github.com/PickNikRobotics/generate_parameter_library), it is necessary to build from source for proper parameter generation
+
+```bash
+git clone -b humble https://github.com/PickNikRobotics/generate_parameter_library 
+```
+
+Additionally, you will want to configure your simulation environment with objects and sensors. Refer to the  sample [environment configuration file](spot_simulation/config/environment_config.yaml) for examples on configuring the environment and the [robot configuration file](spot_simulation/config/spot_config.yaml) for examples of how to modify the robot and sensors. The simulation pulls the same accessories and URDF extensions and the main description launch. To run the simulation, execute
+
+```bash
+ros2 launch spot_simulation simulation.launch.xml
+```
+
+You can then move the robot around by publishing to the `/spot_driver/cmd_vel` topic and you should see the sensor data react to the robot's position. If you are also running the arm, you can control the arm using the MoveIt interface through 
+
+```bash
+ros2 launch spot_moveit_config moveit_rviz.launch.py
+```
+
+You should then see the hand depth data react to the pose of the end effector.
+
 ## Gamepad Mapping for Dualsense5
 
 Refer to the table below for the button mappings to command the robot with a DualSense5 gamepad. The driver must be launched with the bringup launch file for these to have any effect.

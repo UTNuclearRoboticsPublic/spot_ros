@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>spot_simulation</name>
+  <version>2.0.0</version>
+  <description>Kinematic and Sensor Simulation for the Spot Quadruped</description>
+
+  <author email="alexnavtt@utexas.edu">Alex Navarro</author>
+  <maintainer email="alexnavtt@utexas.edu">Alex Navarro</maintainer>
+
+  <license>Proprietary</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>spot_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>velodyne</exec_depend>
+  <exec_depend>python-open3d-pip</exec_depend>
+  <exec_depend>spot_moveit_config</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
