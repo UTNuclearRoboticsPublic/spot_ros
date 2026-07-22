@@ -12,16 +12,16 @@ from threading import Lock
 from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
 from bosdyn.api.spot import robot_command_pb2
+from bosdyn.api.graph_nav import graph_nav_pb2, map_pb2, nav_pb2
 from bosdyn.geometry import EulerZXY
 
 from bosdyn.client.common import FutureWrapper
 from bosdyn.client.docking import DockingClient, blocking_dock_robot, blocking_undock
-from bosdyn.client.frame_helpers import ODOM_FRAME_NAME
+from bosdyn.client.frame_helpers import ODOM_FRAME_NAME, get_odom_tform_body
 from bosdyn.client.point_cloud import PointCloudClient, build_pc_request
 from bosdyn.client.spot_cam.audio import AudioClient
 from bosdyn.client.robot_command import RobotCommandBuilder
 from bosdyn.client.graph_nav import GraphNavClient
-from graph_nav_interface import GraphNavInterface
 
 from google.protobuf.timestamp_pb2 import Timestamp as PB2Timestamp
 from google.protobuf.duration_pb2 import Duration as PB2Duration
@@ -36,7 +36,7 @@ MAX_CMD_ROT = 1.0
 
 class SpotBodyWrapper():
     """Generic wrapper class to encompass release 4.0.2 API features"""
-    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False):
+    def __init__(self, logger, hostname, has_eap_2: bool = False, has_cam_payload: bool = False, bosdyn_map_folder_name = "doghouse_office"):
         self._logger = logger
         self._hostname = hostname
 
@@ -48,6 +48,17 @@ class SpotBodyWrapper():
         """ State futures """
         self._robot_state_proto = None
         self._robot_state_lock = Lock()
+
+        ''' Navigation state variables '''
+        self._current_graph = None
+        self._current_edges = dict()  
+        self._current_waypoint_snapshots = dict()  
+        self._current_edge_snapshots = dict()  
+        self._current_annotation_name_to_wp_id = dict()
+
+        # Filepath to bosdyn map
+        # Alex and Daniel make this better plz
+        self._bosdyn_map_filepath = "~/user_workspaces/dalton_ws/ros2_ws/src/spot_patrol/spot_patrol/bosdyn_maps" + "/" + bosdyn_map_folder_name
 
         """ Point cloud task """
         self._point_cloud_requests = []
@@ -69,11 +80,6 @@ class SpotBodyWrapper():
         self._max_cmd_x = MAX_CMD_X
         self._max_cmd_y = MAX_CMD_Y
         self._max_cmd_rot = MAX_CMD_ROT
-
-        # Alex or Daniel will kow how to make this better
-        self.bosdyn_map_folder_name = "doghouse_office"
-        # self.bosdyn_map_folder_name = "doghouse_building"
-        self.bosdyn_map_filepath = "~/user_workspaces/dalton_ws/ros2_ws/src/spot_patrol/spot_patrol/bosdyn_maps" + "/" + self.bosdyn_map_folder_name
 
     def connect(self, lease_manager: SpotLeaseManager) -> bool:
         """
@@ -122,8 +128,7 @@ class SpotBodyWrapper():
         
         try:
             self._graph_nav_client = self._lease_manager.robot.ensure_client(GraphNavClient.default_service_name)
-            self._graph_nav_interface = GraphNavInterface(upload_path = self.bosdyn_map_filepath, SpotBodyWrapperInstance=self)
-            self._graph_nav_interface._upload_graph_and_snapshots()
+            self._upload_bosdyn_map()
 
         except Exception as e:
             self.logger.error('Unable to create graph nav client services: ' + Text(e))
@@ -690,3 +695,78 @@ class SpotBodyWrapper():
 
         except Exception as e:
             return False, f"Failed to execute gesture sequence: {e}"
+
+    def _localize_to_fiducial(self, *args):
+            '''Localize to a fiducial in view of the robot.'''
+            robot_state = self._lease_manager._robot_state_client.get_robot_state()   
+            current_odom_tform_body = get_odom_tform_body(
+                robot_state.kinematic_state.transforms_snapshot).to_proto()
+
+            localization = nav_pb2.Localization()
+            self._graph_nav_client.set_localization(initial_guess_localization=localization,
+                                                    ko_tform_body=current_odom_tform_body)
+
+    def _check_navigation_success(self, command_id=None):
+            ''' Check feedback from navigation command. Return true if the command is complete, regardless of success. ''' 
+            if command_id == None:
+                return False
+            status = self._graph_nav_client.navigation_feedback(command_id)
+            if status.status == graph_nav_pb2.NavigationFeedbackResponse.STATUS_REACHED_GOAL:
+                return True
+            elif status.status == None:
+                # Navigation command not finished.
+                return False
+            else:
+                 print(f'Navigation command failed with status: {status.status}')
+                 return True
+
+    def _upload_bosdyn_map(self):
+            '''Upload the BD map to the robot.'''
+            print(f'Uploading BD map from {self._bosdyn_map_filepath}.')
+            with open(self._bosdyn_map_filepath + '/graph', 'rb') as graph_file:
+                data = graph_file.read()
+                self._current_graph = map_pb2.Graph()
+                self._current_graph.ParseFromString(data)
+                print(
+                    f'Total waypoints in map: {len(self._current_graph.waypoints)}. Total edges in map: {len(self._current_graph.edges)} edges'
+                )
+
+            # Parse waypoints from map directory
+            for waypoint in self._current_graph.waypoints:
+                with open(f'{self._bosdyn_map_filepath}/waypoint_snapshots/{waypoint.snapshot_id}',
+                          'rb') as snapshot_file:
+                    waypoint_snapshot = map_pb2.WaypointSnapshot()
+                    waypoint_snapshot.ParseFromString(snapshot_file.read())
+                    self._current_waypoint_snapshots[waypoint_snapshot.id] = waypoint_snapshot
+
+            # Parse edges from map directory
+            for edge in self._current_graph.edges:
+                if len(edge.snapshot_id) == 0:
+                    continue
+                with open(f'{self._bosdyn_map_filepath}/edge_snapshots/{edge.snapshot_id}',
+                          'rb') as snapshot_file:
+                    edge_snapshot = map_pb2.EdgeSnapshot()
+                    edge_snapshot.ParseFromString(snapshot_file.read())
+                    self._current_edge_snapshots[edge_snapshot.id] = edge_snapshot
+
+            # Upload the graph to the robot.
+            waypoint_and_edge_snapshot_ids = self._graph_nav_client.upload_graph(graph=self._current_graph)
+
+            # Upload the snapshots to the robot.
+            for snapshot_id in waypoint_and_edge_snapshot_ids.waypoint_snapshot_ids:
+                waypoint_snapshot = self._current_waypoint_snapshots[snapshot_id]
+                self._graph_nav_client.upload_waypoint_snapshot(waypoint_snapshot)
+                print(f'Uploaded {waypoint_snapshot.id}')
+            for snapshot_id in waypoint_and_edge_snapshot_ids.edge_snapshot_ids:
+                edge_snapshot = self._current_edge_snapshots[snapshot_id]
+                self._graph_nav_client.upload_edge_snapshot(edge_snapshot)
+                print(f'Uploaded {edge_snapshot.id}')
+    
+            # Check localization state.
+            localization_state = self._graph_nav_client.get_localization_state()
+            if not localization_state.localization.waypoint_id:
+                # The robot is not localized to the newly uploaded graph.
+                print('\n')
+                print(
+                    'The robot is currently not localized to the map; localize the robot using commands ' \
+                    '_localize_to_fiducial before attempting a navigation command.')

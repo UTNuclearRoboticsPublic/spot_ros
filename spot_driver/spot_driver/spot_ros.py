@@ -636,7 +636,7 @@ class SpotROS(Node):
         # Could also localize to a nearby waypoint in the uploaded graph using _set_initial_localization_waypoint()
         localization_state = self.spot_wrapper._graph_nav_client.get_localization_state()
         if not localization_state.localization.waypoint_id:
-            self.spot_wrapper._graph_nav_interface._set_initial_localization_fiducial()        
+            self.spot_wrapper._localize_to_fiducial()        
 
         # TODO move this into a body wrapper function and add navigation to generic, non-waypoint poses.  
         # Navigate to the destination waypoint.
@@ -644,7 +644,6 @@ class SpotROS(Node):
         while not is_finished:
             # Issue the navigation command about twice a second such that it is easy to terminate the
             # navigation command (with estop or killing the program).
-            # idk if looping is required 
             try:
                 nav_to_cmd_id = self.spot_wrapper._graph_nav_client.navigate_to_full(msg.waypoint_id, cmd_duration = 1, route_params=None,
                                 travel_params=None, leases=None, timesync_endpoint=None, command_id=None,
@@ -653,7 +652,7 @@ class SpotROS(Node):
                     print(f'Error while navigating {e}')
                     return False
             pyTime.sleep(0.5)
-            is_finished = self.spot_wrapper._graph_nav_interface._check_success(nav_to_cmd_id)
+            is_finished = self.spot_wrapper._check_navigation_success(nav_to_cmd_id)
         return True
 
     def parameters_callback(self, params, status_rate_params, sensor_rate_params) -> SetParametersResult:
