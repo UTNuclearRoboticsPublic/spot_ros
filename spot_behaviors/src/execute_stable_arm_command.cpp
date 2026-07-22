@@ -50,7 +50,7 @@ BT::NodeStatus ExecuteStableArmCommand::onStart() {
 
     spot_msgs::action::StableArmCommand::Goal goal;
     goal.joint_trajectory = *joint_trajectory;
-    goal.pose_waypoints = *end_effector_trajectory;
+    goal.end_effector_waypoints = *end_effector_trajectory;
 
     RCLCPP_INFO(get_logger(), "Requesting execution of known stable arm command");
     rclcpp_action::Client<spot_msgs::action::StableArmCommand>::SendGoalOptions opts;

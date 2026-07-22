@@ -12,7 +12,7 @@ trajectory_msgs/JointTrajectory joint_trajectory
 
 # The end-effector waypoints along the trajectory.
 # Number of waypoints should match joint_trajectory
-geometry_msgs/PoseArray pose_waypoints
+geometry_msgs/PoseArray end_effector_waypoints
 
 ---
 
