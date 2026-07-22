@@ -40,7 +40,7 @@ namespace spot_behaviors{
  * === ExecuteStableArmCommand ===
 
  * This behavior bypasses the motion planning step for arm motions using the
- * stable arm motion server by assuming that you already have a traejctory and
+ * stable arm motion server by assuming that you already have a trajectory and
  * simply wish to execute it. This can happen when motion planning is performed 
  * by a dedicated node ahead of time, and when the state of the robot during
  * planning is not the current state of the robot. In that case, simply calling
@@ -81,7 +81,7 @@ protected:
     // Action client
     rclcpp_action::Client<spot_msgs::action::StableArmCommand>::SharedPtr motion_action_client_;
 
-    // Action client future handle - only used while waiting for a request to be accepted or jejected
+    // Action client future handle - only used while waiting for a request to be accepted or rejected
     std::optional<std::shared_future<rclcpp_action::ClientGoalHandle<spot_msgs::action::StableArmCommand>::SharedPtr>> motion_response_future_;
     rclcpp::Time request_timestamp_{};
     bool hasOngoingMotionRequest() const {return motion_response_future_.has_value();};
