@@ -26,6 +26,7 @@
 #include "spot_behaviors/get_images.hpp"
 #include "spot_behaviors/get_gripper_holding_state.hpp"
 #include "spot_behaviors/set_simulated_pose.hpp"
+#include "spot_behaviors/navigate_to.hpp"
 
 namespace spot_behaviors {
 
@@ -49,6 +50,7 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
     REGSITER_SPOT_BEHAVIOR(GetSpotIK);
     REGSITER_SPOT_BEHAVIOR(TogglePayload);
+    REGSITER_SPOT_BEHAVIOR(NavigateTo);
     factory.registerNodeType<MoveHandToPose>("MoveSpotHandToPose", tf_buffer);
 
     // A manifest of subtrees and their requirements
