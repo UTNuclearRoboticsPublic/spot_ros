@@ -12,7 +12,7 @@ import math
 import rclpy.duration
 import rclpy.utilities
 from rclpy.action import ActionServer
-from rclpy.action.server import ServerGoalHandle, GoalResponse
+from rclpy.action.server import ServerGoalHandle, GoalResponse, CancelResponse
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from rclpy.time import Time
@@ -519,6 +519,11 @@ class SpotROS(Node):
             self.get_logger().info('Received new WalkTo goal')
             goal_handle.execute()
 
+    def handle_walk_to_canceled(self, cancel_request) -> CancelResponse:
+        self.get_logger().info('Canceling WalkTo goal')
+        self.spot_wrapper.stop()
+        return CancelResponse.ACCEPT
+
     def handle_walk_to(self, goal_handle: ServerGoalHandle) -> WalkTo.Result:
         req: WalkTo.Goal = goal_handle.request
         resp = WalkTo.Result()
@@ -594,6 +599,14 @@ class SpotROS(Node):
 
         update_rate = self.create_rate(10.0)
         while rclpy.ok():
+            # Check to see if the motion has been canceled
+            if goal_handle.is_cancel_requested:
+                resp.success = False
+                resp.message = "Goal canceled"
+                self.walk_to_active = False
+                goal_handle.canceled()
+                return resp
+            
             # Check to see if we've received a new goal
             if self.updated_walk_to_goal is not None:
                 resp.success = False
@@ -883,6 +896,7 @@ class SpotROS(Node):
             execute_callback=self.handle_walk_to,
             goal_callback=self.handle_new_goal,
             handle_accepted_callback=self.handle_walk_to_accepted,
+            cancel_callback=self.handle_walk_to_canceled,
             callback_group=srv_group
         )
 
