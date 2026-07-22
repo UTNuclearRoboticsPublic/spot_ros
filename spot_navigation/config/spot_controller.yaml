@@ -27,4 +27,4 @@ spot_nav/controller_server:
         x: 1.0
         y: 0.5
         theta: 1.5
-      distance_lookahead: 4.0
+      dist_lookahead: 4.0

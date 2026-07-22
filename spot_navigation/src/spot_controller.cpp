@@ -42,7 +42,7 @@ void SpotController::configure(
             {plugin_name_ + ".max_vel.x", &max_vx_},
             {plugin_name_ + ".max_vel.y", &max_vy_},
             {plugin_name_ + ".max_vel.theta", &max_vtheta_},
-            {plugin_name_ + ".distance_lookahead", &lookahead_dist_}
+            {plugin_name_ + ".lookahead_dist", &lookahead_dist_}
         }
     );
 
