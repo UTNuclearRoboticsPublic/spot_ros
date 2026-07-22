@@ -119,13 +119,13 @@ geometry_msgs::msg::TwistStamped SpotController::computeVelocityCommands(
     std::optional<geometry_msgs::msg::PoseStamped> target_pose;
     
     // Find the point on the path that is the required distance away from either the robot or the last executed waypoint, whichever is lower
-    for (std::size_t pose_idx = last_pose_index_-1; pose_idx < global_path_.poses.size(); pose_idx++) {
+    for (std::size_t pose_idx = last_pose_index_; pose_idx < global_path_.poses.size(); pose_idx++) {
         path_length += pose_dist(global_path_.poses[pose_idx], global_path_.poses[pose_idx-1]);
         const double robot_dist = pose_dist(global_path_.poses[pose_idx], robot_pose_in_world);
         if (robot_dist < lookahead_dist_) {
             inside_region = true;
-    // We don't control the robot via cmd_vel
             target_pose = global_path_.poses[pose_idx];
+            last_pose_index_ = pose_idx;
             if (path_length >= lookahead_dist_) {
                 // We exceeded our max path length
                 break;
@@ -146,6 +146,7 @@ geometry_msgs::msg::TwistStamped SpotController::computeVelocityCommands(
         return null_twist;
     }
 
+    // We don't control the robot via cmd_vel but instead with target poses
     auto walk_to_goal = std::make_shared<spot_msgs::action::WalkTo::Goal>();
     walk_to_goal->target_pose = target_pose.value();
     walk_to_goal->maximum_movement_time = 2*(1.0/controller_frequency_);
