@@ -43,6 +43,7 @@ private:
 
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SharedPtr walk_to_client_;
     rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr walk_to_goal_handle_;
+    rclcpp_action::Client<spot_msgs::action::WalkTo>::SendGoalOptions goal_options_;
     std::size_t last_pose_index_;
 
     // === Parameters === //

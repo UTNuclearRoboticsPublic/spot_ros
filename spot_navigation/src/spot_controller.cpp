@@ -60,6 +60,10 @@ void SpotController::configure(
             return result;
         }
     );
+
+    goal_options_.goal_response_callback = [this](const rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr& goal_handle) {
+        walk_to_goal_handle_ = goal_handle;
+    };
 }
 
 void SpotController::cleanup() {
@@ -149,12 +153,7 @@ geometry_msgs::msg::TwistStamped SpotController::computeVelocityCommands(
     walk_to_goal->max_vel.linear.y = max_vy_;
     walk_to_goal->max_vel.angular.z = max_vtheta_;
 
-    rclcpp_action::Client<spot_msgs::action::WalkTo>::SendGoalOptions opts;
-    opts.goal_response_callback = [this](const rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr& goal_handle) {
-        walk_to_goal_handle_ = goal_handle;
-    };
-    walk_to_client_->async_send_goal(*walk_to_goal, opts);
-
+    walk_to_client_->async_send_goal(*walk_to_goal, goal_options_);
     return null_twist;
 }
 
