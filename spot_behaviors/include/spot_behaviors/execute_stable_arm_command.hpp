@@ -53,8 +53,9 @@ class ExecuteStableArmCommand : public BT::StatefulActionNode, public NodeBehavi
 public:
     ExecuteStableArmCommand(const std::string& name, const BT::NodeConfiguration& config, tf2_ros::Buffer::SharedPtr tf_buffer);
 
-    /** We accept x input ports - TODO 
-     *  - target_pose: geometry_msgs::msg::PoseStamped 
+    /** We accept 2 input ports 
+     *  - joint_trajectory [trajectory_msgs::msg::JointTrajectory::SharedPtr] - The joint trajectory for the arm motion
+     *  - end_effector_trajectory [geometry_msgs::msg::PoseArray::SharedPtr] - The corresponding end effector poses for the joint trajectory
      */
     static BT::PortsList providedPorts();
 
