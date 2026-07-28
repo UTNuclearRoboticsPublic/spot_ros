@@ -1,52 +1,44 @@
 #include "spot_navigation/spot_controller.hpp"
 
 #include <map>
-#include <pluginlib/class_list_macros.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace spot_navigation {
 
-void SpotController::configure(
-    const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
-    std::string name,
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
+SpotController::SpotController(
+    const std::string& xml_tag_name,
+    const std::string& action_name,
+    const BT::NodeConfiguration& bt_config
+) : 
+StatefulActionNode(xml_tag_name, bt_config)
 {
-    node_ = parent;
-    plugin_name_ = name;
-    tf_buffer_ = tf_buffer;
-    costmap_ = costmap_ros;
+    node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
+    tf_buffer_ = config().blackboard->get<tf2_ros::Buffer::SharedPtr>("tf_buffer");
 
-    // Create the spot driver action client
-    auto node = node_.lock();
-    walk_to_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(node, "/spot_driver/walk_to");
-    if (!walk_to_client_->wait_for_action_server(std::chrono::seconds(5))) {
-        RCLCPP_ERROR(get_logger(), "Unable to contact WalkTo server");
-        throw std::runtime_error("Unable to contact WalkTo server");
-    } else {
-        RCLCPP_INFO(get_logger(), "Connected to WalkTo server");
-    }
-    
+    callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
+    executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
+
+    walk_to_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(node_, "/spot_driver/walk_to");
+    target_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>("/spot_nav/spot_controller/target_pose", rclcpp::QoS{1}.transient_local());
+
     // Declare parameters and parameter update function
-    max_vx_     = node->declare_parameter<double>(plugin_name_ + ".max_vel.x");
-    max_vy_     = node->declare_parameter<double>(plugin_name_ + ".max_vel.y");
-    max_vtheta_ = node->declare_parameter<double>(plugin_name_ + ".max_vel.theta");
-    lookahead_dist_ = node->declare_parameter<double>(plugin_name_ + ".lookahead_dist");
-
-    if (!node->get_parameter<double>("controller_frequency", controller_frequency_)) {
-        RCLCPP_ERROR(get_logger(), "Unable to determine controller frequency");
-        throw std::runtime_error("Unable to determine controller frequency");
-    }
+    walk_to_goal_.max_vel.linear.x  = node_->get_parameter("spot_controller.max_vel.x").as_double();
+    walk_to_goal_.max_vel.linear.y  = node_->get_parameter("spot_controller.max_vel.y").as_double();
+    walk_to_goal_.max_vel.angular.z = node_->get_parameter("spot_controller.max_vel.theta").as_double();
+    lookahead_dist_ = node_->get_parameter("spot_controller.lookahead_dist").as_double();
+    controller_frequency_ = node_->get_parameter("spot_controller.frequency").as_double();
 
     params_map_ = std::map<std::string, double*>(
         {
-            {plugin_name_ + ".max_vel.x", &max_vx_},
-            {plugin_name_ + ".max_vel.y", &max_vy_},
-            {plugin_name_ + ".max_vel.theta", &max_vtheta_},
-            {plugin_name_ + ".lookahead_dist", &lookahead_dist_}
+            {"spot_controller.max_vel.x"     , &walk_to_goal_.max_vel.linear.x},
+            {"spot_controller.max_vel.y"     , &walk_to_goal_.max_vel.linear.y},
+            {"spot_controller.max_vel.theta" , &walk_to_goal_.max_vel.angular.z},
+            {"spot_controller.lookahead_dist", &lookahead_dist_},
+            {"spot_controller.frequency"     , &controller_frequency_}
         }
     );
 
-    params_callback_handle_ = node->add_on_set_parameters_callback(
+    params_callback_handle_ = node_->add_on_set_parameters_callback(
         [this](const std::vector<rclcpp::Parameter>& params) -> rcl_interfaces::msg::SetParametersResult {
             for (const auto& param : params) {
                 if (param.get_parameter_value().get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) continue;
@@ -63,53 +55,134 @@ void SpotController::configure(
 
     goal_options_.goal_response_callback = [this](const rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr& goal_handle) {
         walk_to_goal_handle_ = goal_handle;
+        movement_start_time_ = goal_handle->get_goal_stamp();
+    };
+
+    goal_options_.feedback_callback = [this](
+        rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::ConstSharedPtr goal_handle,
+        spot_msgs::action::WalkTo::Feedback::ConstSharedPtr feedback) 
+    {
+        if (walk_to_goal_handle_ && (goal_handle->get_goal_id() == walk_to_goal_handle_->get_goal_id())) {
+            walk_to_feedback_ = feedback;   
+        }
+    };
+
+    goal_options_.result_callback = [this](const rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::WrappedResult& result) {
+        // Filter out old goals
+        if (walk_to_goal_handle_ && result.goal_id == walk_to_goal_handle_->get_goal_id()) {
+            walk_to_success_ = result.result->success;
+        }
     };
 }
 
-void SpotController::cleanup() {
-    if (walk_to_goal_handle_) {
+BT::PortsList SpotController::providedPorts() {
+    return {
+        BT::InputPort<nav_msgs::msg::Path>("path", "The global path to follow")
+    };
+};
+
+BT::NodeStatus SpotController::onStart() {
+    // Get the goal from the blackboard
+    try{
+        getUpdatedPath();
+    } catch (BT::RuntimeError& e) {
+        RCLCPP_ERROR(get_logger(), "Failed to retrieve global plan from blackboard: %s", e.what());
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // Determine the goal to send the robot to based on the path
+    if (auto goal_pose = calculateNextGoal(); goal_pose) {
+        sendNewGoal(goal_pose.value());
+    } else {
+        RCLCPP_ERROR(get_logger(), "Unable to determine determine valid goal pose");
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // Send the goal
+    walk_to_success_.reset();
+    walk_to_client_->async_send_goal(walk_to_goal_, goal_options_);
+    return BT::NodeStatus::RUNNING;
+}
+
+BT::NodeStatus SpotController::onRunning() {
+    executor_.spin_some();
+
+    if (!walk_to_goal_handle_) {
+        const double elapsed_time = (node_->now() - request_start_time_).seconds();
+        if (elapsed_time > 5.0) {
+            RCLCPP_ERROR(get_logger(), "Did not receive a response from the Spot driver within 5 seconds. Aborting");
+            onHalted();
+            return BT::NodeStatus::FAILURE;
+        } else {
+            return BT::NodeStatus::RUNNING;
+        }
+    }
+
+    // If we recevied a new plan, the requisite time has passed, or we've finished this segment, then start a new motion
+    const double elapsed_time = (node_->now() - movement_start_time_).seconds();
+    const bool enough_time_has_passed = elapsed_time > 1.0/controller_frequency_;
+    const bool needs_to_continue = 
+        !isTerminalGoal() 
+        && walk_to_feedback_
+        && (
+            walk_to_feedback_->body_status_enum == walk_to_feedback_->STATUS_STOPPING || 
+            walk_to_feedback_->body_status_enum == walk_to_feedback_->STATUS_STOPPED
+        );
+    if (getUpdatedPath() || enough_time_has_passed || needs_to_continue) {
+        auto target_pose = calculateNextGoal();
+        
+        // If the target pose is not set here, that means that the robot is far away
+        // from where we expect it to be if it's making progress. We halt the robot
+        if (!target_pose && walk_to_goal_handle_) {
+            onHalted();
+            return BT::NodeStatus::FAILURE;
+        }
+
+        sendNewGoal(target_pose.value());
+    }
+
+    // Check to see if we're done
+    if (isTerminalGoal() && walk_to_success_.has_value()) {
+        if (walk_to_success_.value()) {
+            walk_to_goal_handle_.reset();
+            onHalted();
+            return BT::NodeStatus::SUCCESS;
+        } else if (!getUpdatedPath()) {
+            onHalted();
+            return BT::NodeStatus::FAILURE;
+        } else {
+            return BT::NodeStatus::RUNNING;
+        }
+    }
+
+    return BT::NodeStatus::RUNNING;
+}
+
+void SpotController::onHalted() {
+    if (walk_to_goal_handle_ && !walk_to_success_) {
         walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
-        walk_to_goal_handle_.reset();
     }
-    walk_to_client_.reset();
+    walk_to_goal_handle_.reset();
+    walk_to_success_.reset();
+    last_pose_index_ = 1;
+    global_path_ = nav_msgs::msg::Path{};
 }
 
-void SpotController::activate() {
-    // Nothing to activate
-}
-
-void SpotController::deactivate() {
-    // Nothing to deactivate
-}
-
-geometry_msgs::msg::TwistStamped SpotController::computeVelocityCommands(
-    const geometry_msgs::msg::PoseStamped& pose,
-    const geometry_msgs::msg::Twist& velocity,
-    nav2_core::GoalChecker * goal_checker)
-{
-    // Since we don't control the robot via cmd_vel, we always return an empty twist message
-    geometry_msgs::msg::TwistStamped null_twist;
-    null_twist.header = pose.header;
-
-    if (std::string err; !tf_buffer_->canTransform(global_path_.header.frame_id, pose.header.frame_id, pose.header.stamp, rclcpp::Duration::from_seconds(0.3), &err)) {
-        RCLCPP_WARN(get_logger(), "Unable to transform robot pose to global frame: %s", err.c_str());
-        return null_twist;
-    }
-
+std::optional<geometry_msgs::msg::PoseStamped> SpotController::calculateNextGoal() {
     // Determine robot location in same frame as the path
+    geometry_msgs::msg::PoseStamped robot_pose;
+    robot_pose.header.frame_id = "base_footprint";
+    if (std::string err; !tf_buffer_->canTransform(global_path_.header.frame_id, robot_pose.header.frame_id, robot_pose.header.stamp, rclcpp::Duration::from_seconds(0.3), &err)) {
+        RCLCPP_WARN(get_logger(), "Unable to transform robot pose to global frame: %s", err.c_str());
+        return std::nullopt;
+    }
     const geometry_msgs::msg::PoseStamped robot_pose_in_world = tf_buffer_->transform(
-        pose,
+        robot_pose,
         global_path_.header.frame_id,
         tf2::durationFromSec(0.3)
     );
 
-    // If we've reached, don't send a new goal
-    if (walk_to_goal_handle_ && goal_checker->isGoalReached(robot_pose_in_world.pose, global_path_.poses.back().pose, velocity)) {
-        walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
-        walk_to_goal_handle_.reset();
-        return null_twist;
-    }
-
+    // Function to determine distance from robot pose to another pose on the path
     auto pose_dist = [](const geometry_msgs::msg::PoseStamped& robot_pose, const geometry_msgs::msg::PoseStamped& path_pose) -> double {
         return std::sqrt(std::pow(robot_pose.pose.position.x - path_pose.pose.position.x, 2) + std::pow(robot_pose.pose.position.y - path_pose.pose.position.y, 2));
     };
@@ -136,49 +209,49 @@ geometry_msgs::msg::TwistStamped SpotController::computeVelocityCommands(
         }
     }
 
-    // If the target pose is not set here, that means that the robot is far away
-    // from where we expect it to be if it's making progress. We halt the robot
-    // and wait for a new plan
-    if (!target_pose && walk_to_goal_handle_) {
-        walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
-        walk_to_goal_handle_.reset();
-        RCLCPP_WARN(get_logger(), "Made negative progress - waiting for new plan");
-        return null_twist;
+    if (!target_pose) RCLCPP_WARN(get_logger(), "Made negative progress - aborting movement");
+    return target_pose;
+}
+
+bool SpotController::getUpdatedPath() {
+    const nav_msgs::msg::Path global_path = getInput<nav_msgs::msg::Path>("path").value();
+    if (global_path != global_path_) {
+        RCLCPP_INFO(get_logger(), "Got updated path");
+        last_pose_index_ = 1;
+        global_path_ = global_path;
+        return true;
     }
-
-    // We don't control the robot via cmd_vel but instead with target poses
-    auto walk_to_goal = std::make_shared<spot_msgs::action::WalkTo::Goal>();
-    walk_to_goal->target_pose = target_pose.value();
-    walk_to_goal->maximum_movement_time = 2*(1.0/controller_frequency_);
-    walk_to_goal->max_vel.linear.x = max_vx_;
-    walk_to_goal->max_vel.linear.y = max_vy_;
-    walk_to_goal->max_vel.angular.z = max_vtheta_;
-
-    walk_to_client_->async_send_goal(*walk_to_goal, goal_options_);
-    return null_twist;
+    return false;
 }
 
-void SpotController::setPlan(const nav_msgs::msg::Path& path) {
-    global_path_ = path;
-    last_pose_index_ = 1;
+bool SpotController::isTerminalGoal() const {
+    if (global_path_.poses.empty()) return false;
+    return walk_to_goal_.target_pose == global_path_.poses.back();
 }
 
-void SpotController::setSpeedLimit(const double& speed_limit, const bool& percentage) {
-    const double current_speed_limit = std::sqrt(std::pow(max_vx_, 2) + std::pow(max_vy_, 2));
-    const double ratio = percentage ? speed_limit/100.0 : speed_limit / current_speed_limit;
-    max_vx_     *= ratio;
-    max_vy_     *= ratio;
-    max_vtheta_ *= ratio;
-
-    auto node = node_.lock();
-    node->set_parameters({
-        rclcpp::Parameter(plugin_name_ + ".max_vel.x", max_vx_),
-        rclcpp::Parameter(plugin_name_ + ".max_vel.y", max_vy_),
-        rclcpp::Parameter(plugin_name_ + ".max_vel.theta", max_vtheta_),
-    });
+void SpotController::sendNewGoal(const geometry_msgs::msg::PoseStamped& target_pose) {
+    if (walk_to_goal_handle_ && !walk_to_success_) {
+        walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
+    }
+    walk_to_goal_handle_.reset();
+    
+    walk_to_goal_.target_pose = target_pose;
+    walk_to_goal_.maximum_movement_time = 2*(1.0/controller_frequency_);
+    walk_to_success_.reset();
+    walk_to_feedback_.reset();
+    request_start_time_ = node_->now();
+    walk_to_client_->async_send_goal(walk_to_goal_, goal_options_);
+    target_pose_pub_->publish(target_pose);
 }
-
-// Register this controller as a nav2_core plugin
-PLUGINLIB_EXPORT_CLASS(spot_navigation::SpotController, nav2_core::Controller);
 
 } // namespace spot_navigation
+
+#include <behaviortree_cpp_v3/bt_factory.h>
+BT_REGISTER_NODES(factory)
+{
+    BT::NodeBuilder builder = [](const std::string& name, const BT::NodeConfiguration& config) {
+        return std::make_unique<spot_navigation::SpotController>(name, "spot_controller", config);
+    };
+
+    factory.registerBuilder<spot_navigation::SpotController>("SpotController", builder);
+}

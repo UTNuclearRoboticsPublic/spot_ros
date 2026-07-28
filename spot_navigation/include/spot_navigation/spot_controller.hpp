@@ -1,62 +1,80 @@
 #pragma once
 
-#include <thread>
-#include <nav2_core/controller.hpp>
-#include <spot_msgs/action/walk_to.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <tf2_ros/buffer.hpp>
+#include <nav_msgs/msg/path.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+
+// Conditional for supporting Humble and prior
+#if __has_include(<behaviortree_cpp_v3/action_node.h>)
+#include <behaviortree_cpp_v3/action_node.h>
+#else
+#include <behaviortree_cpp/action_node.h>
+#endif
+
+#include "spot_msgs/action/walk_to.hpp"
 
 namespace spot_navigation {
 
-class SpotController : public nav2_core::Controller {
+class SpotController : public BT::StatefulActionNode {
 public:
-    SpotController() = default;
+    SpotController(
+        const std::string& xml_tag_name,
+        const std::string& action_name,
+        const BT::NodeConfiguration& bt_config
+    );
+
     ~SpotController() override = default;
+    
+    static BT::PortsList providedPorts();
 
-    void configure(
-        const rclcpp_lifecycle::LifecycleNode::WeakPtr& parent,
-        std::string name,
-        std::shared_ptr<tf2_ros::Buffer> tf,
-        std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros
-    ) final;
+    BT::NodeStatus onStart() final;
+    BT::NodeStatus onRunning() final;
+    void onHalted() final;
 
-    void cleanup() final;
-    void activate() final;
-    void deactivate() final;
-    void setSpeedLimit(const double& speed_limit, const bool& percentage) final;
-
-    geometry_msgs::msg::TwistStamped computeVelocityCommands(
-        const geometry_msgs::msg::PoseStamped& pose,
-        const geometry_msgs::msg::Twist& velocity,
-        nav2_core::GoalChecker * goal_checker
-    ) final;
-
-    void setPlan(const nav_msgs::msg::Path& path) final;
 private:
-    std::string plugin_name_;
-    rclcpp::Logger get_logger() {return rclcpp::get_logger("PurePursuitController");}
+    rclcpp::Logger get_logger() const {return rclcpp::get_logger("SpotController");}
 
+    rclcpp::Node::SharedPtr node_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
-    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_;
     nav_msgs::msg::Path global_path_;
-    std::size_t last_idx_;
+    rclcpp::CallbackGroup::SharedPtr callback_group_;
+    rclcpp::executors::SingleThreadedExecutor executor_;
 
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
+
+    spot_msgs::action::WalkTo::Goal walk_to_goal_;
+    spot_msgs::action::WalkTo::Feedback::ConstSharedPtr walk_to_feedback_;
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SharedPtr walk_to_client_;
     rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr walk_to_goal_handle_;
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SendGoalOptions goal_options_;
+    rclcpp::Time movement_start_time_;
+    rclcpp::Time request_start_time_;
     std::size_t last_pose_index_;
+    std::optional<bool> walk_to_success_;
+
+    // Update global_path_ from the blackboard
+    // Returns true if the path is not the same as last time. False otherwise
+    bool getUpdatedPath();
+
+    // Calculate where the robot should go based on the current robot position,
+    // the global plan, and the previous state of the planner
+    std::optional<geometry_msgs::msg::PoseStamped> calculateNextGoal();
+
+    // Whether or not the current goal is the final one in the global plan
+    bool isTerminalGoal() const;
+
+    // Send a new goal and reset goal metrics
+    void sendNewGoal(const geometry_msgs::msg::PoseStamped& target_pose);
 
     // === Parameters === //
-    double max_vx_;
-    double max_vy_;
-    double max_vtheta_;
-
     double lookahead_dist_;
     double controller_frequency_;
     
     std::thread params_thread_;
-    rclcpp_lifecycle::LifecycleNode::OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;
+    rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr params_callback_handle_;
     std::map<std::string, double*> params_map_;
+    
 }; // class SpotController
 
 } // namespace spot_navigation
