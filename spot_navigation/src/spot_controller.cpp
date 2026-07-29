@@ -107,33 +107,23 @@ BT::NodeStatus SpotController::onStart() {
 BT::NodeStatus SpotController::onRunning() {
     executor_.spin_some();
 
-    if (!walk_to_goal_handle_) {
-        const double elapsed_time = (node_->now() - request_start_time_).seconds();
-        if (elapsed_time > 5.0) {
-            RCLCPP_ERROR(get_logger(), "Did not receive a response from the Spot driver within 5 seconds. Aborting");
-            onHalted();
-            return BT::NodeStatus::FAILURE;
-        } else {
-            return BT::NodeStatus::RUNNING;
-        }
-    }
-
     // If we recevied a new plan, the requisite time has passed, or we've finished this segment, then start a new motion
-    const double elapsed_time = (node_->now() - movement_start_time_).seconds();
+    const double elapsed_time = (node_->now() - request_start_time_).seconds();
     const bool enough_time_has_passed = elapsed_time > 1.0/controller_frequency_;
     const bool needs_to_continue = 
         !isTerminalGoal() 
         && walk_to_feedback_
         && (
-            walk_to_feedback_->body_status_enum == walk_to_feedback_->STATUS_STOPPING || 
-            walk_to_feedback_->body_status_enum == walk_to_feedback_->STATUS_STOPPED
+            walk_to_feedback_->status_enum == walk_to_feedback_->STATUS_STOPPING || 
+            walk_to_feedback_->status_enum == walk_to_feedback_->STATUS_STOPPED
         );
     if (getUpdatedPath() || enough_time_has_passed || needs_to_continue) {
         auto target_pose = calculateNextGoal();
         
         // If the target pose is not set here, that means that the robot is far away
         // from where we expect it to be if it's making progress. We halt the robot
-        if (!target_pose && walk_to_goal_handle_) {
+        if (!target_pose) {
+            RCLCPP_WARN(get_logger(), "Unable to determine a new target pose");
             onHalted();
             return BT::NodeStatus::FAILURE;
         }
@@ -160,6 +150,7 @@ BT::NodeStatus SpotController::onRunning() {
 
 void SpotController::onHalted() {
     if (walk_to_goal_handle_ && !walk_to_success_) {
+        RCLCPP_INFO(get_logger(), "Halted, cancelling goal");
         walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
     }
     walk_to_goal_handle_.reset();
@@ -230,16 +221,14 @@ bool SpotController::isTerminalGoal() const {
 }
 
 void SpotController::sendNewGoal(const geometry_msgs::msg::PoseStamped& target_pose) {
-    if (walk_to_goal_handle_ && !walk_to_success_) {
-        walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
-    }
     walk_to_goal_handle_.reset();
     
     walk_to_goal_.target_pose = target_pose;
-    walk_to_goal_.maximum_movement_time = 2*(1.0/controller_frequency_);
+    walk_to_goal_.maximum_movement_time = 10*(1.0/controller_frequency_);
     walk_to_success_.reset();
     walk_to_feedback_.reset();
     request_start_time_ = node_->now();
+    RCLCPP_INFO(get_logger(), "Sending new goal");
     walk_to_client_->async_send_goal(walk_to_goal_, goal_options_);
     target_pose_pub_->publish(target_pose);
 }
