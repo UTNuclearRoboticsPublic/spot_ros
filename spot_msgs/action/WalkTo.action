@@ -1,7 +1,16 @@
-# spot_msgs/action/walk_to
+### spot_msgs/action/walk_to
 
-# Request
+## Request
+
+# Pose for the robot to walk to
+# Ignored if target_poses is non-empty
 geometry_msgs/PoseStamped target_pose
+
+# Sequence of poses for the robot to walk through.
+geometry_msgs/PoseArray target_poses
+
+# Duration allocated for the robot to complete the motion.
+# Movement will be halted if this duration is exceeded 
 float64 maximum_movement_time
 
 # Only the SE2 components of twist are considered
@@ -10,7 +19,7 @@ geometry_msgs/Twist max_vel
 
 ---
 
-# Response
+## Response
 bool success
 string message
 
@@ -30,7 +39,7 @@ uint8 FINAL_GOAL_STATUS_IN_PROGRESS = 1
 uint8 FINAL_GOAL_STATUS_ACHIEVABLE  = 2
 uint8 FINAL_GOAL_STATUS_BLOCKED     = 3
 
-# Status
+## Status
 uint8 status_enum
 string status_string
 uint8 body_status_enum

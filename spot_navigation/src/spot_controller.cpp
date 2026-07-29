@@ -98,9 +98,6 @@ BT::NodeStatus SpotController::onStart() {
         return BT::NodeStatus::FAILURE;
     }
 
-    // Send the goal
-    walk_to_success_.reset();
-    walk_to_client_->async_send_goal(walk_to_goal_, goal_options_);
     return BT::NodeStatus::RUNNING;
 }
 
