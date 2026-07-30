@@ -307,7 +307,6 @@ class SpotBodyWrapper():
     def walk_to(self, target_poses_in_odom: list[SE2PoseProto], max_vel: SE2VelProto, max_duration: float) -> Tuple[bool, Text]:
         walk_params = spot_command_pb2.MobilityParams()
         walk_params.CopyFrom(self._mobility_params)
-        any_params = RobotCommandBuilder._to_any(walk_params)
 
         # Only apply the speed limit if it is non-zero in at least one axis
         if (max_vel.linear.x != 0 or max_vel.linear.y != 0 or max_vel.angular != 0):
@@ -326,6 +325,7 @@ class SpotBodyWrapper():
                 geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
             )
 
+        any_params = RobotCommandBuilder._to_any(walk_params)
         trajectory_points = [trajectory_pb2.SE2TrajectoryPoint(pose=goal_se2) for goal_se2 in target_poses_in_odom]
         trajectory = trajectory_pb2.SE2Trajectory(points=trajectory_points)
         trajectory_command = basic_command_pb2.SE2TrajectoryCommand.Request(trajectory=trajectory, se2_frame_name=ODOM_FRAME_NAME)
