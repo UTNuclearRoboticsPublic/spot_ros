@@ -149,10 +149,8 @@ BT::NodeStatus SpotController::onRunning() {
 }
 
 void SpotController::onHalted() {
-    if (walk_to_goal_handle_ && !walk_to_success_) {
-        RCLCPP_INFO(get_logger(), "Halted, cancelling goal");
-        walk_to_client_->async_cancel_goal(walk_to_goal_handle_);
-    }
+    RCLCPP_INFO(get_logger(), "Halted, cancelling goal");
+    walk_to_client_->async_cancel_all_goals();
     walk_to_goal_handle_.reset();
     walk_to_success_.reset();
     last_pose_index_ = 1;
