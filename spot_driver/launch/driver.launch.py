@@ -57,14 +57,15 @@ def generate_launch_description():
                         default_value='False'),
     DeclareLaunchArgument('robot_state_update_rate',
                           description='The update rate of the robot state (including TF) in Hz',
-                          default_value='10.0')
+                          default_value='10.0'),
+    DeclareLaunchArgument('config',
+                          description='Parameter configuration YAML file for the spot driver',
+                          default_value=PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml']))
   ]
 
   has_arm = LaunchConfiguration('has_arm')
   has_eap = LaunchConfiguration('has_eap')
-
-  body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
-
+  config  = LaunchConfiguration('config')
 
   # If the robot has an arm, we do not launch the pure body driver
   nodes = [
@@ -74,7 +75,7 @@ def generate_launch_description():
       name='spot_driver',
       condition=UnlessCondition(has_arm),
       parameters=[
-        body_params,
+        config,
         ParameterDescription(name='hostname',
                              value=LaunchConfiguration('hostname'),
                              value_type=str),

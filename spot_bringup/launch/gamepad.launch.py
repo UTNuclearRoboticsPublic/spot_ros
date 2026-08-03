@@ -19,6 +19,9 @@ def generate_launch_description():
             description='Name of the controller configuration to use for teleoperation',
             choices=['Logitech', 'Dualsense5'],
             default_value='Dualsense5'),
+        DeclareLaunchArgument('dock_id',
+                    description='ID of the dock to be configured for gamepad use',
+                    default_value='520'),
     ]
 
     # Teleop
