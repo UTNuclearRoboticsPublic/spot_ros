@@ -52,6 +52,7 @@ private:
     rclcpp::Time request_start_time_;
     std::size_t last_pose_index_;
     std::optional<bool> walk_to_success_;
+    bool goal_handle_received_;
 
     // Update global_path_ from the blackboard
     // Returns true if the path is not the same as last time. False otherwise

@@ -54,9 +54,12 @@ StatefulActionNode(xml_tag_name, bt_config)
     );
 
     goal_options_.goal_response_callback = [this](const rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr& goal_handle) {
+        goal_handle_received_ = true;
         if (goal_handle) {
             walk_to_goal_handle_ = goal_handle;
             movement_start_time_ = goal_handle->get_goal_stamp();
+        } else {
+            RCLCPP_WARN(get_logger(), "Motion was rejected by the server");
         }
     };
 
@@ -105,6 +108,10 @@ BT::NodeStatus SpotController::onStart() {
 
 BT::NodeStatus SpotController::onRunning() {
     executor_.spin_some();
+
+    if (goal_handle_received_ && !walk_to_goal_handle_) {
+        return BT::NodeStatus::FAILURE;
+    }
 
     // If we recevied a new plan, the requisite time has passed, or we've finished this segment, then start a new motion
     const double elapsed_time = (node_->now() - request_start_time_).seconds();
@@ -220,6 +227,7 @@ bool SpotController::isTerminalGoal() const {
 
 void SpotController::sendNewGoal(const geometry_msgs::msg::PoseStamped& target_pose) {
     walk_to_goal_handle_.reset();
+    goal_handle_received_ = false;
     
     walk_to_goal_.target_pose = target_pose;
     walk_to_goal_.maximum_movement_time = 10*(1.0/controller_frequency_);
