@@ -18,7 +18,7 @@ StatefulActionNode(xml_tag_name, bt_config)
     callback_group_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
     executor_.add_callback_group(callback_group_, node_->get_node_base_interface());
 
-    walk_to_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(node_, "/spot_driver/walk_to");
+    walk_to_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(node_, "/spot_driver/walk_to", callback_group_);
     target_pose_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>("/spot_nav/spot_controller/target_pose", rclcpp::QoS{1}.transient_local());
 
     // Declare parameters and parameter update function
@@ -54,8 +54,10 @@ StatefulActionNode(xml_tag_name, bt_config)
     );
 
     goal_options_.goal_response_callback = [this](const rclcpp_action::Client<spot_msgs::action::WalkTo>::GoalHandle::SharedPtr& goal_handle) {
-        walk_to_goal_handle_ = goal_handle;
-        movement_start_time_ = goal_handle->get_goal_stamp();
+        if (goal_handle) {
+            walk_to_goal_handle_ = goal_handle;
+            movement_start_time_ = goal_handle->get_goal_stamp();
+        }
     };
 
     goal_options_.feedback_callback = [this](
@@ -108,13 +110,12 @@ BT::NodeStatus SpotController::onRunning() {
     const double elapsed_time = (node_->now() - request_start_time_).seconds();
     const bool enough_time_has_passed = elapsed_time > 1.0/controller_frequency_;
     const bool needs_to_continue = 
-        !isTerminalGoal() 
-        && walk_to_feedback_
+        walk_to_feedback_
         && (
             walk_to_feedback_->status_enum == walk_to_feedback_->STATUS_STOPPING || 
             walk_to_feedback_->status_enum == walk_to_feedback_->STATUS_STOPPED
         );
-    if (getUpdatedPath() || enough_time_has_passed || needs_to_continue) {
+    if (getUpdatedPath() || (!isTerminalGoal() && (enough_time_has_passed || needs_to_continue))) {
         auto target_pose = calculateNextGoal();
         
         // If the target pose is not set here, that means that the robot is far away
@@ -133,9 +134,11 @@ BT::NodeStatus SpotController::onRunning() {
         if (walk_to_success_.value()) {
             walk_to_goal_handle_.reset();
             onHalted();
+            RCLCPP_INFO(get_logger(), "Reached terminal goal");
             return BT::NodeStatus::SUCCESS;
         } else if (!getUpdatedPath()) {
             onHalted();
+            RCLCPP_ERROR(get_logger(), "Failed to reach final goal");
             return BT::NodeStatus::FAILURE;
         } else {
             return BT::NodeStatus::RUNNING;
