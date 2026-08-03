@@ -1,0 +1,14 @@
+# spot_msgs/srv/SetObstacleAvoidancePadding
+
+# Desired padding around the body to use when attempting to avoid obstacles.
+# Described in meters. Must be >= 0. Minimum effective value is ~0.1
+float64 padding
+---
+# Whether or not the padding was set successfully
+bool success
+
+# Any message from the robot or driver
+string message
+
+# The previous value of the obstacle avoidance padding
+float64 old_padding

@@ -58,7 +58,7 @@ from spot_msgs.msg import MobilityParams
 from spot_msgs.action import NavigateTo, WalkTo
 
 from spot_msgs.srv import (Dock, ClearBehaviorFault, ListGraph, SetLocomotion, SetVelocity,
-                           GestureSequence, TogglePayload, RegisterPayload)
+                           GestureSequence, TogglePayload, RegisterPayload, SetObstacleAvoidancePadding)
 
 class SpotROS(Node):
     """Parent class for using the wrapper.  Defines all callbacks and keeps the wrapper alive"""
@@ -444,6 +444,15 @@ class SpotROS(Node):
 
         res.success, res.message = self.spot_wrapper._lease_manager.register_payload(payload, req.secret)
         return res
+
+    def handle_obstacle_avoidance_padding(self, req: SetObstacleAvoidancePadding.Request, resp: SetObstacleAvoidancePadding.Response) -> SetObstacleAvoidancePadding.Response:
+        old_padding = self.spot_wrapper._mobility_params.obstacle_params.obstacle_avoidance_padding
+        if old_padding:
+            resp.old_padding = old_padding
+
+        self.spot_wrapper.set_mobility_params(obstacle_avoidance_padding=req.padding)
+        resp.success, resp.message = self.spot_wrapper.stand()
+        return resp
     
     def handle_toggle_payload(self, req: TogglePayload.Request, res: TogglePayload.Response) -> TogglePayload.Response:
         if (len(req.guid) == 0) and (len(req.name) > 0):
@@ -815,12 +824,13 @@ class SpotROS(Node):
         self.create_service(Trigger, "~/estop/release" , self.handle_estop_disengage, callback_group=srv_group)
 
         # Configuration services
-        self.create_service(SetBool           , "~/stair_mode"          , self.handle_stair_mode,           callback_group=srv_group)
-        self.create_service(SetLocomotion     , "~/locomotion_mode"     , self.handle_locomotion_mode,      callback_group=srv_group)
-        self.create_service(SetVelocity       , "~/max_velocity"        , self.handle_max_vel,              callback_group=srv_group)
-        self.create_service(ClearBehaviorFault, "~/clear_behavior_fault", self.handle_clear_behavior_fault, callback_group=srv_group)
-        self.create_service(TogglePayload     , "~/toggle_payload"      , self.handle_toggle_payload,       callback_group=srv_group)
-        self.create_service(RegisterPayload   , "~/register_payload"    , self.handle_register_payload,     callback_group=srv_group)
+        self.create_service(SetBool                    , "~/stair_mode"                    , self.handle_stair_mode                , callback_group=srv_group)
+        self.create_service(SetLocomotion              , "~/locomotion_mode"               , self.handle_locomotion_mode           , callback_group=srv_group)
+        self.create_service(SetVelocity                , "~/max_velocity"                  , self.handle_max_vel                   , callback_group=srv_group)
+        self.create_service(ClearBehaviorFault         , "~/clear_behavior_fault"          , self.handle_clear_behavior_fault      , callback_group=srv_group)
+        self.create_service(TogglePayload              , "~/toggle_payload"                , self.handle_toggle_payload            , callback_group=srv_group)
+        self.create_service(RegisterPayload            , "~/register_payload"              , self.handle_register_payload          , callback_group=srv_group)
+        self.create_service(SetObstacleAvoidancePadding, "~/set_obstacle_avoidance_padding", self.handle_obstacle_avoidance_padding, callback_group=srv_group)
 
         # Status request services
         self.create_service(ListGraph, "~/list_graph", self.handle_list_graph, callback_group=srv_group)
