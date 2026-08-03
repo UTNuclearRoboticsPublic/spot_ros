@@ -23,15 +23,15 @@ def generate_launch_description():
                             default_value='192.168.1.201'),
         DeclareLaunchArgument('spot_namespace',
                             default_value=''),
+        DeclareLaunchArgument('body_config',
+                            description='Absolute path to a parameter YAML file for the spot driver node',
+                            default_value=PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])),
+        DeclareLaunchArgument('arm_config',
+                            description='Absolute path to a parameter YAML file for the spot manipulation driver node',
+                            default_value=PathJoinSubstitution([FindPackageShare('spot_manipulation_driver'), 'config', 'spot_arm.yaml'])),
         DeclareLaunchArgument('image_config',
-                            default_value=PathJoinSubstitution([
-                                FindPackageShare("spot_driver"),
-                                "config",
-                                "image_service_only.yaml"
-                            ]),
+                            default_value=PathJoinSubstitution([FindPackageShare("spot_driver"), "config", "image_service_only.yaml"]),
                             description="Path to image config YAML. By default we don't publish images"),
-        DeclareLaunchArgument('dock_id',
-                            default_value='520'),
 
         # Accessories
         DeclareLaunchArgument('has_eap',
@@ -86,21 +86,17 @@ def generate_launch_description():
                             description='Whether to published received joint trajectories on corresponding action server goal topics',
                             default_value='False'),
         DeclareLaunchArgument('use_proprietary_meshes',
-            description='Whether to use proprietary meshes',
-            default_value='False'),
-        DeclareLaunchArgument(
-            'proprietary_pkg',
-            description='Name of the package containing proprietary meshes',
-            default_value='spot_proprietary_description'),
-        DeclareLaunchArgument(
-            'proprietary_mesh_format',
-            description='File extension format for proprietary mesh files',
-            default_value='dae',
-            choices=['dae', 'stl', 'obj']
-        ),
+                            description='Whether to use proprietary meshes',
+                            default_value='False'),
+        DeclareLaunchArgument('proprietary_pkg',
+                            description='Name of the package containing proprietary meshes',
+                            default_value='spot_proprietary_description'),
+        DeclareLaunchArgument('proprietary_mesh_format',
+                            description='File extension format for proprietary mesh files',
+                            default_value='dae',
+                            choices=['dae', 'stl', 'obj']),
     ]
 
-    dock_id         = LaunchConfiguration('dock_id')
     has_arm         = LaunchConfiguration('has_arm')
     has_eap         = LaunchConfiguration('has_eap')
     has_eap_2       = LaunchConfiguration('has_eap_2')
@@ -108,16 +104,15 @@ def generate_launch_description():
     has_rl_kit      = LaunchConfiguration('has_rl_kit')
     has_realsense   = LaunchConfiguration('has_realsense')
     has_cam_payload = LaunchConfiguration('has_cam_payload')
-    use_proprietary_meshes = LaunchConfiguration('use_proprietary_meshes')
-    proprietary_pkg = LaunchConfiguration('proprietary_pkg')
-    proprietary_mesh_format = LaunchConfiguration('proprietary_mesh_format')
     auto_claim      = LaunchConfiguration('auto_claim')
     auto_power_on   = LaunchConfiguration('auto_power_on')
     auto_stand      = LaunchConfiguration('auto_stand')
+    body_params     = LaunchConfiguration('body_config')
+    arm_params      = LaunchConfiguration('arm_config')
+    proprietary_pkg = LaunchConfiguration('proprietary_pkg')
+    use_proprietary_meshes    = LaunchConfiguration('use_proprietary_meshes')
+    proprietary_mesh_format   = LaunchConfiguration('proprietary_mesh_format')
     launch_pointcloud_service = LaunchConfiguration('launch_pointcloud_service')
-
-    body_params = PathJoinSubstitution([FindPackageShare('spot_driver'), 'config', 'spot_ros.yaml'])
-    arm_params  = PathJoinSubstitution([FindPackageShare('spot_manipulation_driver'), 'config', 'spot_arm.yaml'])
 
     ## Robot bringup
     driver_include = IncludeLaunchDescription(
