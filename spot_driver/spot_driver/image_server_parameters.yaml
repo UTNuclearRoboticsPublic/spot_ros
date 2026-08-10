@@ -21,6 +21,30 @@ spot_driver_parameters:
       subset_of<>: [[frontleft, frontright, left, right, back, hand_rgb, hand_tof]]
       unique<>: null
 
+  rgb_jpeg:
+    type: bool
+    description: Request RGB sources as JPEG and publish them as sensor_msgs/CompressedImage on ~/<source>/image/compressed instead of raw Image. Depth, the get_images service, and static TF stay raw.
+    default_value: false
+
+  jpeg_quality:
+    type: int
+    description: JPEG quality percent passed to the Spot SDK when rgb_jpeg is enabled
+    default_value: 75
+    validation:
+      bounds<>: [1, 100]
+
+  fps_debug:
+    type: bool
+    description: Log a periodic per-source summary of achieved frame rate, SDK round-trip latency, and bandwidth. Logging only, no behavior change.
+    default_value: false
+
+  fps_debug_window:
+    type: double
+    description: Length in seconds of each fps_debug summary window
+    default_value: 5.0
+    validation:
+      gt<>: 0.0
+
   rates:
     __map_image_sources:
       rgb:

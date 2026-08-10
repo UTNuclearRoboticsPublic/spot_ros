@@ -41,6 +41,25 @@ This repository houses the collection of packages required to run the Spot robot
 
    Depending on your desired communication configuration, you may want to set a DDS middleware configuration like `cyclonedds`. To do this, create your configuration file and set the required environment variables to your `~/.bashrc`.
 
+5. **Image Server optional parameters (all default off)**
+
+   The `spot_image_server` node accepts the following optional ROS parameters, settable in a config file (see `spot_driver/config/publish_all_images.yaml`) or via `--ros-args -p <name>:=<value>`:
+
+   | Parameter | Default | What it does |
+   |---|---|---|
+   | `rgb_jpeg` | `false` | RGB sources (except `hand_tof`) are requested as JPEG and published as `sensor_msgs/CompressedImage` on `~/<source>/image/compressed` instead of raw `Image` on `~/<source>/image`. Depth, the `~/get_images` service, and static TF stay raw. Greatly reduces robot-to-driver WiFi bandwidth when many cameras are streamed simultaneously. |
+   | `jpeg_quality` | `75` | JPEG quality percent passed to the Spot SDK, range `[1, 100]`. Only used when `rgb_jpeg` is on. |
+   | `fps_debug` | `false` | Logs a per-source windowed summary (achieved Hz, mean/max round-trip latency, MB/s). Logging only, no behavior change. |
+   | `fps_debug_window` | `5.0` | Summary window length in seconds for `fps_debug`. |
+
+   When `rgb_jpeg` is on, consumers that need raw RGB (e.g. `spot_apriltag`, `camera_pointclouds`) should run the standard `image_transport` republisher, which decodes on the driver side without re-costing the WiFi link:
+   ```bash
+   ros2 run image_transport republish compressed raw \
+        --ros-args -r in/compressed:=/spot_image_server/rgb/<cam>/image/compressed \
+                   -r out:=/spot_image_server/rgb/<cam>/image
+   ```
+
+   The driver tests covering these features live in `spot_driver/tests` and run with `colcon test --packages-select spot_driver` (or `python3 -m pytest spot_driver/tests` from the repository root inside a sourced ROS 2 environment; tests requiring `rclpy`/`bosdyn` skip automatically elsewhere).
 
 ### Driver Launch Commands
 To launch the driver for Spot, execute the following command in a terminal:
