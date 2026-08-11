@@ -1,7 +1,7 @@
 # === Request ===
 
-# Absolute path to map_directory, which is downloaded from tablet controller
-string upload_path 
+# Absolute path to map_directory
+string bosdyn_map_filepath 
 
 # Waypoint id string for where to go
 string waypoint_id 

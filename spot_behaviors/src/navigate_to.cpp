@@ -13,7 +13,7 @@ NodeBehaviorBase(name, tf_buffer)
 
 BT::PortsList NavigateTo::providedPorts() {
     return {
-        BT::InputPort<std::string>("upload_path", "Absolute path to map_directory, which is downloaded from tablet controller"),
+        BT::InputPort<std::string>("bosdyn_map_filepath", "Absolute path to map_directory"),
         BT::InputPort<std::string>("waypoint_id", "The ID of the pose to navigate to"),
         BT::InputPort<bool>("initial_localization_fiducial", "Whether or not to use fiducials for initial localization"),
         BT::InputPort<std::string>("initial_localization_waypoint", "Initial waypoint id at which to trigger localization "),
@@ -34,7 +34,7 @@ BT::NodeStatus NavigateTo::onStart() {
 
     // Set the goal fields from the input ports
     rclcpp_action::Client<spot_msgs::action::NavigateTo>::Goal goal;
-    getInput("upload_path", goal.upload_path);
+    getInput("bosdyn_map_filepath", goal.bosdyn_map_filepath);
     getInput("waypoint_id", goal.waypoint_id);
     getInput("initial_localization_fiducial", goal.initial_localization_fiducial);
     getInput("initial_localization_waypoint", goal.initial_localization_waypoint);
