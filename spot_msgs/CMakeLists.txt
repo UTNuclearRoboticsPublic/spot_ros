@@ -3,6 +3,7 @@ project(spot_msgs)
 
 find_package(ament_cmake REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(trajectory_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(shape_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -21,6 +22,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/NavigateTo.action"
   "action/WalkTo.action"
   "action/ImageToGrasp.action"
+  "action/StableArmCommand.action"
 
   "srv/ArmForceTrajectory.srv"
   "srv/ArmJointMovement.srv"
