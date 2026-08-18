@@ -8,10 +8,12 @@ import threading
 import yaml
 import time as pyTime
 import math
+import time
 
-import rclpy.action
 import rclpy.duration
 import rclpy.utilities
+from rclpy.action import ActionServer
+from rclpy.action.server import ServerGoalHandle, GoalResponse, CancelResponse
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.node import Node
 from rclpy.time import Time
@@ -43,6 +45,7 @@ from .ros_helpers import *
 
 import functools
 import tf2_ros
+from tf2_py import TransformException
 from tf2_geometry_msgs import PoseStamped
 
 from spot_msgs.msg import LeaseArray, LeaseResource
@@ -511,11 +514,61 @@ class SpotROS(Node):
             return SetVelocity.Response(True, 'Success')
         except Exception as e:
             return SetVelocity.Response(False, e)
+        
+    def handle_new_goal(self, goal_request):
+        if not self.spot_wrapper._lease_manager.robot.is_powered_on():
+            self.get_logger().warn('Cannot accept movement goal: robot is not powered on')
+            return GoalResponse.REJECT
+        else:
+            return GoalResponse.ACCEPT
+
+    def handle_walk_to_accepted(self, goal_handle: ServerGoalHandle) -> None:
+        if self.walk_to_active:
+            self.get_logger().info('Received new goal during execution. Preempting previous goal')
+            self.updated_walk_to_goal = goal_handle
+        else:
+            self.get_logger().info('Received new WalkTo goal')
+            goal_handle.execute()
+
+    def handle_walk_to_canceled(self, cancel_request) -> CancelResponse:
+        self.get_logger().info('Canceling WalkTo goal')
+        self.spot_wrapper.stop()
+        return CancelResponse.ACCEPT
+
+    def transform_walk_request_to_odom_frame(self, req: WalkTo.Goal) -> list[SE2PoseProto]:
+        # If only the singular target_pose is present, use that to populate target_poses instead
+        if not len(req.target_poses.poses):
+            req.target_poses.header = req.target_pose.header
+            req.target_poses.poses = [req.target_pose.pose]
+
+        # Check to see if the pose is very old - if it is then update to now time
+        msg_time = Time.from_msg(req.target_poses.header.stamp)
+        seconds, nanoseconds = msg_time.seconds_nanoseconds()
+        if seconds or nanoseconds:
+            time_offset: rclpy.duration.Duration = self.get_clock().now() - msg_time
+            if time_offset > rclpy.duration.Duration(seconds=10):
+                self._logger.warn("Received WalkTo goal with a very old timestamp. Updating with current timestamp")
+                req.target_poses.header.stamp = self.get_clock().now().to_msg()
+
+        # Transform to the odom frame and convert to SE2Proto
+        target_poses = [
+            MsgToSE2Pose(
+                self.tf_buffer.transform(
+                    PoseStamped(pose=target_pose, header=req.target_poses.header),
+                    target_frame="odom",
+                    timeout=rclpy.duration.Duration(seconds=1.0)
+                ).pose
+            ).to_proto()
+            for target_pose in req.target_poses.poses
+        ]
+
+        return target_poses
 
     def handle_walk_to(self, goal_handle: ServerGoalHandle) -> WalkTo.Result:
-        req: WalkTo.Goal = goal_handle.request
+        self.walk_to_active = True
+        self.updated_walk_to_goal = None
         resp = WalkTo.Result()
-
+        
         feedback_strings = {
             "STATUS" : [
                 "STATUS_UNKNOWN: STATUS_UNKNOWN should never be used. If used, an internal error has happened.",
@@ -538,39 +591,41 @@ class SpotROS(Node):
             ]
         }
 
-        # Check to see if the pose is very old - if it is then update to now time
-        time_offset: rclpy.duration.Duration = self.get_clock().now() - Time.from_msg(req.target_pose.header.stamp)
-        if time_offset > rclpy.duration.Duration(seconds=10):
-            self._logger.warn("Received WalkTo goal with a very old timestamp. Updating with current timestamp")
-            req.target_pose.header.stamp = self.get_clock().now().to_msg()
-
-        # Transform the target frame into the odom frame
         try:
-            target_pose_in_odom = self.tf_buffer.transform(req.target_pose, "odom", rclpy.duration.Duration(seconds=1.0))
-        except Exception as e:
-            self.get_logger().info(f"Unable to transform WalkTo target pose from {req.target_pose.header.frame_id} to the odom frame, aborting action: {e}")
+            target_poses = self.transform_walk_request_to_odom_frame(goal_handle.request)
+        except TransformException as e:
+            self.get_logger().error(f"Unable to transform WalkTo target pose to the odom frame, aborting action: {e}")
             goal_handle.abort()
             resp.success = False
-            resp.message = f"Unable to transform WalkTo target pose from {req.target_pose.header.frame_id} to the odom frame, aborting action: {e}"
+            resp.message = f"Unable to transform WalkTo target pose to the odom frame, aborting action: {e}"
             return resp
-        
-        # Convert the ROS types to the corresponding protobuf types
-        target_pose_se2 = MsgToSE2Pose(target_pose_in_odom.pose).to_proto()
-        max_vel = MsgToSE2Vel(req.max_vel).to_proto()
-
-        self.get_logger().info(f"Moving robot to position ({target_pose_se2.position.x, target_pose_se2.position.y}) in the odom frame")
+        except RuntimeError as e:
+            self.get_logger().error(f"Error processing goal: {e}")
+            goal_handle.abort()
+            resp.success = False
+            resp.message = f"Error processing goal: {e}"
+            return resp
 
         def abort(message: str):
+            nonlocal goal_handle
             self.get_logger().error(message)
             self.spot_wrapper.stop()
+            self.walk_to_active = False
+            self.updated_walk_to_goal = None
             goal_handle.abort()
             resp.success = False
             resp.message = message
             return resp
+        
+        # Convert the ROS types to the corresponding protobuf types
+        max_vel = MsgToSE2Vel(goal_handle.request.max_vel).to_proto()
+        self.get_logger().info(f"Moving robot to position ({target_poses[-1].position.x, target_poses[-1].position.y}) in the odom frame")
 
         # Make the command and make sure it was valid
         try:
-            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_in_odom=target_pose_se2, max_vel=max_vel, max_duration=req.maximum_movement_time)
+            command_time = time.time() - 0.1 # intentially set slightly early so that we can pickup a timeout before the robot does
+            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_poses_in_odom=target_poses, max_vel=max_vel, max_duration=goal_handle.request.maximum_movement_time)
+
             if not command_accepted:
                 return abort(f"Unable to command robot to move. Reason: {message}")
             else:
@@ -580,6 +635,27 @@ class SpotROS(Node):
 
         update_rate = self.create_rate(10.0)
         while rclpy.ok():
+            # Check to see if the motion has been canceled
+            if goal_handle.is_cancel_requested:
+                resp.success = False
+                resp.message = "Goal canceled"
+                self.walk_to_active = False
+                goal_handle.canceled()
+                self.get_logger().info(f'Walk to goal canceled successfully')
+                return resp
+            
+            # Check to see if we've received a new goal
+            if self.updated_walk_to_goal is not None:
+                resp.success = False
+                resp.message = "Preempted by new goal"
+                goal_handle.abort()
+                self.updated_walk_to_goal.execute()
+                return resp
+
+            # Check to see if the maximum movement time has been exceeded
+            if time.time() - command_time > goal_handle.request.maximum_movement_time:
+                return abort('Maximum motion time exceeded')
+
             # Check to see if we've concluded
             try:
                 command_feedback = self.spot_wrapper._lease_manager.robot_command_feedback(command_id)
@@ -591,6 +667,7 @@ class SpotROS(Node):
                     self.get_logger().info("WalkTo action completed successfully")
                     goal_handle.succeed()
                     resp.success = True
+                    self.walk_to_active = False
                     resp.message = "WalkTo action completed successfully"
                     return resp
                 elif trajectory_feedback.status == WalkTo.Feedback.STATUS_UNKNOWN:
@@ -844,7 +921,7 @@ class SpotROS(Node):
 
         ## --- Action Servers --- ##
 
-        self._navigate_to_server = rclpy.action.ActionServer(
+        self._navigate_to_server = ActionServer(
             self,
             NavigateTo,
             '~/navigate_to',
@@ -852,11 +929,16 @@ class SpotROS(Node):
             callback_group=srv_group
         )
         
-        self._walk_to_server = rclpy.action.ActionServer(
+        self.walk_to_active = False
+        self.updated_walk_to_goal: ServerGoalHandle = None
+        self._walk_to_server = ActionServer(
             self,
             WalkTo,
             '~/walk_to',
             execute_callback=self.handle_walk_to,
+            goal_callback=self.handle_new_goal,
+            handle_accepted_callback=self.handle_walk_to_accepted,
+            cancel_callback=self.handle_walk_to_canceled,
             callback_group=srv_group
         )
 
