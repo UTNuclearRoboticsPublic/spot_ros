@@ -26,23 +26,37 @@ public:
 
     ~SpotController() override = default;
     
+    // One input port - the global path [nav_msgs::msg::Path]
     static BT::PortsList providedPorts();
 
+    // Retrieve the global path from the blackboard and set the robot
+    // towards the first waypoint in the path
     BT::NodeStatus onStart() final;
+
+    // Check for any of the following conditions to send a new pose to the robot:
+    //  - A new global path on blackboard
+    //  - Sufficient time has passed since the last goal was issued
+    //  - The walk_to feedback reports that the robot is stopping and we
+    //    are not on the final waypoint of the global path
+    //
+    // Otherwise check for action completion
     BT::NodeStatus onRunning() final;
     void onHalted() final;
 
 private:
     rclcpp::Logger get_logger() const {return rclcpp::get_logger("SpotController");}
 
+    // ROS interface
     rclcpp::Node::SharedPtr node_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
-    nav_msgs::msg::Path global_path_;
     rclcpp::CallbackGroup::SharedPtr callback_group_;
     rclcpp::executors::SingleThreadedExecutor executor_;
-
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_pub_;
 
+    // Global path from the planner server
+    nav_msgs::msg::Path global_path_;
+
+    // Action-Server interface
     spot_msgs::action::WalkTo::Goal walk_to_goal_;
     spot_msgs::action::WalkTo::Feedback::ConstSharedPtr walk_to_feedback_;
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SharedPtr walk_to_client_;
@@ -50,6 +64,8 @@ private:
     rclcpp_action::Client<spot_msgs::action::WalkTo>::SendGoalOptions goal_options_;
     rclcpp::Time movement_start_time_;
     rclcpp::Time request_start_time_;
+    
+    // Bookkeeping for planning
     std::size_t last_pose_index_;
     std::optional<bool> walk_to_success_;
     bool goal_handle_received_;
