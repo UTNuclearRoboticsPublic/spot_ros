@@ -28,7 +28,7 @@ class SimulatedLiDAR:
         ], axis=-1)
         ray_origins = np.zeros_like(ray_directions)
 
-        rays_numpy = np.stack([ray_origins, ray_directions], axis=1)
+        rays_numpy = np.concatenate([ray_origins, ray_directions], axis=2)
         self.ray_definitions = open3d.core.Tensor(rays_numpy.reshape(-1, 6), dtype=open3d.core.Dtype.Float32)
 
     def generate_rays(self, _):

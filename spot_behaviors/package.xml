@@ -14,7 +14,7 @@
   <depend>sensor_msgs</depend>
   <depend>moveit_msgs</depend>
   <depend>behaviortree_cpp</depend>
-  <depend>moveit_kinematics</depend>
+  <depend>moveit_ros_planning</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
