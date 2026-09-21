@@ -6,10 +6,10 @@
 #include <rclcpp_action/rclcpp_action.hpp>
 
 // Conditional for supporting Humble and prior
-#if __has_include(<behaviortree_cpp_v3/action_node.h>)
-#include <behaviortree_cpp_v3/action_node.h>
-#else
+#ifdef JAZZY_OR_LATER
 #include <behaviortree_cpp/action_node.h>
+#else
+#include <behaviortree_cpp_v3/action_node.h>
 #endif
 
 #include "spot_msgs/action/walk_to.hpp"
