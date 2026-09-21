@@ -23,7 +23,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(TBB REQUIRED)
 
 # Conditional include based on ROS distro
-if("$ENV{ROS_DISTRO}" STRGREATER_EQUAL "j")
+if("$ENV{ROS_DISTRO}" STRGREATER_EQUAL "jazzy")
   find_package(behaviortree_cpp REQUIRED)
 else()
   find_package(behaviortree_cpp_v3 REQUIRED)
@@ -49,7 +49,7 @@ ament_target_dependencies(filter_pointcloud_node rclcpp tf2_ros sensor_msgs rclc
 
 add_library(spot_controller SHARED src/spot_controller.cpp)
 target_compile_definitions(spot_controller PUBLIC BT_PLUGIN_EXPORT)
-if("$ENV{ROS_DISTRO}" STRGREATER_EQUAL "j")
+if("$ENV{ROS_DISTRO}" STRGREATER_EQUAL "jazzy")
   ament_target_dependencies(spot_controller rclcpp nav2_core nav2_msgs nav_msgs spot_msgs pluginlib tf2_ros behaviortree_cpp tf2_geometry_msgs)
   target_compile_definitions(spot_controller PUBLIC JAZZY_OR_LATER)
 else()
