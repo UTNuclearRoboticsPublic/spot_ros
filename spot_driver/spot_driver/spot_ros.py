@@ -535,34 +535,26 @@ class SpotROS(Node):
         self.spot_wrapper.stop()
         return CancelResponse.ACCEPT
 
-    def transform_walk_request_to_odom_frame(self, req: WalkTo.Goal) -> list[SE2PoseProto]:
-        # If only the singular target_pose is present, use that to populate target_poses instead
-        if not len(req.target_poses.poses):
-            req.target_poses.header = req.target_pose.header
-            req.target_poses.poses = [req.target_pose.pose]
-
+    def transform_walk_request_to_odom_frame(self, req: WalkTo.Goal) -> SE2PoseProto:
         # Check to see if the pose is very old - if it is then update to now time
-        msg_time = Time.from_msg(req.target_poses.header.stamp)
+        msg_time = Time.from_msg(req.target_pose.header.stamp)
         seconds, nanoseconds = msg_time.seconds_nanoseconds()
         if seconds or nanoseconds:
             time_offset: rclpy.duration.Duration = self.get_clock().now() - msg_time
             if time_offset > rclpy.duration.Duration(seconds=10):
                 self._logger.warn("Received WalkTo goal with a very old timestamp. Updating with current timestamp")
-                req.target_poses.header.stamp = self.get_clock().now().to_msg()
+                req.target_pose.header.stamp = self.get_clock().now().to_msg()
 
         # Transform to the odom frame and convert to SE2Proto
-        target_poses = [
-            MsgToSE2Pose(
-                self.tf_buffer.transform(
-                    PoseStamped(pose=target_pose, header=req.target_poses.header),
-                    target_frame="odom",
-                    timeout=rclpy.duration.Duration(seconds=1.0)
-                ).pose
-            ).to_proto()
-            for target_pose in req.target_poses.poses
-        ]
+        target_pose = MsgToSE2Pose(
+            self.tf_buffer.transform(
+                PoseStamped(pose=target_pose, header=req.target_pose.header),
+                target_frame="odom",
+                timeout=rclpy.duration.Duration(seconds=1.0)
+            ).pose
+        ).to_proto()
 
-        return target_poses
+        return target_pose
 
     def handle_walk_to(self, goal_handle: ServerGoalHandle) -> WalkTo.Result:
         self.walk_to_active = True
@@ -592,18 +584,18 @@ class SpotROS(Node):
         }
 
         try:
-            target_poses = self.transform_walk_request_to_odom_frame(goal_handle.request)
+            target_pose = self.transform_walk_request_to_odom_frame(goal_handle.request)
         except TransformException as e:
-            self.get_logger().error(f"Unable to transform WalkTo target pose to the odom frame, aborting action: {e}")
-            goal_handle.abort()
             resp.success = False
             resp.message = f"Unable to transform WalkTo target pose to the odom frame, aborting action: {e}"
+            self.get_logger().error(resp.message)
+            goal_handle.abort()
             return resp
         except RuntimeError as e:
-            self.get_logger().error(f"Error processing goal: {e}")
-            goal_handle.abort()
             resp.success = False
             resp.message = f"Error processing goal: {e}"
+            self.get_logger().error(resp.message)
+            goal_handle.abort()
             return resp
 
         def abort(message: str):
@@ -619,12 +611,12 @@ class SpotROS(Node):
         
         # Convert the ROS types to the corresponding protobuf types
         max_vel = MsgToSE2Vel(goal_handle.request.max_vel).to_proto()
-        self.get_logger().info(f"Moving robot to position ({target_poses[-1].position.x, target_poses[-1].position.y}) in the odom frame")
+        self.get_logger().info(f"Moving robot to position ({target_pose.position.x, target_pose.position.y}) in the odom frame")
 
         # Make the command and make sure it was valid
         try:
             command_time = time.time() - 0.1 # intentially set slightly early so that we can pickup a timeout before the robot does
-            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_poses_in_odom=target_poses, max_vel=max_vel, max_duration=goal_handle.request.maximum_movement_time)
+            command_accepted, message, command_id = self.spot_wrapper.walk_to(target_pose_in_odom=target_pose, max_vel=max_vel, max_duration=goal_handle.request.maximum_movement_time)
 
             if not command_accepted:
                 return abort(f"Unable to command robot to move. Reason: {message}")
