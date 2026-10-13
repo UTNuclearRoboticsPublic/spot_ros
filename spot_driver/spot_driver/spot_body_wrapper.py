@@ -11,7 +11,7 @@ from threading import Lock
 
 from bosdyn.api import header_pb2
 from bosdyn.api.docking import docking_pb2
-from bosdyn.api.spot import robot_command_pb2
+from bosdyn.api.spot import robot_command_pb2 as spot_command_pb2
 from bosdyn.geometry import EulerZXY
 
 from bosdyn.client.common import FutureWrapper
@@ -316,6 +316,7 @@ class SpotBodyWrapper():
                     min_vel=geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
                 )
             )
+
         # Otherwise, we apply the negative of the configured max-vel as the min-vel
         # NOTE: We never configure min vel directly in the main mobility params because it interfers with teleop
         else:
@@ -323,14 +324,13 @@ class SpotBodyWrapper():
             walk_params.vel_limit.min_vel.CopyFrom(
                 geometry_pb2.SE2Velocity(linear=geometry_pb2.Vec2(x=-max_vel.linear.x, y=-max_vel.linear.y), angular=-max_vel.angular)
             )
-            
-        
+
         walk_command = RobotCommandBuilder.synchro_se2_trajectory_command(
             goal_se2=target_pose_in_odom,
             frame_name=ODOM_FRAME_NAME,
             params=walk_params
         )
-
+        
         success, message, command_id = self._lease_manager.robot_command(walk_command, end_time_secs=time.time() + max_duration)
         return success, message, command_id
 
@@ -342,7 +342,7 @@ class SpotBodyWrapper():
     def set_mobility_params(self,
                             body_height_offset: float = 0.0,
                             footprint_R_body: EulerZXY = EulerZXY(),
-                            locomotion_hint: int = robot_command_pb2.LocomotionHint.Value('HINT_AUTO'),
+                            locomotion_hint: int = spot_command_pb2.HINT_AUTO,
                             stair_hint: bool = False,
                             external_force_params: BodyExternalParamsProto = None,
                             obstacle_avoidance_padding: float = None,
