@@ -1,6 +1,6 @@
 import launch
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, IncludeLaunchDescription
 
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
@@ -149,7 +149,91 @@ defaults = {
         0.0,
         0.0,
         0.0,
-    ]
+    ],
+    'namaste': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.00415325,
+        -1.3191,
+        2.291,
+        0.067544,
+        -1.8325,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    'carry': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.0041,
+        -1.91044,
+        2.50288,
+        0.067544,
+        -0.544375,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
+    'namaste_carry': [
+        -0.005910136271268129,
+        0.7761390209197998,
+        -1.549218773841858,
+        -0.008832432329654694,
+        0.7776713371276855,
+        -1.5329267978668213,
+        0.006094180513173342,
+        0.7778038382530212,
+        -1.5406819581985474,
+        0.014208528213202953,
+        0.8038771748542786,
+        -1.5456631183624268,
+        -0.0041,
+        -1.91044,
+        2.50288,
+        0.067544,
+        -1.8325,
+        -0.0605698,
+        -0.010993599891662598,
+        0.5232863240570801,
+        0.0,
+        0.00021981033690376085,
+        -0.0031286977513961018,
+        0.0,
+        0.0,
+        0.0,
+    ],
 }
 
 def launch_joint_states(context, *args, **kwargs) -> dict[str: str]:
@@ -227,7 +311,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument('configuration',
             description='The configuration to emulate for the Spot robot',
-            choices=['docked', 'standing', 'ready', 'unstowed'],
+            choices=['docked', 'standing', 'ready', 'unstowed', 'namaste', 'carry', 'namaste_carry'],
             default_value='standing'
         )
     ]
@@ -239,8 +323,23 @@ def generate_launch_description():
     xacro_path = PathJoinSubstitution([FindPackageShare('spot_description'), 'urdf', 'spot.urdf.xacro'])
     urdf_param = ParameterValue(Command(['xacro ', xacro_path, *xacro_command_args]), value_type=str)
 
+    # Camera transforms
+    camera_transforms = IncludeLaunchDescription(
+        launch_description_source=PathJoinSubstitution([FindPackageShare('spot_description'), 'launch', 'fake_camera_transforms.launch.py']),
+        launch_arguments=[('has_arm', LaunchConfiguration('has_arm'))]
+    )
+
+    # Base footprint
+    base_footprint_pub = Node(
+        package='tf2_ros', 
+        executable='static_transform_publisher', 
+        arguments=['--frame-id', 'base_footprint', '--child-frame-id', 'body', '--z', '0.52']
+    )
+
     return launch.LaunchDescription([
         *launch_args,
+        camera_transforms,
+        base_footprint_pub,
 
         OpaqueFunction(function=launch_joint_states, kwargs={'name': LaunchConfiguration('configuration'), 'urdf':urdf_param}),
 

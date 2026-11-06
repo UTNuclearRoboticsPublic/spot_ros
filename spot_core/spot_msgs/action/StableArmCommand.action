@@ -1,0 +1,41 @@
+# StableArmCommand.action
+
+# This action interfaces with the StableArmMotionServer in spot_moveit_config. 
+# Given a set of end-effector waypoints and a pre-planned set of joint angles 
+# that achieves that trajectory assuming no body motion, have the robot execute
+# the trajectory while accounting for body lean  
+
+# === Request ===
+
+# The joint trajectory that we wish to follow
+trajectory_msgs/JointTrajectory joint_trajectory
+
+# The end-effector waypoints along the trajectory.
+# Number of waypoints should match joint_trajectory
+geometry_msgs/PoseArray pose_waypoints
+
+---
+
+# === Response ===
+
+# Whether or not the trajectory was carried out successfully
+bool success
+
+# Error message if not successful
+string message
+
+---
+
+# === Feedback ===
+
+uint8 STATUS_UNKNOWN=0
+uint8 STATUS_TRAJECTORY_COMPLETE=1
+uint8 STATUS_IN_PROGRESS=2
+uint8 STATUS_TRAJECTORY_CANCELLED=3
+uint8 STATUS_TRAJECTORY_STALLED=4
+
+uint8 status
+float64 measured_pos_tracking_error
+float64 measured_rot_tracking_error
+float64 measured_pos_distance_to_goal
+float64 measured_rot_distance_to_goal

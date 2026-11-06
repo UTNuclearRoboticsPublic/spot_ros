@@ -1,0 +1,59 @@
+spot_simulation:
+  ros__parameters:
+    robot_names: [spot]
+    sensor_names: [lidar, hand_depth_camera, hand_rgb_camera]
+
+    robots:
+      spot:
+        urdf_path: package://spot_description/urdf/spot.urdf.xacro
+        namespace: spot_driver
+        xacro_args: "has_arm:=True has_rl_kit:=True"
+        initial_transform:
+          translation: [0.0, 0.0, 0.51]
+        update_rate: 100.0
+        odometry_topic: odometry
+
+    sensors:
+      hand_depth_camera:
+        sensor_type: depth_camera
+        frame_id: hand_depth_sensor
+        topic: /spot_image_server/depth/hand_tof/image
+        noise_std_dev: 0.02
+        min_range: 0.15
+        max_range: 10.0
+        depth_config:
+          info_topic: /spot_image_server/depth/hand_tof/camera_info
+          fx: 213.809
+          fy: 213.809
+          cx: 107.442
+          cy: 87.193
+          horizontal_resolution: 224
+          vertical_resolution: 171
+          encoding: 16UC1
+
+      hand_rgb_camera:
+        sensor_type: rgb_camera
+        frame_id: hand_color_image_sensor
+        topic: /spot_image_server/rgb/hand_rgb/image
+        rgb_config:
+          info_topic: /spot_image_server/rgb/hand_rgb/camera_info
+          fx: 552.03
+          fy: 552.03
+          cx: 320.0
+          cy: 240.0
+          horizontal_resolution: 640
+          vertical_resolution: 480
+          encoding: rgb8
+
+      lidar:
+        sensor_type: lidar
+        frame_id: lidar_frame
+        noise_std_dev: 0.01
+        min_range: 0.10
+        max_range: 100.0
+        lidar_config:
+          min_vertical_angle: -45.0
+          max_vertical_angle:  45.0
+          num_vertical_channels: 128
+          num_horizontal_channels: 512
+          best_effort: False

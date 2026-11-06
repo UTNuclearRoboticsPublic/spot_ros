@@ -21,7 +21,7 @@ def generate_launch_description():
     nav_include = GroupAction(
         actions=[
             PushRosNamespace("spot_nav"),
-            SetRemap(src='cmd_vel'   , dst='/spot_driver/cmd_vel'),
+            SetRemap(src='cmd_vel'   , dst='/nav_stack/cmd_vel'),
             SetRemap(src='/tf'       , dst='/tf'),
             SetRemap(src='/tf_static', dst='/tf_static'),
             SetRemap(src='/velodyne_points', dst=LaunchConfiguration('cloud_in')),

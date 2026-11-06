@@ -21,11 +21,10 @@ This repository houses the collection of packages required to run the Spot robot
     export SPOT_ACCESSORIES="ARM RL_KIT" # in any order
     ```
 
-    Additional components can be attached to spot via the `SPOT_URDF_EXTRAS` environment variable. This is a full path to a xacro file which is imported into the robot xacro, and so it must attach to a known link on the robot.
-    At NRG, this would be set as
+    Additional components can be attached to spot via the `SPOT_URDF_EXTRAS` environment variable. This is a full path to a xacro file which is imported into the robot xacro, and so it must attach to a known link on the robot. For example:
 
    ```bash
-   export SPOT_URDF_EXTRAS=$(ros2 pkg prefix --share spot_description)/urdf/accessories/rl_kit_velodyne_mount.xacro
+   export SPOT_URDF_EXTRAS=$(ros2 pkg prefix --share spot_proprietary_description)/urdf/rl_kit_velodyne_mount.xacro
    ```
 
 3. **Set Login Credentials**
@@ -61,6 +60,39 @@ Some common arguments are summarized here:
 - `launch_pointcloud_service`, possible values: `True`, `False`
 - `controller_configuration`, possible values: `Dualsense5`, `Logitech`
 - `use_proprietary_meshes`, possible values: `True`, `False`
+
+## Running the Kinematic Simulation
+This package provides a convenience kinematics simulation for navigation, motion planning, teleoperation, or other similar applications. It is fairly limited in scope, however, and cannot detect or react to collisions or dynamic objects, making it unsuitable for testing pick-and-place, door opening, or other environment interaction focused tasks. 
+
+The simulation works by projecting rays from the robot's sensors to a pre-defined mesh or primitive environment to simulate sensor data. It also reacts to standard robot commands such as the `/spot_driver/cmd_vel` topic, the `/spot_manipulation_driver/stow` and `/spot_manipulation_driver/unstow` services, and the `/follow_joint_trajectory` action server, among others.
+
+To install dependencies run the following commands from your colcon workspace root directory
+
+```bash
+python3 -m pip install -U open3d "scipy>=1.8"
+rosdep install --from-paths src/spot_ros/spot_simulation -i -y
+```
+
+Also due to a bug in the Humble release of the [Generate Parameters Library](https://github.com/PickNikRobotics/generate_parameter_library), it is necessary to build from source for proper parameter generation
+
+```bash
+git clone -b humble https://github.com/PickNikRobotics/generate_parameter_library 
+```
+
+Additionally, you will want to configure your simulation environment with objects and sensors. Refer to the  sample [environment configuration file](spot_simulation/config/environment_config.yaml) for examples on configuring the environment and the [robot configuration file](spot_simulation/config/spot_config.yaml) for examples of how to modify the robot and sensors. The simulation pulls the same accessories and URDF extensions and the main description launch. To run the simulation, execute
+
+```bash
+ros2 launch spot_simulation simulation.launch.xml
+```
+
+You can then move the robot around by publishing to the `/spot_driver/cmd_vel` topic and you should see the sensor data react to the robot's position. If you are also running the arm, you can control the arm using the MoveIt interface through 
+
+```bash
+ros2 launch spot_moveit_config moveit_rviz.launch.py
+```
+
+You should then see the hand depth data react to the pose of the end effector.
+
 ## Gamepad Mapping for Dualsense5
 
 Refer to the table below for the button mappings to command the robot with a DualSense5 gamepad. The driver must be launched with the bringup launch file for these to have any effect.
@@ -137,6 +169,8 @@ The `spot_behaviors` package provides a library of basic commands that can be se
 | `TriggerService` | `service_name` `timeout` `empty` | --- | Calls a service with `std_srvs/Trigger` (or `std_srvs/Empty` if `empty` is True) and waits for `timeout` seconds for a response. Returns the success value of the response (always `SUCCESS` for Empty), or `FAILURE` if no response is received |
 | `WalkToPose` | `target_pose` | --- | Command the robot to walk to a given pose using the Boston Dynamics API | 
 | `GetImages` | `camera_names` | `image_list` | Get images from requested cameras. Xml Example: `<GetImages camera_names='LEFT; RIGHT' image_list="{image_list}" />` | 
+| `GetGripperHoldingState` | --- | `is_holding` | Query whether the gripper is holding something. Xml Example: `<GetGripperHoldingState is_holding="{is_holding}" />` | 
+| `GetStowState` | --- | `is_stowed` | Query whether the arm is stowed. Xml Example: `<GetStowState is_stowed="{is_stowed}" />` | 
 
 # Proprietary Mesh Usage
 If you have access to NRG’s private [spot_proprietary](https://github.com/UTNuclearRobotics/spot_proprietary.git) repository, clone and build it to enable higher-fidelity meshes for Spot. These meshes can be activated by passing the launch argument `use_proprietary_meshes:=True` when launching Spot bringup or loading the robot description. Alternatively, if you have your own higher-fidelity meshes for the arm and accessories (e.g., EAP, EAP2, RL Kit), you can use them by placing them in a separate ROS package—such as `spot_proprietary_description`—with the following structure:

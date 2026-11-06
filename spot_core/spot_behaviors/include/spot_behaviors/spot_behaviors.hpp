@@ -42,9 +42,13 @@
 #include "spot_behaviors/move_hand_through_poses.hpp"
 #include "spot_behaviors/move_hand_to_pose.hpp"
 #include "spot_behaviors/walk_to_pose.hpp"
+#include "spot_behaviors/get_stow_state.hpp"
 #include "spot_behaviors/get_spot_ik.hpp"
 #include "spot_behaviors/toggle_payload.hpp"
 #include "spot_behaviors/get_images.hpp"
+#include "spot_behaviors/get_gripper_holding_state.hpp"
+#include "spot_behaviors/execute_stable_arm_command.hpp"
+#include "spot_behaviors/set_simulated_pose.hpp"
 
 namespace spot_behaviors {
 
@@ -53,7 +57,10 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
         throw std::runtime_error("Cannot register spot behaviors will a null pointer to tf_buffer!");
     }
 
+    factory.registerNodeType<GetStowState>("GetStowState");
+    factory.registerNodeType<GetGripperHoldingState>("GetGripperHoldingState");
     factory.registerNodeType<GetImages>("GetImages");
+    factory.registerNodeType<SetSimulatedPose>("SetSimulatedPose");
 
     // Register all of the behaviors in the package
     #define REGSITER_SPOT_BEHAVIOR(name) factory.registerNodeType<name>(#name, tf_buffer)
@@ -62,16 +69,17 @@ void registerSpotBehaviors(BT::BehaviorTreeFactory& factory, tf2_ros::Buffer::Sh
     REGSITER_SPOT_BEHAVIOR(CheckHandCollision);
     REGSITER_SPOT_BEHAVIOR(DockRobot);
     REGSITER_SPOT_BEHAVIOR(MoveHandThroughPoses);
-    REGSITER_SPOT_BEHAVIOR(MoveHandToPose);
     REGSITER_SPOT_BEHAVIOR(WalkToPose);
     REGSITER_SPOT_BEHAVIOR(GetSpotIK);
     REGSITER_SPOT_BEHAVIOR(TogglePayload);
+    REGSITER_SPOT_BEHAVIOR(ExecuteStableArmCommand);
+    factory.registerNodeType<MoveHandToPose>("MoveSpotHandToPose", tf_buffer);
 
     // A manifest of subtrees and their requirements
     static const std::map<std::string, std::vector<std::string>> subtree_requirements{
-        {"safely_stow_arm.xml" , {"MoveHandToPose", "TriggerService", "CheckArmStowed"}},
+        {"safely_stow_arm.xml" , {"MoveSpotHandToPose", "TriggerService", "CheckArmStowed"}},
         {"move_to.xml"         , {"NavigateToPose", "WalkToPose"}},
-        {"move_hand_exact.xml" , {"MoveHandToPose"}}
+        {"move_hand_exact.xml" , {"MoveSpotHandToPose"}}
     };
 
     // Register all the sub-trees in the package

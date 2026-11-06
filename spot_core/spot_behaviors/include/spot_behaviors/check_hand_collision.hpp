@@ -52,9 +52,6 @@ private:
     // Most recently recorded data
     std::optional<bool> in_collision_;
 
-    // A thread to spin the node and look for messages
-    std::thread spin_thread_;
-
     // Record the collision state obtained from the message
     void collisionStateCallback(std_msgs::msg::Bool::UniquePtr msg);
 };

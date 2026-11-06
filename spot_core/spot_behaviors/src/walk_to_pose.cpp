@@ -27,6 +27,7 @@
 
 #include "spot_behaviors/walk_to_pose.hpp"
 
+#include <set>
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
@@ -36,18 +37,21 @@ WalkToPose::WalkToPose(const std::string& name, const BT::NodeConfig& config, tf
     BT::StatefulActionNode(name, config),
     NodeBehaviorBase(name, tf_buffer)
 {
-    navigation_action_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(this, "/spot_driver/walk_to");
+    navigation_action_client_ = rclcpp_action::create_client<spot_msgs::action::WalkTo>(this, action_server_name_);
 }
 
 BT::PortsList WalkToPose::providedPorts() {
     return {
         BT::InputPort<geometry_msgs::msg::PoseStamped::SharedPtr>("target_pose"),
+        BT::InputPort<std::string>("speed_profile", "NORMAL", "The type of movement speed desired. Options are [SLOW, NORMAL, FAST, CURRENT]"),
         BT::InputPort<double>("trans_err_threshold"),
         BT::InputPort<double>("rot_err_threshold")
     };
 }
 
 BT::NodeStatus WalkToPose::onStart() {
+    static const std::set<std::string> valid_profiles{"SLOW", "NORMAL", "FAST", "CURRENT"};
+
     // Check to see that the server and input are in place
     if (!navigation_action_client_->wait_for_action_server(std::chrono::seconds(10))){
         RCLCPP_ERROR(get_logger(), "/navigate_to_pose action server not available, aborting call for Spot navigation");
@@ -75,6 +79,13 @@ BT::NodeStatus WalkToPose::onStart() {
             "Using rotational error threshold: " << rot_err_threshold_);
     }
 
+    std::string profile = getInput<std::string>("speed_profile").value();
+    std::ranges::for_each(profile, [](char& c){c = std::toupper(c);});
+    if (!valid_profiles.contains(profile)) {
+        RCLCPP_ERROR(get_logger(), "Invalid speed profile '%s'. Options are [SLOW, NORMAL, FAST, CURRENT]", profile.c_str());
+        return BT::NodeStatus::FAILURE;
+    }
+
     // Record the target for goal checking later
     target_pose_ = *target_pose_expected.value();
 
@@ -82,6 +93,21 @@ BT::NodeStatus WalkToPose::onStart() {
     spot_msgs::action::WalkTo::Goal navigation_goal;
     navigation_goal.target_pose = target_pose_;
     navigation_goal.maximum_movement_time = 10.0;
+    
+    if (profile == "SLOW") {
+        navigation_goal.max_vel.linear.x = 0.5;
+        navigation_goal.max_vel.linear.y = 0.3;
+        navigation_goal.max_vel.angular.z = 0.45;
+    } else if (profile == "NORMAL") {
+        navigation_goal.max_vel.linear.x = 0.8;
+        navigation_goal.max_vel.linear.y = 0.5;
+        navigation_goal.max_vel.angular.z = 0.6;
+    } else if (profile == "FAST") {
+        navigation_goal.max_vel.linear.x = 2.0;
+        navigation_goal.max_vel.linear.y = 2.0;
+        navigation_goal.max_vel.angular.z = 1.3;
+    }
+    // If profile is "CURRENT" then we leave max_vel as all zeros and the driver will use the current max_vel parameter settings
 
     goal_handle_future_ = navigation_action_client_->async_send_goal(navigation_goal);
     request_time_point_ = now();
@@ -96,7 +122,7 @@ BT::NodeStatus WalkToPose::onRunning() {
             case rclcpp::FutureReturnCode::TIMEOUT:{
                 const rclcpp::Duration duration = now() - request_time_point_; 
                 if (duration > std::chrono::seconds(1)){
-                    RCLCPP_ERROR(get_logger(), "Timed out waiting for response from /navigate_to_pose server. Aborting");
+                    RCLCPP_ERROR(get_logger(), "Timed out waiting for response from %s server. Aborting", action_server_name_.c_str());
                     navigation_action_client_->async_cancel_all_goals();
                     goal_handle_future_ = decltype(goal_handle_future_){};
                     return BT::NodeStatus::FAILURE;
@@ -105,7 +131,7 @@ BT::NodeStatus WalkToPose::onRunning() {
             }
 
             case rclcpp::FutureReturnCode::INTERRUPTED:
-                RCLCPP_ERROR(get_logger(), "Request interrupted waiting for response from /navigate_to_pose server. Aborting");
+                RCLCPP_ERROR(get_logger(), "Request interrupted waiting for response from %s server. Aborting", action_server_name_.c_str());
                 goal_handle_future_ = decltype(goal_handle_future_){};
                 return BT::NodeStatus::FAILURE;
 
@@ -137,7 +163,7 @@ BT::NodeStatus WalkToPose::onRunning() {
                 [[fallthrough]];
             case action_msgs::msg::GoalStatus::STATUS_ABORTED:
             case action_msgs::msg::GoalStatus::STATUS_CANCELED:
-                RCLCPP_WARN(get_logger(), "Navigate action failed, checking if we're within threshold distance of the goal");
+                RCLCPP_WARN(get_logger(), "Navigate action failed with status %s, checking if we're within threshold distance of the goal", goal_status == action_msgs::msg::GoalStatus::STATUS_ABORTED ? "ABORTED" : "CANCELLED");
                 goal_handle_.reset();
                 if (checkGoal()) {
                     RCLCPP_INFO(get_logger(), "Robot is within acceptable tolerance of the goal pose, reporting success");

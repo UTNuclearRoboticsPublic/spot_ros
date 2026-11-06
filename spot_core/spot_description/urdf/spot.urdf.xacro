@@ -80,10 +80,10 @@
             <limit lower = "-10.0" upper = "10.0" velocity="0.1" effort="1e9"/>
         </joint>
 
-        <joint name="body_or" type="revolute">
+        <joint name="body_or" type="continuous">
             <parent link = "body_y"/>
             <child  link = "body_or"/>
-            <limit lower = "0" upper = "${2*pi}" velocity="0.1" effort="1e9"/>
+            <limit velocity="0.1" effort="1e9"/>
             <axis    xyz = "0 0 1"/>
         </joint>
 

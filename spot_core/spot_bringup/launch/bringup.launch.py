@@ -182,7 +182,10 @@ def generate_launch_description():
     image_publisher_include = Node(
         package='spot_driver',
         executable='image_server',
-        parameters=[LaunchConfiguration('image_config')]
+        parameters=[
+            {'hostname': LaunchConfiguration('hostname')},
+            LaunchConfiguration('image_config')
+        ]
     )
 
     # State publisher
@@ -240,13 +243,13 @@ def generate_launch_description():
             {'enable_button': 4},
             {'axis_linear.x': 1},
             {'axis_linear.y': 0},
-            {'scale_linear.x': 0.85},
-            {'scale_linear.y': 0.5},
+            {'scale_linear.x': 2.0},
+            {'scale_linear.y': 2.0},
             {'axis_angular.yaw': 2},
-            {'scale_angular.yaw': 1.0}
+            {'scale_angular.yaw': 1.5}
         ],
         remappings=[
-            ('cmd_vel', '/spot_driver/cmd_vel')
+            ('cmd_vel', '/controller/cmd_vel')
         ]
     )
 
@@ -294,7 +297,7 @@ def generate_launch_description():
                 name='velodyne_container',
                 namespace='',
                 package='rclcpp_components',
-                executable='component_container',
+                executable='component_container_mt',
                 composable_node_descriptions=[
                     ComposableNode(
                         package='velodyne_driver',
@@ -303,7 +306,8 @@ def generate_launch_description():
                         parameters=[
                             PathJoinSubstitution([FindPackageShare('spot_bringup'), 'config', 'velodyne_config.yaml']),
                             {'device_ip': LaunchConfiguration('velodyne_ip')}
-                        ]
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}]
                     ),
                     ComposableNode(
                         package='velodyne_pointcloud',
@@ -315,7 +319,8 @@ def generate_launch_description():
                         ],
                         remappings=[
                             ('velodyne_points', 'unfiltered_velodyne_points')
-                        ]
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}]
                     ),
                     ComposableNode(
                         name='spot_pointcloud_filter_component',
@@ -324,11 +329,27 @@ def generate_launch_description():
                         remappings=[
                             ('cloud_in', 'unfiltered_velodyne_points'),
                             ('cloud_out','velodyne_points')
-                        ]
+                        ],
+                        extra_arguments=[{'use_intra_process_comms': True}]
                     )
                 ]
             )
         ],
+    )
+
+    twist_mux_config = PathJoinSubstitution([
+        FindPackageShare('spot_driver'),
+        'config',
+        'twist_mux.yaml'
+    ])
+
+    twist_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        output='screen',
+        name='twist_mux',
+        remappings=[('/cmd_vel_out', '/spot_driver/cmd_vel')],
+        parameters=[twist_mux_config]
     )
 
     ## Launch
@@ -343,5 +364,6 @@ def generate_launch_description():
         teleop_twist_joy_node,
         spot_joy_node,
         spot_arm_joy_include,
-        velodyne_include
+        velodyne_include,
+        twist_mux
     ])

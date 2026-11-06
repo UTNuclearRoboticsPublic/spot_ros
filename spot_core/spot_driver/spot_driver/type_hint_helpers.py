@@ -5,6 +5,7 @@ from bosdyn.api.spot.inverse_kinematics_pb2 import InverseKinematicsResponse, In
 
 # Until python type hints gets proper support for protobuf types
 class Vec3Proto(type[geometry_pb2.Vec3]): pass
+class SE2VelProto(type[geometry_pb2.SE2Velocity]): pass
 class SE2PoseProto(type[geometry_pb2.SE2Pose]): pass
 class QuaternionProto(type[geometry_pb2.Quaternion]): pass
 class SE3VelocityProto(type[geometry_pb2.SE3Velocity]): pass

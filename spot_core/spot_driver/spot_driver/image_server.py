@@ -5,6 +5,7 @@ from asyncio import Future, InvalidStateError
 
 import rclpy
 import rclpy.logging
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from rclpy.node import Node
 from rclpy.timer import Timer
 from rclpy.time import Time
@@ -31,12 +32,23 @@ from .type_hint_helpers import *
 class CameraPub():
     def __init__(self, parent: SpotImageServer, namespace: str):
         self.parent = parent
-        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', 1)
-        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace+'/camera_info', 1)
         self.lease_manager = parent.lease_manager
 
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1 # Making it effectively behave like BEST_EFFORT for wifi stability
+        )
+
+        self.image_pub = parent.create_publisher(Image, '~/' + namespace + '/image', qos_profile=qos_profile)
+        self.info_pub = parent.create_publisher(CameraInfo, '~/' + namespace + '/camera_info', qos_profile=qos_profile)
+
     def process_data(self, data: ImageResponseProto):
-        if self.image_pub.get_subscription_count() > 0:
+        # Publish both if either image or camera info has subscribers (necessary for nodes like Apriltag)
+        has_subscribers = (self.image_pub.get_subscription_count() > 0 or 
+                          self.info_pub.get_subscription_count() > 0)
+        
+        if has_subscribers:
             image_msg, camera_info_msg, _ = getImageMsg(data, self.lease_manager)
             self.image_pub.publish(image_msg)
             self.info_pub.publish(camera_info_msg)
@@ -137,8 +149,11 @@ class SpotImageServer(Node):
             is_active_topic = self.camera_pubs[source_name].image_pub.get_subscription_count() > 0 or self.camera_pubs[source_name].info_pub.get_subscription_count() > 0
             if not is_active_topic: return
             
-            self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
-            self.image_response_futures[source_name].add_done_callback(self.publish_image_callback)
+            try:
+                self.image_response_futures[source_name] = self.image_client.get_image_async([self.image_requests[source_name]])
+                self.image_response_futures[source_name].add_done_callback(self.publish_image_callback)
+            except Exception as e:
+                self.get_logger().warn(f'Failed to request image from {source_name}: {e}')
 
     def publish_image_callback(self, response_future: Future):
         try:
@@ -239,7 +254,6 @@ class SpotImageServer(Node):
 
         if unique_transforms:
             self.static_tf_broadcaster.sendTransform(unique_transforms)
-            self.get_logger().info(f'Camera static transforms broadcasted ({len(unique_transforms)} unique frames)')
         else:
             self.get_logger().warn('No static camera transforms found to broadcast')
 
